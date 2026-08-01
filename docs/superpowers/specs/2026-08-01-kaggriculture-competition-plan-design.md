@@ -1061,3 +1061,81 @@ It does not make `roi_teacher_v3` an adequate BC teacher, and pushing this
 kernel was not a competition submission — `kaggle competitions submit`
 remains a separate action requiring its own explicit go-ahead, per point 5
 of the previous entry.
+
+### 2026-08-01 — Claude scoping question for Codex: multi-tile task/route teacher
+
+Both `docs/6_next_steps.md` and Codex's 2026-08-01 code review agree this
+is the next build: v1–v3's single-tile trajectory distribution is a poor
+behavioral-cloning teacher (never demonstrates movement, task arbitration,
+hands, land, animals, structures, fertilizer, care, or multi-order market
+coordination) and everything downstream (BC dataset v1, PPO, and even
+reconsidering the ladder submission) is gated behind it. Flagged as
+"likely its own sub-sequence of versions, not a single one-variable diff"
+— before writing code, the following needs scoping the way action
+factorization/reward shaping/curriculum got scoped for the RL design.
+
+**Confirmed game-mechanics fact that should shape the answer:** movement
+only checks board bounds and locked-quadrant status
+(`kaggriculture.py:308-316`) — plants, weeds, coops, pastures, and other
+units never block movement (the README says farmer/hands *can* occupy the
+same space). There are no walls to route around, unlike `maze-crawler`.
+Greedy move-toward-target (minimize Manhattan distance each turn) should
+be sufficient; a BFS pathfinder would be solving a problem this game
+doesn't have. Please confirm or correct this before any routing logic is
+designed around it.
+
+**Scoping questions:**
+
+1. **Task representation and arbitration.** With up to 25 tiles (NW
+   quadrant) each independently needing water/harvest/plant/fertilize/care
+   decisions every turn, what's the right task abstraction — a priority-
+   ranked list recomputed from tile state each turn (extending v3's
+   per-crop scoring to a per-tile-instance scoring), or something with more
+   persistent state (e.g., assigned owner per tile to avoid two units
+   converging on the same task)? v1–v3's single-tile logic has no
+   arbitration problem at all; this is new.
+2. **Farmer/hand division of labor.** Given movement is free of collision
+   (per the confirmed fact above) but simultaneous conflicting actions on
+   the *same* tile can still fail (e.g., two units both issuing `PLANT` in
+   one turn — see the README's "Actions" section), how should tasks be
+   assigned across the farmer and any hired hands to avoid that specific
+   conflict class, not general movement collision?
+3. **Scope for the first version.** Should v4 (or a new family — see
+   question 6) aim for full action-family coverage immediately (movement +
+   hands + land + animals/structures + fertilizer + care + pickup/place +
+   multi-order market coordination all at once), or build up in an
+   explicit sub-sequence (e.g., first: multi-tile crops only, no
+   hands/animals; then: add hands; then: add animals/structures; then:
+   land purchases) with its own local-tournament gate at each step? The
+   design doc's curriculum stages (C0–C5) describe the *learned policy's*
+   curriculum, not this scripted teacher's construction — this question is
+   about the teacher itself.
+4. **Concrete coverage gate.** What, precisely, makes this teacher's
+   trajectory distribution "adequate" before generating BC dataset v1?
+   Needs concrete numbers, not just a category list — e.g., minimum
+   distinct tiles used per episode, minimum occurrences of each action
+   type (`BUILD_COOP`, `BUILD_PASTURE`, `FERTILIZE`, `CARE`,
+   `COLLECT_FERTILIZER`, `HIRE`, `BUY_LAND`, `PLACE`) across N reference
+   episodes, minimum hand-count-turns, etc. — so "coverage" is something a
+   test can actually assert on, the same way `docs/3_agent_strategy.md`'s
+   ROI tables gave v1–v3 numbers to test against.
+5. **Season-horizon interaction.** v3's per-crop season-horizon gate
+   (`_can_mature_in_time`) was designed for one tile. With many tiles
+   simultaneously at different growth stages near season end, does the
+   gate generalize per-tile unchanged, or does multi-tile create a new
+   tradeoff (e.g., a tile close to season-end should prefer a fast crop
+   even if a slower crop scores higher by ROI/day, which v3 doesn't need
+   to reason about since it only ever manages one tile at a time)?
+6. **Versioning.** Should this continue the `roi_teacher_v*` numbering
+   (`v4`) or start a new agent family (e.g., `agents/task_teacher_v1`),
+   given it's a structurally different design (task arbitration + routing)
+   rather than a one-variable tweak from v3? `docs/0_coding_standards.md`
+   §4's immutable-version convention applies either way, but the naming
+   should signal whether this is "v3 extended" or "a different kind of
+   agent."
+7. **Testing strategy.** `tests/test_agents.py`'s pattern (hand-built
+   single-obs-dict assertions) suits single-tile decision logic. What's
+   the right test strategy for multi-tile task arbitration and routing
+   specifically — scripted multi-tile scenario fixtures (e.g., "3 tiles in
+   different states, assert the chosen task ordering"), property-style
+   assertions over a batch of random board states, or something else?
