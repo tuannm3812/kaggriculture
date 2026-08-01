@@ -105,6 +105,45 @@ inference cost is added; see the design doc §9's Week-1 throughput-benchmark
 plan (env-only, policy-inference at multiple parallel-env counts, full
 training steps/sec, all still to be measured).
 
+## Kaggle Platform Smoke Test — Passed (2026-08-01)
+
+Per the design doc §9's execution-status audit: verified `kaggriculture`
+actually runs on Kaggle's own infrastructure, not just this repo's local
+`.venv`. State reached: `kernel_pushed` (10:0x UTC) → `kernel_complete`
+(confirmed via `kaggle kernels status`, ~65s runtime).
+
+- Kernel: `tuannm3812/kaggriculture-platform-smoke-test`, version 1,
+  private. Source: `notebooks/00_platform_smoke_test.ipynb`.
+- Remote environment: Python `3.12.13`, `Linux-6.12.90+-x86_64`,
+  `kaggle-environments==1.29.3`, `torch==2.10.0+cpu`, no GPU (none
+  requested — `enable_gpu: false`, this check didn't need one).
+- **`kaggriculture_import_ok: true`, no explicit install needed** —
+  confirms the hypothesis in §9: Kaggle's kernel image already has a
+  `kaggle-environments` build with `kaggriculture` registered, distinct
+  from (and older than, `1.29.3` vs. the `1.32.2` installed locally from
+  GitHub `master`) the version this project develops against locally. The
+  offline wheel-dataset fallback plan was not needed.
+- Paired-seat match (seed `20260801`, 720 steps, packaged `roi_teacher_v3`
+  vs. `starter`): both seat assignments finished `DONE`/`DONE` with finite
+  rewards (`5319.0`/`2523.0` and `2523.0`/`5319.0` — consistent, agent won
+  both seats).
+- **Packaged-agent SHA-256 matches exactly** between the local build and
+  the remote kernel: `dd47d40735d9370c2aa45f8e564ee5e6c4f0d462aeda75267fff165871031f42`
+  — independently re-verified locally (`shasum -a 256`) against the
+  downloaded kernel output file, not just the JSON result's self-reported
+  hash.
+- Result artifact: `/kaggle/working/smoke_result.json`, downloaded via
+  `kaggle kernels output` to `/tmp/kaggriculture_smoke_output/`. Log
+  inspected (`kaggle kernels output ... `'s `.log` file): clean run,
+  "SMOKE TEST PASSED" printed; the only stderr output is Kaggle's own
+  harmless `nbconvert`/`mistune` `SyntaxWarning`s during its own
+  notebook-to-HTML rendering step, unrelated to this project's code.
+
+**Conclusion:** platform compatibility confirmed. Per the audit's scope
+decision, this validates execution only — it does not make the single-tile
+`roi_teacher_v3` an adequate behavioral-cloning teacher (see
+`docs/6_next_steps.md`), and it is not a competition submission.
+
 ## Open Items
 
 - Confirm actual Kaggle ladder episode configuration (fixed defaults, or do
@@ -116,3 +155,9 @@ training steps/sec, all still to be measured).
   worth using for early curriculum stages (C0/C1) instead of hand-rolling a
   reduced-rules training environment. Follow up before curriculum work
   starts.
+- The remote kernel's pre-installed `kaggle-environments==1.29.3` is older
+  than this project's local `1.32.2` (from GitHub `master`) — not yet
+  confirmed whether this version gap matters (e.g. differing `kaggriculture`
+  game-logic versions between local dev and Kaggle's actual ladder
+  evaluator). Worth diffing if a future local-vs-ladder score discrepancy
+  ever looks larger than expected.

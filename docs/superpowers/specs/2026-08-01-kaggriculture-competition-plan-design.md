@@ -227,7 +227,13 @@ don't describe anything as "running on Kaggle" short of an actual
 - `packaged`: `roi_teacher_v3` packaged into a standalone artifact,
   verified to run with `PYTHONPATH` stripped (the condition Kaggle's
   execution environment actually imposes).
-- Not yet reached: `kernel_pushed`, `submitted`, `scored`.
+- `kernel_complete`: the platform smoke test (`kaggle-platform-smoke-test`,
+  version 1) ran on Kaggle's actual infrastructure 2026-08-01 —
+  `kaggriculture` imported and ran with no explicit install step, the
+  packaged `roi_teacher_v3` completed a full paired-seat match `DONE`/
+  `DONE` with finite rewards, and its SHA-256 matched the local build
+  exactly. Full evidence in `docs/2_environment_notes.md`.
+- Not yet reached: `submitted`, `scored`.
 
 | Week | Dates | Evidence checkpoint |
 | --- | --- | --- |
@@ -1007,3 +1013,51 @@ trajectories. `docs/6_next_steps.md`'s 2026-08-01 reprioritization already
 gates BC dataset generation behind the multi-tile task/routing teacher's
 own action-family and state-coverage gate — unchanged by this audit, and
 the smoke kernel doesn't move that gate.
+
+### 2026-08-01 — Smoke kernel result: `kernel_complete`, platform confirmed
+
+Executed the plan from the previous entry. Evidence, per the audit's
+checklist:
+
+- Local notebook validation: extracted the notebook's code cells, ran them
+  locally with `/kaggle/working` redirected to a temp dir — passed
+  end-to-end before pushing anything to Kaggle.
+- Kernel slug: `tuannm3812/kaggriculture-platform-smoke-test`, pushed
+  version 1 (`kaggle kernels push`, private).
+- Transitions: `kernel_pushed` → polled `kaggle kernels status` in a
+  background loop → `kernel_complete` (`KernelWorkerStatus.COMPLETE`),
+  ~65s runtime. No `failed` transition occurred.
+- Remote environment: Python `3.12.13`, `Linux-6.12.90+-x86_64`,
+  `kaggle-environments==1.29.3`, `torch==2.10.0+cpu`, no GPU (none
+  requested for this check).
+- `kaggriculture_import_ok: true` with **no explicit install step** —
+  confirms the hypothesis from the previous entry: Kaggle's kernel image
+  already has a compatible `kaggle-environments` build. The offline
+  wheel-dataset fallback was not needed.
+- Paired-seat match (seed `20260801`, 720 steps, packaged `roi_teacher_v3`
+  vs. `starter`): both seat assignments `DONE`/`DONE`, finite rewards
+  (`5319.0`/`2523.0` and `2523.0`/`5319.0`).
+- Packaged-agent SHA-256
+  (`dd47d40735d9370c2aa45f8e564ee5e6c4f0d462aeda75267fff165871031f42`)
+  matched exactly between the local build and the downloaded remote
+  output — re-verified independently with `shasum -a 256` locally, not
+  just trusting the JSON result's self-reported hash.
+- Result artifact: `/kaggle/working/smoke_result.json`, downloaded via
+  `kaggle kernels output`. Log inspected: clean run, "SMOKE TEST PASSED"
+  printed; only stderr output was Kaggle's own harmless `nbconvert`
+  `SyntaxWarning`s from its post-run notebook-to-HTML rendering,
+  unrelated to this project's code.
+
+**New finding, not anticipated in the previous entry:** the remote
+kernel's `kaggle-environments==1.29.3` is older than this project's local
+`1.32.2` (installed from GitHub `master`). Not yet confirmed whether
+`kaggriculture`'s game logic differs between those two versions — logged
+as a new open item in `docs/2_environment_notes.md` and
+`docs/6_next_steps.md`, worth diffing if a future local-vs-ladder score
+gap ever looks larger than expected.
+
+**Scope reminder, unchanged:** this confirms platform compatibility only.
+It does not make `roi_teacher_v3` an adequate BC teacher, and pushing this
+kernel was not a competition submission — `kaggle competitions submit`
+remains a separate action requiring its own explicit go-ahead, per point 5
+of the previous entry.
