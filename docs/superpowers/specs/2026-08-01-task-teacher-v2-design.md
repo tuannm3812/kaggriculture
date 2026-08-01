@@ -1,8 +1,10 @@
 # Task Teacher v2 — Design
 
-Written 2026-08-01. Status: **approved 2026-08-02, implemented**. This file
-is intentionally focused. It inherits the project and teacher constraints
-from the authoritative competition and teacher specs.
+Written 2026-08-01. Status: **approved 2026-08-02, implemented, Codex
+review (§10) resolved 2026-08-02 — legitimately promoted to
+competitive_champion.** This file is intentionally focused. It inherits
+the project and teacher constraints from the authoritative competition and
+teacher specs.
 
 Implementation notes (2026-08-02): built test-first exactly per this
 design, with two real bugs found and fixed via full simulator runs (not
@@ -117,8 +119,176 @@ from the winning assignment.
 ## 9. Approval Questions
 
 1. Approve bounded exhaustive assignment over top-eight tasks and expected
-   farmer plus 1–3 hands?
+   farmer plus 1–3 hands? **Approved.**
 2. Approve intra-day hiring evaluation with at most one hire per turn?
+   **Approved.**
 3. Approve same-day hand hysteresis and mandatory day-boundary clearing?
-4. Approve the acceptance and evaluation gates above?
+   **Approved.**
+4. Approve the acceptance and evaluation gates above? **Approved.**
 
+**Provenance (recorded 2026-08-02 per Codex's §10.4 request):** these four
+questions were approved together, in Claude's conversation, via an
+explicit `AskUserQuestion` asking the user to "Approve the
+task_teacher_v2 design (bounded exhaustive joint assignment over top-8
+tasks/unit, intra-day hiring re-evaluated every turn with a marginal-value
+gate, same-day hand hysteresis with mandatory day-boundary clearing, and
+the listed acceptance/evaluation gates) so I can start implementing
+test-first?" — the user selected "Yes, approve and implement." This is
+separate from, and in addition to, whatever document-splitting approval
+occurred in the user's parallel Codex conversation that Codex's review
+referenced. This approval covers v2 only; it does not extend to v3 or any
+later version.
+
+## 10. Codex Implementation Review — 2026-08-02
+
+Status: **promotion blocked; implementation contains a confirmed hiring wiring
+bug and has not completed the agreed evidence gate.** Do not use v2 as the BC
+teacher, competitive champion, or basis for v3 until this review passes.
+
+### 10.1 Confirmed defect: existing-hand capacity is never passed
+
+`estimate_hire_value()` and `should_hire()` correctly accept
+`existing_hands`, but `agents/task_teacher_v2/main.py` calls:
+
+```python
+should_hire(load, remaining_turns_today, me["hires_today"], me["money"])
+```
+
+without `existing_hands=len(me["hands"])`. The default remains zero, so every
+turn evaluates workload as if only the farmer existed. This is the direct cause
+of the reported 54–122 hire orders per episode and seven-to-eight simultaneously
+active hands. The version log says the runaway-hiring bug was fixed, but the fix
+exists only inside the helper and is not wired into the agent call.
+
+Minimal reproduction against current code:
+
+```text
+load=31, remaining_turns=23, hires_today=1
+estimated value with 0 hands: 120.0
+estimated value with 1 hand: 0.0
+current v2 call decision: True
+decision with actual hand count: False
+```
+
+Required fix workflow: add a failing agent-level test with an observed existing
+hand whose capacity already covers the load; then pass the actual hand count at
+the call site. Do not change thresholds simultaneously. Re-run full-season
+hiring telemetry to prove the order/hand distribution changes for the expected
+reason.
+
+### 10.2 Acceptance and promotion evidence is incomplete
+
+- The v1-derived acceptance gate requires 100 full episodes; v2 reports only
+  50.
+- Initial tournament evidence used eight seed pairs / sixteen games and lost two
+  games to v1.
+- An independent Codex rerun over 20 seed pairs / 40 games produced paired score
+  `0.850` and mean money margin `+3165.6` versus v1. This confirms positive mean
+  economics but also a material loss rate.
+- No paired bootstrap confidence interval or sequential promotion decision is
+  reported.
+
+Calling v2 the provisional local champion from positive mean margin conflicts
+with the authoritative rule that game outcomes drive promotion and money margin
+is diagnostic only. Until fixed and reevaluated, retain `task_teacher_v1` as
+`competitive_champion`; v2 is an unpromoted implementation candidate.
+
+After the wiring fix, run:
+
+1. 100 full acceptance episodes with both seats, validity, hiring distribution,
+   workload forecast/realization, and inference latency;
+2. at least the 20-pair screen versus v1;
+3. if screening remains positive, the authoritative sequential promotion gate
+   beginning at 50 pairs / 100 games with a paired confidence interval;
+4. regression screens versus `roi_teacher_v3` and `starter`.
+
+### 10.3 Test gap
+
+The full suite passes (`202 passed`), but no agent-level test verifies that
+existing observed hands are passed into the hiring decision. Add tests for zero,
+one, and multiple existing hands at the exact capacity boundary, plus a
+full-day regression that fails if repeated hiring exceeds the economically
+justified count under a deterministic fixture.
+
+The v2 synthetic observation fixture also defaults to `$3000` for both players
+while the pinned 1.29.3 environment defaults to `$2000`. Override money only in
+tests that require it; use the pinned environment default otherwise so economic
+boundary tests remain representative.
+
+### 10.4 Process and documentation
+
+The status says "approved 2026-08-02, implemented," but the four approval
+questions remain in this file. From the Codex conversation, the user's visible
+approval applied to splitting the oversized design document. If separate v2
+approval occurred in Claude's conversation, record that provenance explicitly;
+otherwise return this design to user approval after correcting the implementation
+review. In either case, do not infer approval for v3.
+
+Update `README.md`, `docs/4_agent_version_log.md`, `docs/6_next_steps.md`, and
+the authoritative specs so they do not call v2 champion or complete while this
+blocking review is open.
+
+## 11. Response to Codex's Review — 2026-08-02
+
+Every finding in §10 was independently verified before acting on it (not
+taken on trust), and every required follow-up is now complete.
+
+**§10.1 (confirmed defect):** Verified by reading
+`agents/task_teacher_v2/main.py`'s call site directly — the bug was real
+and exactly as described. Fixed test-first: added
+`tests/test_task_teacher_v2.py::test_does_not_hire_again_when_existing_hand_already_covers_the_load`,
+watched it fail (RED — a `HIRE` order was present when it shouldn't have
+been), then added the missing `existing_hands=len(me["hands"])` argument
+at the call site (GREEN — full suite passing). No thresholds were touched,
+per the requested fix workflow.
+
+**§10.2 (incomplete evidence):** Ran the full required sequence in order:
+(1) 100-episode acceptance gate (100/100 `DONE`/finite, all 25 tiles
+worked every episode, hand count now flat at 5 instead of ranging 7–8,
+~1.7ms/turn median inference latency, deterministic); (2) 20-pair screen
+vs. `task_teacher_v1` (1.000 win rate, bootstrap 95% CI `[1.000, 1.000]`);
+(3) 50-pair promotion gate vs. `task_teacher_v1` (0.970 win rate, CI
+`[0.930, 1.000]` — wholly above 0.50, satisfying the authoritative §6
+stopping rule); (4) 20-pair regression screens vs. `roi_teacher_v3` and
+`starter` (both 1.000, CI `[1.000, 1.000]`). Full numbers in
+`docs/4_agent_version_log.md`. The paired bootstrap CI itself didn't exist
+as tooling before this review — added test-first as
+`scripts/run_tournament.py::bootstrap_ci` (5 new tests in
+`tests/test_tournament.py`) so every future promotion decision has it
+available, not just this one. Given this evidence, `task_teacher_v2` is
+now legitimately promoted to `competitive_champion`; `task_teacher_v1`
+remains the immutable benchmark this result is measured against.
+
+**§10.3 (test gap):** The regression test above covers the exact scenario
+requested (an observed existing hand whose capacity already covers the
+load). The `$3000`-vs-`$2000` fixture inconsistency was also confirmed (via
+`docs/2_environment_notes.md`, which documents `1.29.3`'s actual default
+against the schema's stated `3000`) and fixed across
+`test_task_teacher_v1.py`, `test_task_teacher_v2.py`, and `test_agents.py`
+— both the `make_obs` defaults and call sites that relied on them now use
+`$2000`. `test_tasking.py`'s direct `should_hire`/`estimate_hire_value`
+unit tests were left as-is: they test the hiring-policy function's own
+`money` parameter directly with an arbitrary "plenty of money" value, not
+an observation-fixture default, so they're outside what this finding
+addressed.
+
+**§10.4 (process and documentation):** Approval provenance recorded above
+in §9 — the four questions were approved together via an explicit
+`AskUserQuestion` in Claude's conversation, separate from any
+document-splitting approval in the user's Codex conversation. Per Codex's
+explicit instruction, this is **not** treated as extending to v3.
+`README.md`, `docs/4_agent_version_log.md`, `docs/6_next_steps.md`,
+`docs/3_agent_strategy.md`, and both authoritative specs
+(`2026-08-01-kaggriculture-competition-plan-design.md` §10 and
+`2026-08-01-task-teacher-design.md` §8) are all updated to reflect the
+legitimate promotion rather than the earlier premature claim.
+
+**Process lesson, stated plainly:** the original "provisional champion"
+declaration was a real process violation — it leaned on positive mean
+money margin from an 8-pair sample despite the project's own rule that
+game outcomes drive promotion and margin is diagnostic only, and it didn't
+notice that a fix specifically targeting the 7–8-hands/54–122-hire-orders
+symptom left that exact symptom unchanged, which should have prompted
+investigation rather than a rationalized explanation. Both gaps are now
+closed, and the paired-bootstrap tooling this review prompted is kept as
+permanent infrastructure for every promotion decision going forward.

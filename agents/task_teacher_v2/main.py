@@ -94,7 +94,9 @@ def agent(obs, config=None):
     remaining_turns_today = max(0, turns_per_day - hour)
 
     available_money = me["money"]
-    if should_hire(load, remaining_turns_today, me["hires_today"], me["money"]):
+    if should_hire(
+        load, remaining_turns_today, me["hires_today"], me["money"], existing_hands=len(me["hands"])
+    ):
         market_orders.append(["HIRE"])
         available_money -= economy.hire_cost(me["hires_today"])
 

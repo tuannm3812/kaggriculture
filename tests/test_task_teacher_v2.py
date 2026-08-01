@@ -25,7 +25,7 @@ def make_obs(
     *,
     day=0,
     hour=0,
-    money=3000.0,
+    money=2000.0,
     farmer=(4, 4),
     hands=None,
     hires_today=0,
@@ -116,7 +116,7 @@ def test_hires_when_service_load_is_overloaded():
     for i in range(20):
         x, y = i % BOARD_SIZE, i // BOARD_SIZE  # 20 tiles across rows 0-1
         tiles[y][x] = make_plant_tile("WHEAT", planted_day=0, watered_today=False)
-    obs = make_obs(farmer=(4, 4), hands=[], hour=0, money=3000, tiles=tiles)
+    obs = make_obs(farmer=(4, 4), hands=[], hour=0, money=2000, tiles=tiles)
     action = module.agent(obs, V2_CONFIG)
     assert any(order[0] == "HIRE" for order in action["market"])
 
@@ -129,7 +129,40 @@ def test_does_not_hire_when_not_overloaded():
     # list, use a day late enough that no candidate crop can mature (so no
     # PLANT tasks get generated at all -- see economy.can_mature_in_time).
     tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
-    obs = make_obs(farmer=(4, 4), hands=[], hour=0, money=3000, day=29, tiles=tiles)
+    obs = make_obs(farmer=(4, 4), hands=[], hour=0, money=2000, day=29, tiles=tiles)
+    action = module.agent(obs, V2_CONFIG)
+    assert not any(order[0] == "HIRE" for order in action["market"])
+
+
+def test_does_not_hire_again_when_existing_hand_already_covers_the_load():
+    """Regression test for a real, confirmed bug Codex's review found: the
+    call site in agent() never passed existing_hands=len(me["hands"]) to
+    should_hire(), so every turn evaluated workload as if only the farmer
+    existed -- even with an active hand standing by. This is the direct
+    cause of the reported 54-122 hire orders/episode and 7-8 simultaneously
+    active hands (the estimate_hire_value/should_hire *functions* were
+    fixed and unit-tested correctly in isolation; the fix was just never
+    wired into the agent that calls them).
+    """
+    module = load_agent_module("task_teacher_v2")
+    # 25 already-growing, unwatered plants (pending_water=25) -> load=31
+    # (25 + TRAVEL_ALLOWANCE(4) + END_OF_DAY_RESERVE(2)), remaining_turns
+    # =23 (hour=1) -- with the farmer alone (existing_hands=0) this
+    # overloads and justifies a hire; with the one hand already hired this
+    # day correctly counted (existing_hands=1), its capacity already
+    # covers the load and no further hire is justified this turn.
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    for y in range(5):
+        for x in range(5):
+            tiles[y][x] = make_plant_tile("WHEAT", planted_day=0, watered_today=False)
+    obs = make_obs(
+        farmer=(4, 4),
+        hands=[(1, 1)],
+        hour=1,
+        hires_today=1,
+        money=1_000_000,
+        tiles=tiles,
+    )
     action = module.agent(obs, V2_CONFIG)
     assert not any(order[0] == "HIRE" for order in action["market"])
 

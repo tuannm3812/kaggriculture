@@ -142,11 +142,15 @@ Initial targets, recalibrated only with recorded evidence:
   over 100 full episodes with reported median 17 worked tiles and 179 total
   passing tests at implementation time. Superseded as champion by v2.
 - `task_teacher_v2`: implemented daily hiring and bounded exhaustive
-  multi-unit assignment; locally verified over 50 full episodes (median 25
-  worked tiles, avg 7.0 max hands active) with 202 total passing tests at
-  implementation time. Beats v1 on average (+2779.6 margin, 0.875 win
-  rate) but not a clean sweep — see `2026-08-01-task-teacher-v2-design.md`
-  and the project version ledger for the two real bugs (runaway hiring,
-  combinatorial performance) found and fixed via full simulator runs.
-  Provisional champion.
+  multi-unit assignment. A confirmed hiring-wiring bug (Codex review,
+  2026-08-02) meant an earlier fix in `tasking.py` never reached the
+  running agent's call site; fixed test-first, then re-verified over 100
+  full episodes (median 25 worked tiles, flat 5.0 max hands active,
+  ~1.7ms/turn inference latency). Paired bootstrap evaluation per §6 of the
+  project design gave a 50-pair promotion-gate CI of `[0.930, 1.000]` vs.
+  v1 (wholly above 0.50) plus clean 20-pair regression sweeps vs.
+  `roi_teacher_v3` and `starter` — see `2026-08-01-task-teacher-v2-design.md`
+  §10 and the project version ledger for the full account, including the
+  process lesson (win rate/outcomes decide promotion, not margin).
+  **Legitimately promoted, competitive champion.**
 

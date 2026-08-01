@@ -95,3 +95,43 @@ def test_run_pair_is_seat_symmetric_in_scoring():
     assert forward_score == 1.0
     assert reverse_score == 0.0
     assert math.isclose(forward_margin, -reverse_margin)
+
+
+# --- paired bootstrap confidence interval ---------------------------------
+# Per the authoritative design doc §6: "Stop for success/futility only when
+# the paired bootstrap interval is wholly above/below 0.50" -- this is
+# permanent evaluation infrastructure every promotion decision needs, not a
+# one-off for task_teacher_v2.
+
+
+def test_bootstrap_ci_degenerate_all_wins_is_a_point_at_one():
+    lo, hi = run_tournament.bootstrap_ci([1.0, 1.0, 1.0, 1.0], seed=0)
+    assert lo == hi == 1.0
+
+
+def test_bootstrap_ci_degenerate_all_losses_is_a_point_at_zero():
+    lo, hi = run_tournament.bootstrap_ci([0.0, 0.0, 0.0], seed=0)
+    assert lo == hi == 0.0
+
+
+def test_bootstrap_ci_brackets_the_sample_mean():
+    scores = [1.0, 0.0, 1.0, 1.0, 0.5, 1.0, 0.0, 1.0, 1.0, 1.0]
+    lo, hi = run_tournament.bootstrap_ci(scores, seed=0)
+    mean = sum(scores) / len(scores)
+    assert lo <= mean <= hi
+
+
+def test_bootstrap_ci_is_seed_deterministic():
+    scores = [1.0, 0.0, 1.0, 0.5, 1.0, 0.0, 1.0, 1.0]
+    assert run_tournament.bootstrap_ci(scores, seed=42) == run_tournament.bootstrap_ci(scores, seed=42)
+
+
+def test_bootstrap_ci_narrows_with_more_pairs_at_the_same_win_rate():
+    """A 90%-win-rate sample repeated 10x (100 pairs) should give a tighter
+    interval than the original 10 pairs -- more evidence at the same
+    empirical rate should narrow the interval, not just recenter it."""
+    small = [1.0] * 9 + [0.0]
+    large = small * 10
+    lo_small, hi_small = run_tournament.bootstrap_ci(small, seed=0)
+    lo_large, hi_large = run_tournament.bootstrap_ci(large, seed=0)
+    assert (hi_large - lo_large) < (hi_small - lo_small)

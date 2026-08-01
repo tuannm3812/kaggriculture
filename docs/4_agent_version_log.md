@@ -284,8 +284,8 @@ available, and outcome/lesson.
      "expected farmer plus 1–3 hands" assumption) and using the
      already-designed deterministic greedy fallback beyond that. Full
      episode time: ~20s → ~1s.
-- **Acceptance-gate measurement** (50 full 720-step episodes vs.
-  `starter`, seeds 2000–2049):
+- **Acceptance-gate measurement, first pass** (50 full 720-step episodes
+  vs. `starter`, seeds 2000–2049):
 
   | Metric | Result |
   | --- | --- |
@@ -296,8 +296,8 @@ available, and outcome/lesson.
   | `HIRE` orders/episode | min 54, max 122, avg 112.2 (re-evaluated every turn, per the design) |
   | Max hands active/episode | min 7, max 8, avg 7.0 |
 
-- **Local tournament** (`scripts/run_tournament.py`, 8 seed pairs / 16 games
-  per opponent, full 720-step episodes, base seed 0):
+- **Local tournament, first pass** (`scripts/run_tournament.py`, 8 seed
+  pairs / 16 games per opponent, full 720-step episodes, base seed 0):
 
   | Opponent | Win rate | Mean money margin |
   | --- | ---: | ---: |
@@ -307,27 +307,92 @@ available, and outcome/lesson.
   | **`task_teacher_v1` (direct)** | **0.875** | **+2779.6** |
   | **`roi_teacher_v3` (direct)** | **0.875** | **+22839.4** |
 
-- **Outcome:** clear net positive (positive margin and majority win rate
-  against every opponent including the prior champion), but **not** a
-  clean sweep like v1→v3 or v2(roi)→v3(roi) — 2 of 16 games lost to
-  `task_teacher_v1` despite v2's added capabilities. Not investigated
-  further this round; the v2 design doc explicitly allows this outcome
-  ("v2 may become the coverage teacher without replacing the competitive
-  champion if it expands valid action coverage but lacks confident win
-  improvement"). **`task_teacher_v2` is provisionally the new local
-  champion** given the positive average margin, but the occasional losses
-  are worth revisiting before any promotion decision that matters (e.g.
-  BC teacher selection or ladder submission).
+- **Premature champion claim, self-identified error (2026-08-02):** this
+  entry originally declared `task_teacher_v2` "provisionally the new local
+  champion" from the numbers above. That conflicts with the authoritative
+  design doc §6's own rule — game outcomes/win rate drive promotion, money
+  margin is diagnostic only — and the evidence base (8 pairs, 2 losses, no
+  confidence interval) was well short of the promotion gate (50 pairs / 100
+  games with a paired bootstrap interval wholly above/below 0.50). Codex's
+  2026-08-02 implementation review (see
+  `2026-08-01-task-teacher-v2-design.md` §10) caught both the process
+  violation and, more importantly, a confirmed implementation bug:
+  `agents/task_teacher_v2/main.py`'s `should_hire(...)` call never passed
+  `existing_hands=len(me["hands"])`, so the hiring-value fix below (item 1)
+  was correct in `tasking.py` and in its direct unit tests, but never
+  actually took effect in the running agent — every turn evaluated
+  workload as if only the farmer existed. This is the real explanation for
+  the 54–122 `HIRE` orders/episode and 7–8 simultaneously active hands
+  measured above: the fix hadn't taken effect, and the acceptance-gate
+  numbers were incorrectly rationalized as "economically correct given a
+  large load" rather than investigated as a persisting symptom of an
+  already-"fixed" bug.
+- **Fix (2026-08-02):** added
+  `tests/test_task_teacher_v2.py::test_does_not_hire_again_when_existing_hand_already_covers_the_load`
+  (RED: failed by hiring again with a hand already covering the load; GREEN
+  after the fix), then added the missing `existing_hands=len(me["hands"])`
+  argument at the call site. Also fixed a related test-rigor gap Codex
+  flagged: the synthetic observation fixtures in `test_task_teacher_v1.py`,
+  `test_task_teacher_v2.py`, and `test_agents.py` defaulted to `money=3000`,
+  inconsistent with the pinned `1.29.3` environment's actual `$2000`
+  default (`docs/2_environment_notes.md`) — corrected to `$2000` throughout.
+- **Acceptance-gate measurement, re-run after the fix** (100 full 720-step
+  episodes vs. `starter`, seeds 3000–3099, matching `task_teacher_v1`'s
+  100-episode rigor per Codex's request):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` both players | 100/100 |
+  | Invalid/non-finite episodes | 0 |
+  | Distinct tiles worked/episode | median 25, p10 25, range [25, 25] |
+  | Action-kind coverage | `PLANT`=6047, `WATER`=43395, `HARVEST`=3225, `DIG`=2949 |
+  | `HIRE` orders/episode | min 72, max 78, avg 73.4 (down from 54–122, and far tighter variance) |
+  | Max hands active/episode | min 5, max 5, avg 5.0 (flat, down from 7–8) |
+  | Inference latency (ms/turn) | median 1.73, p95 1.85 |
+  | Determinism (same seed, 2 runs) | identical rewards |
+
+  The fix's effect is visible directly: hand count is now a stable 5/5/5
+  instead of ranging 7–8, and hire-order count dropped and tightened
+  substantially — exactly the symptom the bug produced, now gone for the
+  reason expected (existing hands' capacity is finally counted).
+- **Paired bootstrap evaluation, per the authoritative design doc §6's
+  protocol** (screen at 20 pairs / 40 games, promote at 50 pairs / 100
+  games, stop when the paired bootstrap 95% CI is wholly above/below
+  0.50): implemented `scripts/run_tournament.py::bootstrap_ci` test-first
+  (`tests/test_tournament.py`, 5 new tests) as permanent evaluation
+  infrastructure, not a one-off.
+
+  | Comparison | Pairs/Games | Win rate | Mean margin | Bootstrap 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v1` (screen, seed 5000) | 20/40 | 1.000 | +6563.0 | [1.000, 1.000] |
+  | vs. `task_teacher_v1` (promotion, seed 6000) | 50/100 | 0.970 | +6336.1 | **[0.930, 1.000]** |
+  | vs. `roi_teacher_v3` (regression, seed 7000) | 20/40 | 1.000 | +33175.4 | [1.000, 1.000] |
+  | vs. `starter` (regression, seed 7000) | 20/40 | 1.000 | +35994.8 | [1.000, 1.000] |
+
+  The promotion-gate CI `[0.930, 1.000]` is wholly above 0.50 — a decisive,
+  rigorously-established result, not a margin-based guess. At 50 pairs the
+  fixed v2 loses a small minority of games to v1 (unlike the perfect 20-pair
+  screen), but the interval leaves no ambiguity about the direction.
+- **Outcome: `task_teacher_v2` is legitimately promoted to
+  `competitive_champion`**, satisfying every item in Codex's required
+  post-fix evidence gate (100-episode acceptance run, 20-pair screen,
+  50-pair promotion gate with paired CI, regression screens vs.
+  `roi_teacher_v3` and `starter`). This supersedes the premature claim
+  above; `task_teacher_v1` is retained as the immutable benchmark this
+  result is measured against, per `docs/0_coding_standards.md` §4.
 - **Packaging:** re-verified standalone (`PYTHONPATH` stripped) after the
   performance fix; all four existing agents (`roi_teacher_v1-v3`,
   `task_teacher_v1`) re-packaged and re-verified alongside it.
 - **Ladder result:** not yet submitted.
 - **Lesson carried forward:** synthetic unit tests validated every
-  individual function correctly, but neither bug above was visible until
-  a *real, full-length simulator run* — the runaway-hiring bug only
-  manifests when load stays high across many consecutive turns in one
-  day (not exercised by short synthetic scenarios), and the performance
-  bug only manifests at the unit counts that emerge from realistic
-  economic conditions over a full season. Full-episode smoke runs before
-  declaring a version done are not optional, even with thorough unit
-  test coverage.
+  individual function correctly, but neither the runaway-hiring bug nor
+  the performance bug was visible until a *real, full-length simulator
+  run* — full-episode smoke runs before declaring a version done are not
+  optional, even with thorough unit test coverage. A second, distinct
+  lesson from this same version: a library-level fix with passing unit
+  tests is not evidence the fix is *wired in* — when a symptom a fix was
+  supposed to eliminate persists unchanged afterward, that persistence is
+  itself a signal to investigate, not a data point to rationalize. And a
+  third: win rate/game outcomes, not money margin, decide promotion —
+  positive mean margin over a small, unreplicated sample is not
+  promotion evidence on its own.

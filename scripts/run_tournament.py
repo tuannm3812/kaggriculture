@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import random
 import sys
 import time
 from pathlib import Path
@@ -93,24 +94,52 @@ def run_pair(agent_ref: str, opponent_ref: str, episode_steps: int, seed: int) -
     return agent_score, mean_margin, dt
 
 
+def bootstrap_ci(
+    pair_scores: list[float], n_resamples: int = 10000, ci: float = 0.95, seed: int = 0
+) -> tuple[float, float]:
+    """Percentile bootstrap CI for the mean of paired seed/seat scores.
+
+    Per the authoritative design doc §6: promotion/rejection is decided by
+    whether this interval is wholly above/below 0.50, not by a point
+    estimate alone. Resamples whole pairs (each already averages both seat
+    assignments of one seed), not individual games, to respect the paired
+    design.
+    """
+    n = len(pair_scores)
+    rng = random.Random(seed)
+    means = []
+    for _ in range(n_resamples):
+        resample = [pair_scores[rng.randrange(n)] for _ in range(n)]
+        means.append(sum(resample) / n)
+    means.sort()
+    lower_tail = (1.0 - ci) / 2
+    lo_idx = int(lower_tail * n_resamples)
+    hi_idx = int((1.0 - lower_tail) * n_resamples) - 1
+    return means[lo_idx], means[max(lo_idx, hi_idx)]
+
+
 def tournament(agent_ref: str, opponent_ref: str, episodes: int, episode_steps: int, base_seed: int) -> None:
-    total_score = 0.0
     total_margin = 0.0
     total_wall = 0.0
+    pair_scores = []
     for i in range(episodes):
         seed = base_seed + i
         score, margin, wall = run_pair(agent_ref, opponent_ref, episode_steps, seed)
-        total_score += score
+        pair_scores.append(score)
         total_margin += margin
         total_wall += wall
     n_games = episodes * 2
-    win_rate = total_score / episodes
+    win_rate = sum(pair_scores) / episodes
     mean_margin = total_margin / episodes
     steps_per_sec = (n_games * episode_steps) / total_wall if total_wall > 0 else float("nan")
+    ci_msg = ""
+    if episodes >= 2:
+        lo, hi = bootstrap_ci(pair_scores)
+        ci_msg = f", bootstrap_95%_ci=[{lo:.3f}, {hi:.3f}]"
     print(
         f"{agent_ref!r} vs {opponent_ref!r}: "
         f"win_rate={win_rate:.3f} ({episodes} seed pairs / {n_games} games), "
-        f"mean_money_margin={mean_margin:+.1f}, "
+        f"mean_money_margin={mean_margin:+.1f}{ci_msg}, "
         f"wall_time={total_wall:.1f}s ({steps_per_sec:.0f} steps/sec)"
     )
 

@@ -11,11 +11,19 @@ test), economy math tested against the real simulator, and a series of
 agents have each beaten the last in local tournament play. Current local
 champion: **`task_teacher_v2`** — adds daily hiring and bounded exhaustive
 multi-unit assignment on top of `task_teacher_v1`'s multi-tile task
-scheduler (see `docs/4_agent_version_log.md` for the full progression and
-two real bugs found via full simulator runs). Packaging
-(`scripts/package_agent.py`) is done and verified for every agent; not yet
-submitted to the ladder — see `docs/6_next_steps.md` for the current
-recommendation.
+scheduler. A confirmed hiring-wiring bug initially blocked promotion
+(Codex review, 2026-08-02): the fix was correct in the shared library but
+never actually passed to the running agent's hiring call, which the
+project had mistaken for a legitimate "provisional champion" result based
+on positive money margin alone. After fixing the wiring and re-running the
+full evidence gate — 100-episode acceptance run, then paired bootstrap
+evaluation at 20 pairs (screen) and 50 pairs (promotion, 95% CI
+`[0.930, 1.000]`, wholly above 0.50) — `task_teacher_v2` is legitimately
+promoted. See `docs/4_agent_version_log.md` for full numbers and
+`docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md` §10 for
+Codex's review and the response. Packaging (`scripts/package_agent.py`)
+is done and verified for every agent; not yet submitted to the ladder —
+see `docs/6_next_steps.md` for the current recommendation.
 
 Full design is split across
 [`docs/superpowers/specs/`](docs/superpowers/specs/): the authoritative

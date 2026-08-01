@@ -4,20 +4,25 @@ Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
 ## Current Recommendation (2026-08-02)
 
-`task_teacher_v2` is provisionally the new local champion — adds daily
-hiring and bounded exhaustive multi-unit assignment on top of
-`task_teacher_v1`. Beats every built-in at 1.000 win rate, and beats
-`task_teacher_v1` on average (+2779.6 mean margin) but not a clean sweep
-(0.875 win rate — 2 of 16 games lost). Passed its acceptance-gate
-measurement (50 episodes, 100% `DONE`/finite, median 25/25 tiles worked,
-every action kind well-represented). See `docs/4_agent_version_log.md`
-for full numbers and two real bugs found (and fixed) via full simulator
-runs, not caught by unit tests alone: a runaway-hiring bug and a
-combinatorial-performance bug.
+`task_teacher_v2` is the new local champion — adds daily hiring and
+bounded exhaustive multi-unit assignment on top of `task_teacher_v1`. This
+supersedes an earlier, self-identified process error: the first pass
+declared v2 "provisionally" champion from an 8-pair local tournament
+(0.875 win rate, positive margin) without a confidence interval, which
+Codex's 2026-08-02 review correctly flagged as both short of the
+authoritative promotion gate (design doc §6) and built on top of a real
+bug — a hiring-value fix that was correct in `tasking.py` but never
+actually wired into `agents/task_teacher_v2/main.py`'s call site.
 
-Given v2 doesn't cleanly dominate v1, the occasional losses are worth a
-closer look before treating v2 as unambiguously "done" — e.g. before using
-it as the BC teacher or before any ladder submission decision.
+After fixing the wiring bug (test-first regression test, then the one-line
+call-site fix) and re-running the acceptance gate (100 episodes, 100%
+`DONE`/finite, all 25 tiles worked every episode, hand count now a flat
+5/5/5 instead of ranging 7-8), the full paired-bootstrap protocol was run:
+20-pair screen vs. `task_teacher_v1` (1.000 win rate, CI `[1.000, 1.000]`),
+then the 50-pair promotion gate (0.970 win rate, CI `[0.930, 1.000]` —
+wholly above 0.50), plus 20-pair regression screens vs. `roi_teacher_v3`
+and `starter` (both 1.000, CI `[1.000, 1.000]`). See
+`docs/4_agent_version_log.md` for full numbers.
 
 Still not submitted to the ladder — re-ask before submitting or continuing
 to delay, per the standing rule from earlier (design doc §9's execution-
@@ -33,11 +38,14 @@ status audit).
 6. ~~Multi-tile task/route teacher (`task_teacher_v1`)~~ — done 2026-08-01.
 7. ~~`task_teacher_v2` (hiring + multi-unit assignment)~~ — done 2026-08-02.
    See `docs/4_agent_version_log.md`.
-8. **Investigate `task_teacher_v2`'s occasional losses to `task_teacher_v1`**
-   (2 of 16 games) before promoting v2 unambiguously — is this real
-   variance from hiring risk (money spent on hands that didn't pay off in
-   that specific seed/seat), or a fixable inefficiency in the greedy
-   fallback / hiring formula? Not yet investigated.
+8. ~~Investigate `task_teacher_v2`'s occasional losses to `task_teacher_v1`~~
+   — done 2026-08-02: the losses were caused by the confirmed hiring-wiring
+   bug (existing hands' capacity never reached `should_hire`), not
+   irreducible variance. Fixed; the 50-pair promotion gate afterward gave
+   CI `[0.930, 1.000]`, still not a perfect sweep but decisively above 0.50.
+   The remaining ~3% loss rate at 50 pairs could still be profiled further
+   (same hiring-risk-vs-fallback-inefficiency question) if it matters before
+   BC teacher selection, but is no longer a promotion blocker.
 9. **`task_teacher_v3`** (per the construction sequence: ongoing crops —
    Tomato/Strawberry — and fertilizer timing): the next version. Needs the
    ongoing-crop ROI ranking deferred in `docs/3_agent_strategy.md` (season-

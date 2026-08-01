@@ -23,7 +23,7 @@ MULTI_CROP_VERSIONS = (V2, V3)  # versions with MELON in CANDIDATE_CROPS
 BASE_PRICES = {item: p["base"] for item, p in economy.MARKET_PARAMS.items()}
 
 
-def make_obs(*, day=0, money=3000.0, tile=None, farmer_inventory=None, shed=None, seeds=None, prices=None):
+def make_obs(*, day=0, money=2000.0, tile=None, farmer_inventory=None, shed=None, seeds=None, prices=None):
     tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
     fx, fy = FARMER_POS
     tiles[fy][fx] = tile
@@ -116,7 +116,7 @@ def test_plant_watered_but_not_yet_mature_passes():
 
 def test_farmer_inventory_triggers_drop_before_replanting():
     module = load_agent_module(V1)
-    obs = make_obs(tile=None, farmer_inventory={"CARROT": 2}, seeds={"WHEAT": 1}, money=3000)
+    obs = make_obs(tile=None, farmer_inventory={"CARROT": 2}, seeds={"WHEAT": 1}, money=2000)
     action = run_agent(module, obs)
     assert action["farmer"] == ["DROP"]
 
@@ -132,7 +132,7 @@ def test_insufficient_money_skips_seed_purchase():
 
 def test_empty_tile_buys_best_scoring_crop_seed_at_base_prices():
     module = load_agent_module(V1)
-    obs = make_obs(tile=None, money=3000, prices=BASE_PRICES)
+    obs = make_obs(tile=None, money=2000, prices=BASE_PRICES)
     action = run_agent(module, obs)
     buy_orders = [o for o in action["market"] if o[0] == "BUY_SEED"]
     assert len(buy_orders) == 1
@@ -150,7 +150,7 @@ def test_empty_tile_plants_directly_when_seed_already_held():
 def test_v2_v3_prefer_melon_at_base_prices():
     for version in MULTI_CROP_VERSIONS:
         module = load_agent_module(version)
-        obs = make_obs(tile=None, money=3000, prices=BASE_PRICES)
+        obs = make_obs(tile=None, money=2000, prices=BASE_PRICES)
         action = run_agent(module, obs)
         buy_orders = [o for o in action["market"] if o[0] == "BUY_SEED"]
         assert buy_orders == [["BUY_SEED", "MELON", 1]], version
@@ -190,7 +190,7 @@ def _day_too_late_for_every_candidate(module) -> int:
 def test_v3_holds_instead_of_planting_when_no_crop_can_mature():
     module = load_agent_module(V3)
     too_late_day = _day_too_late_for_every_candidate(module)
-    obs = make_obs(tile=None, day=too_late_day, money=3000, prices=BASE_PRICES)
+    obs = make_obs(tile=None, day=too_late_day, money=2000, prices=BASE_PRICES)
     action = run_agent(module, obs, V3_CONFIG)
     assert action["farmer"] == ["PASS"]
     assert not any(o[0] == "BUY_SEED" for o in action["market"])
@@ -202,7 +202,7 @@ def test_v3_still_plants_a_short_maturity_crop_near_season_end():
     day = LAST_DAY_INDEX - economy.CROPS["CARROT"]["max_yield_day"]
     assert day + economy.CROPS["WHEAT"]["max_yield_day"] > LAST_DAY_INDEX
     assert day + economy.CROPS["MELON"]["max_yield_day"] > LAST_DAY_INDEX
-    obs = make_obs(tile=None, day=day, money=3000, prices=BASE_PRICES)
+    obs = make_obs(tile=None, day=day, money=2000, prices=BASE_PRICES)
     action = run_agent(module, obs, V3_CONFIG)
     buy_orders = [o for o in action["market"] if o[0] == "BUY_SEED"]
     assert buy_orders == [["BUY_SEED", "CARROT", 1]]
@@ -216,7 +216,7 @@ def test_v1_v2_have_no_horizon_awareness_by_contrast():
             continue
         module = load_agent_module(version)
         too_late_day = _day_too_late_for_every_candidate(module)
-        obs = make_obs(tile=None, day=too_late_day, money=3000, prices=BASE_PRICES)
+        obs = make_obs(tile=None, day=too_late_day, money=2000, prices=BASE_PRICES)
         action = run_agent(module, obs)
         assert any(o[0] == "BUY_SEED" for o in action["market"]), (
             f"{version} was expected to (still, bug-for-bug) buy a seed "

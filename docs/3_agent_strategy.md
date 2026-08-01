@@ -87,7 +87,7 @@ construction sequence (`docs/6_next_steps.md`). Superseded as champion by
 `task_teacher_v2`; kept as the immutable benchmark this result is measured
 against.
 
-## `task_teacher_v2` Scope (`agents/task_teacher_v2`) — Current Champion
+## `task_teacher_v2` Scope (`agents/task_teacher_v2`) — Current Champion (promoted 2026-08-02)
 
 Adds daily hiring and bounded exhaustive multi-unit assignment on top of
 v1's task model — `src/kaggriculture_lib/tasking.py`'s `joint_assign`
@@ -104,12 +104,17 @@ version of this formula didn't discount for existing hands and approved
 hire after hire indefinitely, found via a full simulator run (see
 `docs/4_agent_version_log.md`).
 
-Beats every built-in at 1.000 win rate and beats v1 on average (+2779.6
-margin) but not a clean sweep (0.875 win rate) — unlike every prior
-version transition in this project, which were clean wins. Provisionally
-the champion given the positive average, but the occasional losses are
-flagged as worth investigating in `docs/6_next_steps.md` before treating
-this as unambiguously settled.
+An early hiring-value fix in `tasking.py` was correct but never actually
+reached the running agent (a missing `existing_hands` argument at the call
+site, confirmed by Codex's 2026-08-02 review) — this produced an initial,
+premature "provisional champion" claim from an 8-pair sample with 2
+losses and no confidence interval, which conflicted with the project's own
+promotion rule (win rate/outcomes decide, margin is diagnostic only). After
+fixing the wiring bug, the full paired-bootstrap protocol
+(`docs/4_agent_version_log.md`) gave a 50-pair promotion-gate CI of
+`[0.930, 1.000]` vs. `task_teacher_v1` — wholly above 0.50 — plus clean
+20-pair regression sweeps vs. `roi_teacher_v3` and `starter`. This is a
+legitimate, rigorously-established promotion, not a margin-based guess.
 
 ## Strategy Approach (unchanged from the design doc)
 

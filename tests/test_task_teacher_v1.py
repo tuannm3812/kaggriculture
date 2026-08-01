@@ -21,7 +21,7 @@ BOARD_SIZE = 10
 V1_CONFIG = {"episodeSteps": 720, "turnsPerDay": 24}
 
 
-def make_obs(*, day=0, money=3000.0, farmer=(4, 4), tiles=None, farmer_inventory=None, shed=None, seeds=None, prices=None):
+def make_obs(*, day=0, money=2000.0, farmer=(4, 4), tiles=None, farmer_inventory=None, shed=None, seeds=None, prices=None):
     board = tiles if tiles is not None else [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
     opponent_tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
     fx, fy = farmer
@@ -134,7 +134,7 @@ def test_market_timing_seed_bought_this_turn_is_not_planted_this_turn():
     satisfy a PLANT task this same turn."""
     module = load_agent_module("task_teacher_v1")
     tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
-    obs = make_obs(farmer=(4, 4), tiles=tiles, seeds={}, money=3000, prices={"CARROT": 35})
+    obs = make_obs(farmer=(4, 4), tiles=tiles, seeds={}, money=2000, prices={"CARROT": 35})
     action = module.agent(obs, V1_CONFIG)
     assert action["farmer"] != ["PLANT", "CARROT"]
     assert any(o[0] == "BUY_SEED" for o in action["market"])
