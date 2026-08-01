@@ -1,8 +1,13 @@
 # Kaggriculture Competition Plan — Design
 
-Written 2026-08-01. Discuss/revise with Codex or others before moving to a
-detailed implementation plan — nothing in `src/`, `agents/`, or `scripts/`
-should be built until this design is settled.
+Written 2026-08-01. Sections 1–3 and 8 are stable background. Sections 4–7
+were rewritten 2026-08-01 to reflect the converged design after the
+strategy pivot recorded in §9's Design Review Log (scripted-expert
+imitation → PPO league self-play, not the original heuristic-only plan) —
+if §9's most recent entry ever disagrees with §4–7, §9 is the source of
+truth and this section should be updated to match. §9 itself is preserved
+as the historical record of how each decision was reached; don't rewrite
+it retroactively.
 
 ## 1. Competition Facts
 
@@ -20,8 +25,8 @@ should be built until this design is settled.
   `agent(obs)` function, submitted via `kaggle competitions submit
   kaggriculture -f main.py -m "<message>"`. Kaggle runs episodes against
   other submitted agents; **submission-slot / ladder-tracking rules are not
-  stated in Kaggriculture's own docs** and must be confirmed early (see Phase
-  0) rather than assumed to mirror `maze-crawler`'s "only latest N tracked"
+  stated in Kaggriculture's own docs** and must be confirmed early (see §7,
+  Week 1) rather than assumed to mirror `maze-crawler`'s "only latest N tracked"
   behavior.
 
 ## 2. Game Summary (see full rules in the downloaded `README.md`)
@@ -65,25 +70,65 @@ local tournament/replay-analysis script pair, and a strict "don't submit
 speculative variants that push a known-good version out of tracked slots"
 submission discipline.
 
-## 4. Strategy Approach — Recommendation
+## 4. Strategy Approach — Approved Design
 
-**Start heuristic, layer in search later.** Ship a hand-tuned ROI-heuristic
-agent first (fast to build, easy to debug, gets on the ladder quickly so
-rating has time to converge on real game volume — the same lesson
-`maze-crawler`'s docs recorded repeatedly). Only add a short-horizon
-lookahead/planning layer once replay evidence identifies a *specific* tempo
-or timing failure the heuristic can't fix — not preemptively.
+**Scripted-expert imitation, then PPO league self-play**, bootstrapped from
+a scripted heuristic teacher. This supersedes the original "start
+heuristic, layer in search later" recommendation once the user confirmed
+(§9, "Codex review after user strategy change"): solo competitor, a
+flexible time budget tracked via weekly evidence checkpoints rather than a
+fixed hour cap, optimizing for both leaderboard result and portfolio
+quality, with Kaggle GPU access.
+
+**Superseded original recommendation** (kept for history, no longer the
+plan): ship a hand-tuned ROI-heuristic agent, add a short-horizon lookahead
+layer only if replay evidence showed a specific tempo/timing failure the
+heuristic couldn't fix. Not wrong for what it covered — the scripted
+heuristic remains a required component — but scoped for a pure rule-based
+project, one layer short of what's actually being built.
+
+**Approved architecture:**
+
+1. A scripted ROI-heuristic agent (`agents/roi_teacher_v*`) serves three
+   roles: teacher for behavioral cloning, benchmark/regression-test
+   opponent for every later policy, and fallback submission if the RL
+   track stalls.
+2. Behavioral cloning warm-starts a learned policy from the teacher's
+   trajectories — gated on the teacher demonstrating broad action-family
+   and state coverage first (v1–v3 are single-tile and not yet adequate
+   teachers for this; see the 2026-08-01 "Codex review of Claude's current
+   implementation" entry in §9 and `docs/6_next_steps.md`).
+3. PPO fine-tunes the BC-initialized policy against a growing league:
+   built-ins, the teacher, frozen historical checkpoints, self-play
+   policies, and ladder-derived opponent proxies (§9's `ladder_proxies`
+   tier).
+4. Weekly evidence checkpoints — not a fixed abandon-RL date — decide
+   continue/adjust/fallback-to-heuristic-submission each week;
+   `docs/4_agent_version_log.md` is the record.
+
+Full technical detail (action factorization, reward shaping, network
+architecture, curriculum stage gates, league/evaluation protocol, GPU
+checkpoint/resume format) lives in §9 as the historical record of how each
+decision was reached — not duplicated here.
 
 Rejected alternatives:
-- **Full lookahead/simulation agent from day one** — more adaptive to market
-  state, but much more code to get right before any submission exists, and
-  the added complexity may not target this game's actual failure modes
-  (unknown until replay data exists).
-- **Heuristic only, no planning layer ever** — likely leaves value on the
-  table once the market-timing and quadrant/hand-investment tradeoffs get
-  sophisticated in later-game states; deferred, not discarded.
+- **Full lookahead/simulation heuristic instead of RL** — caps strategic
+  depth once portfolio quality and GPU access changed the cost-benefit;
+  less transferable as a portfolio artifact than a genuine imitation+RL
+  pipeline.
+- **Full RL from scratch, no scripted-teacher bootstrap** — this game's
+  action space (multi-unit actions plus an ordered market-order list) and
+  sparse terminal-only reward make cold-start PPO too sample-inefficient
+  to be a responsible use of a solo GPU budget; BC warm-start is the
+  standard fix.
+- **A fixed calendar date to abandon the RL track** — replaced with weekly
+  evidence checkpoints against the heuristic teacher/incumbent, so a
+  stalled RL track doesn't silently consume the whole remaining runway.
 
 ## 5. Repo Structure
+
+Reflects the repo's actual state as of 2026-08-01 (see git history), not a
+structure speculatively written before any code existed:
 
 ```
 kaggriculture/
@@ -92,68 +137,127 @@ kaggriculture/
 ├── .gitignore
 ├── docs/
 │   ├── 0_coding_standards.md       # project-specific layer on the master doc;
-│   │                               # documents the src/-from-day-one exception (§6)
+│   │                               # src/-from-day-one and notebooks/-for-
+│   │                               # platform-verification exceptions (§6)
 │   ├── 1_competition_instructions.md  # game rules, deadline, submission mechanics
 │   ├── 2_environment_notes.md     # price-curve/yield-formula verification,
 │   │                               # kaggle_environments quirks found locally
-│   ├── 3_agent_strategy.md        # ROI tables, market-timing hypotheses
+│   ├── 3_agent_strategy.md        # ROI tables, agent scope/lineage
 │   ├── 4_agent_version_log.md     # per-version config diff + score/outcome
-│   ├── 5_replay_strategy.md       # aggregate replay findings, loss-mode taxonomy
-│   ├── 6_next_steps.md            # rolling submit/wait recommendation
-│   └── assets/
+│   ├── 6_next_steps.md            # rolling recommendation (5_replay_strategy.md
+│   │                               # is reserved, not yet created — no replay
+│   │                               # findings exist until a ladder submission does)
+│   └── superpowers/specs/          # this design doc
 ├── src/kaggriculture_lib/
-│   ├── economy.py                 # replicated price curve + yield formulas
-│   └── planner.py                 # decision logic (heuristic first, lookahead later)
+│   └── economy.py                 # replicated + tested price curve, yield formulas
 ├── agents/
-│   ├── roi_baseline_v1/main.py
+│   ├── roi_teacher_v1/main.py     # single-tile, best-of-{WHEAT, CARROT}
+│   ├── roi_teacher_v2/main.py     # + MELON candidate
+│   ├── roi_teacher_v3/main.py     # + season-horizon gate — current champion
 │   └── ...                        # one folder per tried version, immutable once tried
+├── notebooks/                      # narrow exception (§6): platform
+│   │                               # verification only, not agent development
+│   ├── 00_platform_smoke_test.ipynb
+│   └── kernels/platform_smoke_test/kernel-metadata.json
 ├── scripts/
 │   ├── run_tournament.py          # local batch runner: agent vs pass/random/starter/champion
-│   ├── analyze_replay.py          # action counts, money-over-time, loss-mode tagging
-│   └── submit.sh                  # wraps `kaggle competitions submit`
-├── tests/                          # unit tests for economy.py math
-└── replays/                        # gitignored raw JSON; replays/analysis/ summaries kept in git
+│   ├── package_agent.py           # inlines src/kaggriculture_lib into a standalone main.py
+│   └── push_kaggle_kernel.sh       # wraps `kaggle kernels push` + status polling
+├── tests/                          # economy.py, agent decision logic, tournament
+│                                   # harness, packaging — 129 passing as of 2026-08-01
+├── build/                          # gitignored packaged submission artifacts
+└── replays/                        # gitignored raw JSON; replays/analysis/ summaries
+                                    # kept in git once any exist
 ```
 
-## 6. Deliberate Exception to the Master Coding Standard
+`scripts/analyze_replay.py` and `scripts/submit.sh` from the original
+repo-structure sketch were never built — no replay data exists yet (no
+ladder submission has happened), and `kaggle competitions submit`/`kaggle
+kernels push` are run directly so far rather than through a wrapper. Build
+these if/when the volume of repeated manual commands justifies it, not
+speculatively.
 
-The master standard says: "only add `src/<package>` once shared logic is
-genuinely reused across multiple notebooks." This project adds
-`src/kaggriculture_lib/` starting at v1, not after proving reuse, because the
-price-curve and yield formulas (9 resources × asymmetric shape functions,
-one-time vs. ongoing yield math, `CARE` bonus banking) are complex enough
-that every agent version must share exactly one correct implementation —
-reimplementing per version risks silent divergence and an agent that's
-"wrong" in an untestable way. `docs/0_coding_standards.md` will record this
-exception explicitly, per the master doc's own convention for project-level
-deviations.
+## 6. Deliberate Exceptions to the Master Coding Standard
 
-## 7. Phased Timeline
+**`src/kaggriculture_lib/` from day one.** The master standard says: "only
+add `src/<package>` once shared logic is genuinely reused across multiple
+notebooks." This project adds it starting at v1, not after proving reuse,
+because the price-curve and yield formulas (9 resources × asymmetric shape
+functions, one-time vs. ongoing yield math, `CARE` bonus banking) are
+complex enough that every agent version — heuristic teacher, BC-cloned
+policy, PPO-trained policy — must share exactly one tested implementation.
+Reimplementing this per version risks silent divergence and an agent
+that's "wrong" in an untestable way.
 
-Today: 2026-08-01. Deadline: 2026-09-30 23:59 UTC (~60 days). Pace: **heavy
-push now, taper later** (front-load Phases 0–3, then steady iteration,
-freeze before the deadline).
+**`notebooks/` for platform verification only, added 2026-08-01.** This
+repo is otherwise deliberately code-first, not notebook-first (§3) — but
+Kaggle's execution environment cannot be verified without running actual
+code on Kaggle's own infrastructure, and `kaggriculture` isn't in the
+latest published `kaggle-environments` PyPI release
+(`docs/2_environment_notes.md`), so whether Kaggle's kernel image has a
+compatible build is a genuine open question, not a formality.
+`notebooks/00_platform_smoke_test.ipynb` exists solely to answer that — it
+is not becoming the executable source of truth for agent development the
+master standard's notebook-first default warns against duplicating logic
+into.
 
-| Phase | Window | Deliverable |
+Both exceptions recorded here per the master doc's own convention for
+project-level deviations.
+
+## 7. Phased Plan
+
+Supersedes the original Phase 0–6 table, which assumed a pure-heuristic
+project with no RL component. Today: 2026-08-01. Deadline: 2026-09-30
+23:59 UTC. Pace: user-approved weekly evidence checkpoints (§9's
+time-budget recalibration), not a fixed hour budget or a fixed date to
+abandon any track.
+
+**Status as of 2026-08-01** — stated using §9's execution-status-audit
+vocabulary (`local_verified` → `packaged` → `kernel_pushed` →
+`kernel_running` → `kernel_complete` → `submitted` → `scored` → `failed`);
+don't describe anything as "running on Kaggle" short of an actual
+`kernel_running`/`kernel_complete` result:
+
+- `local_verified`: environment installed and verified (`docs/2`);
+  `economy.py` tested against the real simulator; `roi_teacher_v1`→`v3`
+  built and local-tournament-validated, each superseding the last on
+  measured evidence (`docs/4`); `roi_teacher_v3` is the local champion;
+  129 tests passing across economy math, agent decision logic, the
+  tournament harness, and packaging.
+- `packaged`: `roi_teacher_v3` packaged into a standalone artifact,
+  verified to run with `PYTHONPATH` stripped (the condition Kaggle's
+  execution environment actually imposes).
+- Not yet reached: `kernel_pushed`, `submitted`, `scored`.
+
+| Week | Dates | Evidence checkpoint |
 | --- | --- | --- |
-| 0 — Setup | Day 0–1 | Repo scaffold; `docs/0_coding_standards.md`, `docs/1_competition_instructions.md`; confirm `kaggle_environments.make("kaggriculture")` runs locally; baseline matchups among the three built-in agents (`pass`, `random`, `starter`); **confirm submission-slot/ladder-tracking rules** (open item, not stated in Kaggriculture's own docs) |
-| 1 — Economics modeling | Day 1–4 | `src/kaggriculture_lib/economy.py` + `tests/`, validated against the README's sample price points (e.g. wheat `$45`/`$20`/`$19` at `I0−T`/`I0+T`/`I0+2T`); static $/tile/day and $/action tables per crop/animal → `docs/2_environment_notes.md`, `docs/3_agent_strategy.md` (v0 hypotheses) |
-| 2 — ROI baseline agent | Day 4–8 | `agents/roi_baseline_v1`: greedy highest-current-ROI planting/selling, never miss watering/feeding, hire hands / buy land only when marginal ROI clears cost; `scripts/run_tournament.py` built and used locally before any submission |
-| 3 — First submission + diagnostics | Day 8–14 | Submit v1 early to start accumulating ladder games (rating needs volume to converge); build `scripts/analyze_replay.py` (money-over-time, weed/escape counts, self-crash-on-sell detection); scaffold `docs/4_agent_version_log.md`, `docs/5_replay_strategy.md` |
-| 4 — Iterate (heavy-push window) | Day 14–30 | One-variable-at-a-time versions v2–v6+: sell pacing (avoid self-crashing premium goods), hire cadence, land-buy timing, crop-mix sequencing over the season, fertilizer/care gating. Local tournament gate before every submission; update `docs/4` + `docs/6_next_steps.md` after every result |
-| 5 — Lookahead layer (conditional) | Day 30–45 | Only if replay evidence shows a specific tempo/timing failure a greedy heuristic can't fix. Short-horizon (1–3 day) simulate-and-score used only at high-value decision points: `BUY_LAND` timing, crop-mix switch timing, bulk-sell timing — not a full replan every turn |
-| 6 — Stabilize & final | Day 45–60 | Freeze new mechanics ~1 week before deadline; re-verify champion via local tournament; submit with buffer before 2026-09-30 23:59 UTC; close out `README.md` with a results summary |
+| 1 | Aug 1–7 | Environment contract, repo scaffold, legality masks, teacher v1→v3, paired tournament harness, packaging — **done**. Kaggle platform smoke kernel (offline-safe import check + a full paired-seat match on Kaggle's actual runtime) — next, isolated from all RL work. Multi-tile task/routing teacher plus an action-family/state-coverage gate — after the smoke kernel, before any BC work starts. |
+| 2 | Aug 8–14 | Encoders/decoders frozen at schema v1; trajectory dataset v1 generated from the multi-tile teacher, **not** v1–v3 (per Codex's 2026-08-01 code review); BC baseline; a valid heuristic ladder submission — re-confirm with the user before spending it, rather than treating the earlier "not yet" as standing authorization (§9's execution-status audit, point 5) |
+| 3 | Aug 15–21 | Full-economy teacher and BC dataset, BC full-season checkpoint, replay diagnostics |
+| 4 | Aug 22–28 | PPO bootstrap on mixed-length curriculum, resume tested across Kaggle sessions |
+| 5 | Aug 29–Sep 4 | Full-season PPO and first frozen-opponent league; submit only if the promotion gate passes |
+| 6 | Sep 5–11 | Self-play iteration, reward/entropy ablations, opponent-specific regression analysis |
+| 7 | Sep 12–18 | Strongest targeted challenger: recurrent policy only if probes justify it; otherwise league/population refinement |
+| 8 | Sep 19–25 | Robustness tests (conditional on actually-observed live episode config variation, per §9 — not trained speculatively), inference/package optimization, champion selection; freeze major architecture changes |
+| 9 | Sep 26–30 | Final paired verification, submission with buffer, replay/status monitoring, portfolio write-up |
 
-## 8. Open Items to Resolve Early (Phase 0)
+If this table and §9's most recent entry ever disagree, §9 is correct and
+this table should be updated to match — the same discipline this project's
+own version logs (`docs/4`, `docs/6`) already use.
+
+## 8. Open Items
 
 1. Submission-slot / ladder-tracking behavior for Kaggriculture specifically
    — do not assume it matches `maze-crawler`'s "only latest N submissions
    tracked" rule until confirmed via `kaggle competitions submissions
-   kaggriculture` behavior or competition rules page.
-2. Whether team play is relevant (solo assumed unless stated otherwise).
+   kaggriculture` behavior or competition rules page. Still open as of
+   2026-08-01 (0 submissions exist yet to observe the behavior with).
+2. ~~Whether team play is relevant~~ — resolved: user confirmed competing
+   solo (§9, "Codex review after user strategy change").
 3. Exact opponent pool for ladder games (random public submissions? seeded
    built-ins? unclear from `AGENTS.md`/`README.md` alone) — affects how much
    weight to put on built-in-agent tournament results vs. real ladder score.
+   Still open as of 2026-08-01.
 
 ## 9. Design Review Log
 
