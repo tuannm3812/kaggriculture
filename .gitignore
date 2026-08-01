@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Raw competition/game files and generated artifacts
+replays/**/*.json
+!replays/.gitkeep
+scratch/
+*.tar.gz
+kaggriculture.zip
+
+# Training artifacts (large, regenerable, not for git)
+checkpoints/
+*.safetensors
+*.pt

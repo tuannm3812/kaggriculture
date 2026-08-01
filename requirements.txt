@@ -1,0 +1,10 @@
+# Local dev environment. Needs Python >= 3.11 (kaggle-environments' own
+# requirement) — use a dedicated venv, e.g.:
+#   python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# kaggriculture is not yet in a PyPI kaggle-environments release (checked
+# 2026-08-01, latest release 1.18.0); install from GitHub main until it is.
+git+https://github.com/Kaggle/kaggle-environments.git
+
+numpy
+pytest
