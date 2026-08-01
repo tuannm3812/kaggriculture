@@ -6,10 +6,12 @@ economy simulation bot: https://www.kaggle.com/competitions/kaggriculture
 ## Status
 
 Week 1 in progress (2026-08-01). Deadline: **2026-09-30 23:59 UTC**. Local
-environment verified, economy math tested against the real simulator, and a
-working ROI-heuristic teacher agent (`roi_teacher_v1`) beats all three
-built-in agents in local tournament play. Not yet submitted to the ladder —
-see `docs/6_next_steps.md` for the blocking packaging step.
+environment verified, economy math tested against the real simulator, and
+a series of ROI-heuristic teacher agents beat all three built-in agents in
+local tournament play. Current local champion: **`roi_teacher_v3`** (see
+`docs/4_agent_version_log.md` for the full v1→v3 progression). Packaging
+(`scripts/package_agent.py`) is done and verified; not yet submitted to the
+ladder — see `docs/6_next_steps.md` for the current recommendation.
 
 Full design (why this repo is structured this way, strategy approach, and
 the converged RL-pipeline discussion with Codex) is in
@@ -23,8 +25,10 @@ the converged RL-pipeline discussion with Codex) is in
   (price curve, yield formulas) mirrored from and validated against the
   real environment. Single source of truth for every agent version.
 - `agents/<version>/main.py`: one immutable folder per tried agent version.
-- `scripts/`: local tournament runner, replay analysis, submit wrapper.
-- `tests/`: unit tests for `src/kaggriculture_lib`.
+- `scripts/`: local tournament runner (`run_tournament.py`), submission
+  packaging (`package_agent.py`).
+- `tests/`: unit tests for `src/kaggriculture_lib`, agent decision logic,
+  the tournament harness, and the packaging step.
 - `replays/`: gitignored raw episode JSON; `replays/analysis/` keeps small
   derived summaries.
 
@@ -43,8 +47,14 @@ Run the local tournament harness:
 
 ```bash
 PYTHONPATH=src .venv/bin/python scripts/run_tournament.py \
-    agents/roi_teacher_v1/main.py pass random starter \
+    agents/roi_teacher_v3/main.py pass random starter \
     --episodes 10 --episode-steps 720
+```
+
+Package an agent into a standalone submission artifact:
+
+```bash
+.venv/bin/python scripts/package_agent.py agents/roi_teacher_v3
 ```
 
 Run tests:

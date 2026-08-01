@@ -72,6 +72,21 @@ retyping values from the README.
   applied plus the following two days (3 days inclusive), matching the
   README.
 
+## Quirk: The Built-in `"random"` Agent Is Not Seed-Reproducible
+
+`kaggriculture.py:995-1019`'s `random_agent` creates `rng =
+random.Random()` fresh and unseeded on every single call — the
+environment's own `seed` config (which does deterministically control
+weed spawning and episode generation) has no effect on it. Confirmed by
+hand 2026-08-01: two `run_pair("starter", "random", ...)` calls at the same
+seed produced different money margins (400.0 vs. 455.0). Consequence:
+**any local-tournament or evaluation result measured against the `"random"`
+built-in is not reproducible run-to-run**, even with `configuration["seed"]`
+set. `tests/test_tournament.py` uses `"starter"`/`"pass"` (both
+deterministic) for its seed-determinism test instead. Relevant to the
+design doc §9's paired-seed evaluation protocol if `"random"` is ever used
+as a league member for anything beyond a rough sanity check.
+
 ## Baseline Throughput (2026-08-01, this machine, env-only, CPU)
 
 240-step episodes among the three built-in agents (`pass`, `random`,

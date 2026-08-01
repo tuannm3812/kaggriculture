@@ -1,0 +1,97 @@
+"""Tests for scripts/run_tournament.py.
+
+Added per Codex's 2026-08-01 code review: the harness that gates every
+submission decision had no tests of its own — a bug here (e.g. scoring a
+draw as a win, or silently swallowing a crashed agent) could corrupt every
+downstream comparison without ever showing up as a visible crash.
+"""
+
+import importlib.util
+import math
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+spec = importlib.util.spec_from_file_location("run_tournament", REPO_ROOT / "scripts" / "run_tournament.py")
+run_tournament = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(run_tournament)
+
+
+def fake_env(rewards, statuses=("DONE", "DONE")):
+    state = [SimpleNamespace(reward=r, status=s) for r, s in zip(rewards, statuses)]
+    return SimpleNamespace(steps=[state])
+
+
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [(100.0, 50.0, 1.0), (50.0, 100.0, 0.0), (75.0, 75.0, 0.5)],
+)
+def test_pairwise_score(a, b, expected):
+    assert run_tournament.pairwise_score(a, b) == expected
+
+
+def test_final_rewards_extracts_both_players():
+    env = fake_env([3200.0, 2800.0])
+    assert run_tournament.final_rewards(env) == (3200.0, 2800.0)
+
+
+@pytest.mark.parametrize("statuses", [("DONE", "ACTIVE"), ("INVALID", "DONE"), ("ERROR", "ERROR")])
+def test_final_rewards_raises_on_non_done_status(statuses):
+    env = fake_env([3200.0, 2800.0], statuses=statuses)
+    with pytest.raises(run_tournament.GameFailure):
+        run_tournament.final_rewards(env)
+
+
+@pytest.mark.parametrize("bad_reward", [None, float("nan"), float("inf")])
+def test_final_rewards_raises_on_invalid_reward(bad_reward):
+    env = fake_env([bad_reward, 2800.0])
+    with pytest.raises(run_tournament.GameFailure):
+        run_tournament.final_rewards(env)
+
+
+# --- integration tests against the real environment ----------------------
+
+def test_run_pair_pass_vs_pass_is_a_draw_with_zero_margin():
+    score, margin, _ = run_tournament.run_pair("pass", "pass", episode_steps=48, seed=1)
+    assert score == 0.5
+    assert margin == 0.0
+
+
+EPISODE_STEPS = 240  # >= ~6 in-game days: enough for starter's wheat loop to
+# turn a profit over "pass". At very short episodes (e.g. 96 steps / 4 days)
+# starter can legitimately still be behind "pass" -- confirmed by hand: it's
+# the same season-horizon issue Codex's review flagged for roi_teacher_v1/v2,
+# just showing up in the *official* starter baseline instead. Not this
+# harness's bug; just needs a long-enough episode for the assumption to hold.
+
+
+def test_run_pair_starter_beats_pass():
+    score, margin, _ = run_tournament.run_pair("starter", "pass", episode_steps=EPISODE_STEPS, seed=1)
+    assert score == 1.0
+    assert margin > 0
+
+
+def test_run_pair_is_seed_deterministic():
+    # Deliberately not "random": kaggriculture.py's built-in random_agent
+    # creates `random.Random()` fresh and unseeded on every call, so it is
+    # NOT reproducible via the env's `seed` config -- confirmed by hand
+    # (two runs of "starter" vs "random" at the same seed gave different
+    # margins). Use two deterministic built-ins instead.
+    result_1 = run_tournament.run_pair("starter", "pass", episode_steps=EPISODE_STEPS, seed=7)
+    result_2 = run_tournament.run_pair("starter", "pass", episode_steps=EPISODE_STEPS, seed=7)
+    assert result_1[0] == result_2[0]
+    assert result_1[1] == result_2[1]
+
+
+def test_run_pair_is_seat_symmetric_in_scoring():
+    """Swapping which function plays agent-vs-opponent shouldn't change the
+    *reported* pairwise score convention: run_pair always reports the score
+    from the perspective of its first argument."""
+    forward_score, forward_margin, _ = run_tournament.run_pair("starter", "pass", episode_steps=EPISODE_STEPS, seed=3)
+    reverse_score, reverse_margin, _ = run_tournament.run_pair("pass", "starter", episode_steps=EPISODE_STEPS, seed=3)
+    assert forward_score == 1.0
+    assert reverse_score == 0.0
+    assert math.isclose(forward_margin, -reverse_margin)

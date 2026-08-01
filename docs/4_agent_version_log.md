@@ -75,3 +75,54 @@ available, and outcome/lesson.
   agent uses 1 of 25 available NW tiles) but a bigger, separate change that
   should be evaluated on its own, not bundled with further crop-selection
   tweaks.
+- **Code-review finding (2026-08-01, Codex):** neither v1 nor v2 checks
+  remaining season length before planting — a late-season purchase can
+  spend money that never converts back to bank balance before the episode
+  ends. Confirmed as a real, characterized bug (see `roi_teacher_v3` below
+  and `tests/test_agents.py::test_v1_v2_have_no_horizon_awareness_by_contrast`).
+  v1/v2 are kept as-is (immutable once tried, per `docs/0_coding_standards.md`
+  §4) — the fix is a new version, not a retroactive edit.
+
+## roi_teacher_v3 (`agents/roi_teacher_v3/main.py`)
+
+- **Date:** 2026-08-01
+- **Config diff from v2:** one variable changed — adds a season-horizon
+  gate: only plants a candidate crop if `current_day + max_yield_day <=
+  last_day_index` (derived from the real `episodeSteps`/`turnsPerDay` via
+  an `(obs, config)` agent signature — `kaggle_environments/agent.py`
+  passes `config` when the agent function accepts a second argument, so
+  this uses the actual episode config rather than a hardcoded guess). If no
+  candidate crop can mature in time, holds (`PASS`) rather than spending on
+  a seed that can't come back as money. No other logic changed.
+- **Motivation:** fixes the gap Codex's code review found in v1/v2 (see the
+  design doc's 2026-08-01 "Codex review of Claude's current implementation"
+  entry).
+- **Local tournament** (`scripts/run_tournament.py`, 8 seed pairs / 16 games
+  per opponent, full 720-step episodes, base seed 0):
+
+  | Opponent | Win rate | Mean money margin |
+  | --- | ---: | ---: |
+  | `pass` | 1.000 | +3436.5 |
+  | `random` | 1.000 | +6388.9 |
+  | `starter` | 1.000 | +2938.5 |
+  | **`roi_teacher_v2` (direct)** | **1.000** | **+264.5** |
+
+- **Outcome:** measurable improvement over v2 across every opponent
+  (margin vs. `pass`/`random`/`starter` all increased), and beats v2
+  head-to-head at 100% win rate. Confirms the horizon-gate fix is a real
+  improvement, not just theoretically correct. **v3 is the new local
+  champion.**
+- **Packaging:** verified 2026-08-01 the same way as v1 — runs correctly
+  standalone with `PYTHONPATH` stripped (`build/roi_teacher_v3/main.py`),
+  including as a full-season (720-step) smoke test in
+  `tests/test_package_agent.py`.
+- **Ladder result:** not yet submitted.
+- **Lesson carried forward:** this was found by external code review, not
+  by this project's own local-tournament/replay process — a reminder that
+  100% win rate against weak built-ins doesn't surface every correctness
+  gap. Per Codex's Feedback 2, the next priority is **not** another
+  single-tile ROI variant (e.g., ongoing-crop ROI ranking) but multi-tile
+  task/route coverage: v1–v3's single-tile trajectory distribution would
+  make a poor behavioral-cloning teacher, since it never demonstrates
+  movement, hands, land, animals, structures, or multi-order market
+  coordination. See `docs/6_next_steps.md`.
