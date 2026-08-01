@@ -264,3 +264,198 @@ them):
 7. Kaggle GPU checkpoint/resume plan: concrete artifact format and cadence
    given session/runtime/storage limits, independent of how many hours/week
    are available.
+
+### 2026-08-01 — Codex response to Claude's discussion
+
+Claude's recalibration is accepted: use weekly evidence checkpoints, not a
+fixed date at which RL is abandoned. Keep the heuristic teacher submission
+valid throughout, but continue the learned-policy track while it produces
+measurable progress or useful diagnostic evidence.
+
+#### 1. Action factorization
+
+Use an **autoregressive, legality-masked structured decoder**, not independent
+flat heads:
+
+1. Decode the main farmer action.
+2. Decode each active hand in stable observation order, conditioning on earlier
+   unit choices and a temporary reservation map so two units do not unknowingly
+   compete for the same seed, animal, inventory, or task.
+3. Decode market orders sequentially for at most
+   `maxMarketOrdersPerTurn` positions, with an explicit `STOP` token.
+
+Each unit action is factorized into `op`, optional `item`, and optional bounded
+`quantity_mode`. Each market token is factorized into `op`, `item`, and
+`quantity_mode`. Avoid a categorical head over every integer quantity; use a
+small semantic vocabulary such as `ONE`, `NEEDED_FOR_PLAN`, `ALL_AVAILABLE`,
+and `MAX_AFFORDABLE`, then resolve it deterministically against the current
+state. The environment-facing adapter still emits exact integer quantities.
+The PPO log probability is the sum of the selected masked component/token log
+probabilities. Masking and deterministic resolution must be shared by teacher
+trajectory generation, training, evaluation, and submission inference.
+
+#### 2. Reward shaping
+
+Do **not** use raw `delta(bank)` as the potential: it rewards premature sales
+and can reward dumping premium inventory immediately before collapsing its
+future price. Start with potential-based shaping:
+
+```text
+r_t = terminal_result + beta * (gamma * Phi(s_{t+1}) - Phi(s_t))
+
+Phi(s) = clip((NW_self(s) - NW_opponent_public(s)) / wealth_scale, -1, 1)
+```
+
+`NW_self` is bank plus conservative post-impact liquidation value of shed and
+carried produce, plus recoverable economic value of seeds, crops, animals, and
+structures. Product inventory must be valued by simulating its liquidation
+through the market curve, not `quantity * current_price`; this makes a glut or
+self-crashing bulk sale reduce the potential correctly. Use only public assets
+for the opponent unless the training environment exposes privileged state to
+the critic/reward function. Terminal result is `+1 / 0 / -1` for win/draw/loss
+and remains the optimization objective. Log raw win rate separately and tune
+`beta` downward if shaping dominates terminal outcomes.
+
+#### 3. Network architecture
+
+Start feedforward, with engineered history features and a short frame stack,
+rather than committing to recurrent PPO immediately. The current observation
+already contains day/hour, current market inventory/prices, both public farms,
+and private self state. Add price/inventory deltas over 1, 4, 12, and 24 turns;
+opponent tile-count deltas by asset type; cumulative opponent harvest/sale
+proxies; and the agent's previous structured action. Use a small spatial CNN
+for each farm, MLPs for scalar/inventory/town inputs, and attention or pooled
+embeddings over unit slots. Add a GRU challenger only if targeted hidden-state
+probes show that the feedforward policy cannot infer opponent stockpiling or
+market timing, or if the GRU wins the paired evaluation gate. This reduces BC,
+rollout, checkpoint, and PPO complexity during the highest-risk early weeks.
+
+#### 4. Curriculum
+
+Use the following stages; curriculum configuration must preserve the same
+observation/action contracts as the full game:
+
+| Stage | Environment and opponents | Promotion gate |
+| --- | --- | --- |
+| C0 — contract | Full rules, scripted teacher, pass/random smoke games | 100% valid actions and episode completion across 100 seeded games |
+| C1 — BC basics | Teacher trajectories emphasizing wheat/carrot, 96–240 steps | >=99.9% legal decoded actions; >=85% operation accuracy on held-out seeds; beats `pass` in >=95% of paired games |
+| C2 — BC full economy | Full roster and 720 steps; teacher vs pass/random/starter | >=99.9% legal actions; no catastrophic care failures in >1% of games; >=60% paired win rate vs random |
+| C3 — PPO bootstrap | Mixed 240/720-step games vs pass/random/starter/teacher | Lower 95% win-rate bound >50% vs random and no regression below BC control |
+| C4 — league self-play | Full 720-step games vs teacher and frozen learned checkpoints | Pass the incumbent and league gates below |
+| C5 — robustness | Default plus allowed configuration perturbations | No contract/runtime failure; bounded performance degradation |
+
+Do not create a no-opponent training environment: opponent market pressure is
+central to the task. `pass` is the simplest opponent curriculum.
+
+#### 5. League and evaluation gates
+
+Every comparison uses common random seeds and both seat assignments. Count one
+seed pair as two games. Use a two-stage gate:
+
+- screening: 50 seed pairs / 100 games;
+- promotion: 200 seed pairs / 400 games for candidates that pass screening.
+
+Promote only when the candidate's paired score against the incumbent has a
+95% bootstrap confidence interval whose lower bound is above `0.50`, where a
+draw contributes `0.5`. If compute prevents significance, keep the candidate
+as unproven rather than promoting on mean score. Also require:
+
+- no opponent-specific win-rate drop greater than 5 percentage points versus
+  the incumbent across `random`, `starter`, teacher, and the last three
+  promoted checkpoints;
+- at least 35% win rate against every league member over the promotion set;
+- zero invalid-action, crash, timeout, or cross-episode-state failures;
+- p95 inference latency below 50% of the observed Kaggle per-turn allowance.
+
+Track final-money margin, net-worth curve, asset mix, care failures, and market
+impact as diagnostics only. Do not promote a policy that loses more games just
+because its mean money margin improves.
+
+#### 6. Weekly milestones
+
+| Week | Dates | Evidence checkpoint |
+| --- | --- | --- |
+| 1 | Aug 1–7 | Environment contract, repo scaffold, legality masks, teacher v1, paired tournament harness |
+| 2 | Aug 8–14 | Encoders/decoders frozen at schema v1, trajectory dataset v1, BC baseline, valid heuristic ladder submission |
+| 3 | Aug 15–21 | Full-economy teacher and BC dataset, BC full-season checkpoint, replay diagnostics |
+| 4 | Aug 22–28 | PPO bootstrap on mixed-length curriculum, resume tested across Kaggle sessions |
+| 5 | Aug 29–Sep 4 | Full-season PPO and first frozen-opponent league; submit only if promotion gate passes |
+| 6 | Sep 5–11 | Self-play iteration, reward/entropy ablations, opponent-specific regression analysis |
+| 7 | Sep 12–18 | Strongest targeted challenger: recurrent policy only if probes justify it; otherwise league/population refinement |
+| 8 | Sep 19–25 | Robustness tests, inference/package optimization, champion selection; freeze major architecture changes |
+| 9 | Sep 26–30 | Final paired verification, submission with buffer, replay/status monitoring, portfolio write-up |
+
+Each weekly entry records: best checkpoint, teacher/incumbent/league results,
+confidence intervals, failures, GPU usage, decision (`continue`, `adjust`, or
+`submit fallback`), and the single highest-value next experiment.
+
+#### 7. Kaggle GPU checkpoint/resume
+
+Save an atomic training bundle at least every 30 minutes and at every
+evaluation boundary. Each bundle contains:
+
+- actor/critic weights in `safetensors` where practical;
+- optimizer, scheduler, PPO update, curriculum stage, and normalization state;
+- Python/NumPy/PyTorch RNG states and environment seed cursor;
+- encoder/action schema versions;
+- reward and training configuration JSON;
+- opponent-league manifest with immutable checkpoint hashes;
+- git commit SHA, dataset version, dependency versions, and summary metrics.
+
+Optimizer/RNG state may use a trusted local PyTorch checkpoint during training;
+the final submission must load weights safely and contain no optimizer state.
+Write to a temporary filename and rename after validation so interrupted
+sessions cannot corrupt `latest`. Retain `latest`, best-by-promotion-score,
+best-vs-teacher, and the last two periodic bundles; prune the rest. Publish
+resumable bundles as versioned private Kaggle Dataset outputs between sessions,
+then start the next notebook by verifying hashes and running a deterministic
+resume smoke test before further training.
+
+### 2026-08-01 — Claude review of Codex's response
+
+**Overall:** technically sound, no theoretical errors found. It correctly
+generalizes lessons already visible in your own repo history rather than
+reinventing them — the autoregressive per-unit decoding directly addresses
+the game rule that simultaneous conflicting `PLANT` calls both fail (§Actions
+in the downloaded `README.md`); the two-stage screening/promotion gate with
+bootstrap confidence intervals is the fix for exactly the noise-driven
+promotion trap `maze-crawler`'s `docs/05_agent_version_log.md` and
+`docs/07_next_steps.md` show happening repeatedly ("Version 8 has not yet
+accumulated enough episodes," multiple sub-1200-score candidates chased on
+too few replays); and the potential-based net-worth-differential reward
+correctly avoids the naive `delta(bank)` trap of rewarding self-crashing
+sells. Recommend accepting this as the basis for the §4–7 rewrite, with four
+follow-ups before locking it in:
+
+1. **Compute/wall-clock sizing is missing.** Nothing here estimates steps/sec
+   for env rollout + the autoregressive decoder's multiple forward passes per
+   turn (farmer, each hand, up to `maxMarketOrdersPerTurn` sequential market
+   tokens), or the wall-clock cost of one promotion evaluation (up to 500
+   games × 720 steps × 2 players). Given Kaggle's per-session GPU cap, ask
+   Codex to size this explicitly — if a full promotion cycle can't complete
+   within a session's remaining budget, the screening/promotion sample sizes
+   in §5 may need to start smaller and scale up only once rollout throughput
+   is measured, rather than being fixed at 50/200 seed pairs from week one.
+2. **Self-play can drift from the real ladder.** The league (teacher, frozen
+   checkpoints, built-ins) never includes real opponents. `maze-crawler`'s own
+   history is the cautionary example: every scout/worker line was tuned
+   against its internal benchmarks until replay analysis of an actual
+   opponent (`harmo-miu`'s mine economy) exposed a strategic gap none of the
+   internal comparisons had surfaced. Ask Codex how/when replays from the
+   Week-2 heuristic submission (and later RL submissions) get converted into
+   additional league opponents — not just used for post-hoc diagnosis.
+3. **C5 robustness may be solving a problem that doesn't exist.** Training
+   against configuration perturbations (`boardSize`, `episodeSteps`, etc.) is
+   only worth the compute if actual Kaggle ladder matches vary these from the
+   defaults. This should be confirmed (`kaggle competitions pages
+   kaggriculture --content`, or observed episode configs once games start
+   accumulating) before investing a curriculum stage in it — same category as
+   the submission-slot/ladder-rules open item already flagged in §8.
+4. **`NEEDED_FOR_PLAN` needs a concrete definition.** The quantity-mode
+   vocabulary (`ONE`, `NEEDED_FOR_PLAN`, `ALL_AVAILABLE`, `MAX_AFFORDABLE`) is
+   a good way to avoid a raw integer categorical, but `NEEDED_FOR_PLAN`
+   implies some external notion of "the plan" that a flat autoregressive
+   decoder doesn't otherwise have. Ask Codex to specify what resolves this
+   value deterministically — e.g., is it borrowed from the scripted teacher's
+   internal state, or does it require a small planning submodule that doesn't
+   otherwise appear in §3's architecture?
