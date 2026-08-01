@@ -251,3 +251,83 @@ available, and outcome/lesson.
   (a Manhattan-distance tie in a ranking test, and an unrealistic price
   assumption in a synthetic-obs test) — not implementation bugs. Confirms
   the earlier investment in design review before code was worth it.
+
+## task_teacher_v2 (`agents/task_teacher_v2/main.py`)
+
+- **Date:** 2026-08-02
+- **Extends `task_teacher_v1` with:** daily hiring and bounded exhaustive
+  joint multi-unit assignment, per the approved design in
+  `docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md`. Same
+  crop scope as v1 (Wheat/Carrot/Melon, one-time crops only); still no
+  animals, fertilizer, or land purchases.
+- **New shared-module additions:** `joint_assign` (bounded exhaustive
+  assignment across farmer + hands, with a deterministic greedy fallback
+  for unit counts past a practical exhaustive-search bound —
+  `MAX_EXHAUSTIVE_UNITS`), `estimate_hire_value`/`should_hire` (marginal-
+  value hiring gate), `reset_hand_assignments_on_day_change` (hand-index
+  identity doesn't survive a day boundary), `TeacherState.previous_day`.
+- **Two real bugs found via a full simulator run, not caught by unit
+  tests alone** — both are exactly the kind of gap `roi_teacher`'s
+  100%-win-rate-against-weak-built-ins couldn't have surfaced either:
+  1. **Runaway hiring.** The hiring value estimate didn't account for
+     capacity already provided by hands hired earlier the same day, so
+     `should_hire` kept approving hire after hire — 9 in a row in a
+     synthetic worst case, 7–8 in a real game. Fixed by discounting
+     `estimate_hire_value` by `remaining_turns_today * (1 + existing_hands)`
+     of already-available capacity — hiring hand N+1 only has value if
+     load still exceeds what N hands (plus the farmer) already absorb.
+  2. **Combinatorial blowup.** 7–8 active units pushed `joint_assign`'s
+     exhaustive search (`(candidates+1)^n_units`) into multi-second-per-
+     turn territory, making one 720-step episode take ~20s. Measured
+     directly: `n=4` costs ~8ms/call, `n=5` ~70ms, `n=6` ~650ms — fixed by
+     lowering `MAX_EXHAUSTIVE_UNITS` from 6 to 4 (matching the design's own
+     "expected farmer plus 1–3 hands" assumption) and using the
+     already-designed deterministic greedy fallback beyond that. Full
+     episode time: ~20s → ~1s.
+- **Acceptance-gate measurement** (50 full 720-step episodes vs.
+  `starter`, seeds 2000–2049):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` both players | 50/50 |
+  | Invalid/non-finite episodes | 0 |
+  | Distinct tiles worked/episode | median 25, p10 24, range [22, 25] — all 25 NW tiles, most episodes |
+  | Action-kind coverage | `PLANT`=3213, `WATER`=24211, `HARVEST`=1578, `DIG`=1643 |
+  | `HIRE` orders/episode | min 54, max 122, avg 112.2 (re-evaluated every turn, per the design) |
+  | Max hands active/episode | min 7, max 8, avg 7.0 |
+
+- **Local tournament** (`scripts/run_tournament.py`, 8 seed pairs / 16 games
+  per opponent, full 720-step episodes, base seed 0):
+
+  | Opponent | Win rate | Mean money margin |
+  | --- | ---: | ---: |
+  | `pass` | 1.000 | +30238.1 |
+  | `random` | 1.000 | +33128.4 |
+  | `starter` | 1.000 | +27214.1 |
+  | **`task_teacher_v1` (direct)** | **0.875** | **+2779.6** |
+  | **`roi_teacher_v3` (direct)** | **0.875** | **+22839.4** |
+
+- **Outcome:** clear net positive (positive margin and majority win rate
+  against every opponent including the prior champion), but **not** a
+  clean sweep like v1→v3 or v2(roi)→v3(roi) — 2 of 16 games lost to
+  `task_teacher_v1` despite v2's added capabilities. Not investigated
+  further this round; the v2 design doc explicitly allows this outcome
+  ("v2 may become the coverage teacher without replacing the competitive
+  champion if it expands valid action coverage but lacks confident win
+  improvement"). **`task_teacher_v2` is provisionally the new local
+  champion** given the positive average margin, but the occasional losses
+  are worth revisiting before any promotion decision that matters (e.g.
+  BC teacher selection or ladder submission).
+- **Packaging:** re-verified standalone (`PYTHONPATH` stripped) after the
+  performance fix; all four existing agents (`roi_teacher_v1-v3`,
+  `task_teacher_v1`) re-packaged and re-verified alongside it.
+- **Ladder result:** not yet submitted.
+- **Lesson carried forward:** synthetic unit tests validated every
+  individual function correctly, but neither bug above was visible until
+  a *real, full-length simulator run* — the runaway-hiring bug only
+  manifests when load stays high across many consecutive turns in one
+  day (not exercised by short synthetic scenarios), and the performance
+  bug only manifests at the unit counts that emerge from realistic
+  economic conditions over a full season. Full-episode smoke runs before
+  declaring a version done are not optional, even with thorough unit
+  test coverage.

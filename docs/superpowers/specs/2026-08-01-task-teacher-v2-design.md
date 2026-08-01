@@ -1,8 +1,19 @@
-# Task Teacher v2 — Proposed Design
+# Task Teacher v2 — Design
 
-Written 2026-08-01. Status: **pending user approval**. This file is intentionally
-focused. It inherits the project and teacher constraints from the authoritative
-competition and teacher specs.
+Written 2026-08-01. Status: **approved 2026-08-02, implemented**. This file
+is intentionally focused. It inherits the project and teacher constraints
+from the authoritative competition and teacher specs.
+
+Implementation notes (2026-08-02): built test-first exactly per this
+design, with two real bugs found and fixed via full simulator runs (not
+caught by unit tests alone) — see `docs/4_agent_version_log.md`'s
+`task_teacher_v2` entry for details: (1) the hiring value estimate didn't
+originally discount for capacity existing hands already provide, causing
+runaway hiring; (2) unit counts past ~6 made `joint_assign`'s exhaustive
+search too slow for practical per-turn use, fixed by lowering
+`MAX_EXHAUSTIVE_UNITS` to 4 and relying on the greedy fallback beyond
+that (both anticipated in principle by §3/§4 below, but not caught until
+real data existed).
 
 ## 1. Goal
 

@@ -5,20 +5,25 @@ economy simulation bot: https://www.kaggle.com/competitions/kaggriculture
 
 ## Status
 
-Week 1 in progress (2026-08-01). Deadline: **2026-09-30 23:59 UTC**. Local
-environment verified (including a passed Kaggle platform smoke test),
-economy math tested against the real simulator, and a series of agents
-have each beaten the last in local tournament play. Current local
-champion: **`task_teacher_v1`** — a multi-tile task/route scheduler that
-beats the prior single-tile champion (`roi_teacher_v3`) by roughly 10x
-margin (see `docs/4_agent_version_log.md` for the full progression).
-Packaging (`scripts/package_agent.py`) is done and verified for every
-agent; not yet submitted to the ladder — see `docs/6_next_steps.md` for
-the current recommendation.
+Week 1-2 in progress (2026-08-02). Deadline: **2026-09-30 23:59 UTC**.
+Local environment verified (including a passed Kaggle platform smoke
+test), economy math tested against the real simulator, and a series of
+agents have each beaten the last in local tournament play. Current local
+champion: **`task_teacher_v2`** — adds daily hiring and bounded exhaustive
+multi-unit assignment on top of `task_teacher_v1`'s multi-tile task
+scheduler (see `docs/4_agent_version_log.md` for the full progression and
+two real bugs found via full simulator runs). Packaging
+(`scripts/package_agent.py`) is done and verified for every agent; not yet
+submitted to the ladder — see `docs/6_next_steps.md` for the current
+recommendation.
 
-Full design (why this repo is structured this way, strategy approach, and
-the converged RL-pipeline discussion with Codex) is in
-[`docs/superpowers/specs/2026-08-01-kaggriculture-competition-plan-design.md`](docs/superpowers/specs/2026-08-01-kaggriculture-competition-plan-design.md).
+Full design is split across
+[`docs/superpowers/specs/`](docs/superpowers/specs/): the authoritative
+project-level design
+(`2026-08-01-kaggriculture-competition-plan-design.md`), the task-teacher
+family's own design (`2026-08-01-task-teacher-design.md` and
+`-v2-design.md`), and the full chronological Codex↔Claude discussion
+history (`2026-08-01-kaggriculture-design-discussion-log.md`).
 
 ## Repository Structure
 
@@ -56,14 +61,14 @@ Run the local tournament harness:
 
 ```bash
 PYTHONPATH=src .venv/bin/python scripts/run_tournament.py \
-    agents/task_teacher_v1/main.py pass random starter \
+    agents/task_teacher_v2/main.py pass random starter \
     --episodes 10 --episode-steps 720
 ```
 
 Package an agent into a standalone submission artifact:
 
 ```bash
-.venv/bin/python scripts/package_agent.py agents/task_teacher_v1
+.venv/bin/python scripts/package_agent.py agents/task_teacher_v2
 ```
 
 Run tests:

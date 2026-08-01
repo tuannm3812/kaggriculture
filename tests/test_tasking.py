@@ -16,10 +16,14 @@ from kaggriculture_lib.tasking import (
     TaskId,
     TaskKind,
     TeacherState,
+    estimate_hire_value,
     generate_tasks,
+    joint_assign,
     project_daily_load,
     rank_tasks,
+    reset_hand_assignments_on_day_change,
     route_toward,
+    should_hire,
 )
 
 BOARD_SIZE = 10
@@ -408,3 +412,234 @@ def test_project_daily_load_rejects_new_plant_when_over_budget():
         pending_water_tiles=turns_per_day, scheduled_plant_actions=0, scheduled_harvest_actions=0
     )
     assert load > turns_per_day
+
+
+# --- joint_assign (task_teacher_v2) ---------------------------------------
+
+
+def test_joint_assign_single_unit_matches_rank_tasks_top_choice():
+    water_task = make_task(TaskKind.WATER, 1, 0, PriorityTier.DAILY_CARE)
+    dig_task = make_task(TaskKind.DIG, 5, 5, PriorityTier.DAILY_CARE)
+    assignment = joint_assign(
+        unit_positions=[(0, 0)], tasks=[dig_task, water_task], current_assignments={}
+    )
+    assert assignment[0] == water_task.task_id  # closer, same tier
+
+
+def test_joint_assign_two_units_no_duplicate_task_claims():
+    only_task = make_task(TaskKind.DIG, 3, 3, PriorityTier.DAILY_CARE)
+    assignment = joint_assign(
+        unit_positions=[(0, 0), (5, 5)], tasks=[only_task], current_assignments={}
+    )
+    claimed = [v for v in assignment.values() if v is not None]
+    assert len(claimed) == len(set(claimed))  # no task claimed twice
+    assert only_task.task_id in claimed
+
+
+def test_joint_assign_beats_naive_farmer_first_greedy():
+    """The concrete acceptance test from the v2 design: a naive sequential
+    farmer-first allocation (farmer picks its own top-ranked task first, by
+    that unit's own ranking, which sorts by priority tier before distance)
+    would have the farmer travel to a distant EMERGENCY task while the hand
+    -- already standing right on it -- gets stuck with a distant ECONOMIC
+    task the farmer was actually standing on. Joint assignment must find
+    the zero-travel swap instead.
+    """
+    emergency_task = Task(
+        task_id=TaskId(kind=TaskKind.WATER, x=0, y=0),
+        target=(0, 0),
+        priority_tier=PriorityTier.EMERGENCY,
+        deadline_step=None,
+        expected_value=0.0,
+        action_cost=1,
+    )
+    economic_task = Task(
+        task_id=TaskId(kind=TaskKind.PLANT, x=1, y=0, item="CARROT"),
+        target=(1, 0),
+        priority_tier=PriorityTier.ECONOMIC,
+        deadline_step=None,
+        expected_value=50.0,
+        action_cost=1,
+    )
+    farmer_pos = (1, 0)  # standing on the economic task's tile
+    hand_pos = (0, 0)  # standing on the emergency task's tile
+
+    assignment = joint_assign(
+        unit_positions=[farmer_pos, hand_pos],
+        tasks=[emergency_task, economic_task],
+        current_assignments={},
+    )
+
+    # A naive farmer-first-by-own-ranking pass would have the farmer claim
+    # the EMERGENCY task purely because its tier outranks distance in the
+    # farmer's own view -- even though the hand is already standing on it
+    # and the farmer is already standing on the economic task. The joint
+    # assignment must find the zero-travel swap instead.
+    assert assignment[0] == economic_task.task_id
+    assert assignment[1] == emergency_task.task_id
+
+
+# --- reset_hand_assignments_on_day_change (task_teacher_v2) --------------
+
+
+def test_reset_hand_assignments_clears_non_farmer_entries_on_new_day():
+    state = TeacherState()
+    state.assignments[0] = TaskId(kind=TaskKind.WATER, x=1, y=1)  # farmer
+    state.assignments[1] = TaskId(kind=TaskKind.DIG, x=2, y=2)  # yesterday's hand
+    state.previous_day = 4
+
+    reset_hand_assignments_on_day_change(state, day=5)
+
+    assert 0 in state.assignments  # farmer's assignment survives
+    assert 1 not in state.assignments  # stale hand assignment cleared
+    assert state.previous_day == 5
+
+
+def test_reset_hand_assignments_keeps_hand_entries_within_same_day():
+    state = TeacherState()
+    state.assignments[0] = TaskId(kind=TaskKind.WATER, x=1, y=1)
+    state.assignments[1] = TaskId(kind=TaskKind.DIG, x=2, y=2)
+    state.previous_day = 5
+
+    reset_hand_assignments_on_day_change(state, day=5)  # same day, no change
+
+    assert state.assignments == {
+        0: TaskId(kind=TaskKind.WATER, x=1, y=1),
+        1: TaskId(kind=TaskKind.DIG, x=2, y=2),
+    }
+
+
+# --- hiring policy (task_teacher_v2) --------------------------------------
+
+
+def test_estimate_hire_value_zero_when_no_overload():
+    assert estimate_hire_value(projected_load=10, remaining_turns_today=20) == 0.0
+
+
+def test_estimate_hire_value_positive_when_overloaded():
+    value = estimate_hire_value(projected_load=30, remaining_turns_today=20)
+    assert value > 0.0
+
+
+def test_estimate_hire_value_caps_at_remaining_turns():
+    # Overload of 100 turns can't be recovered by more turns today than
+    # actually remain -- the recovered-turns proxy is capped.
+    value_huge_overload = estimate_hire_value(projected_load=1000, remaining_turns_today=20)
+    value_capped_overload = estimate_hire_value(projected_load=20 + 20, remaining_turns_today=20)
+    assert value_huge_overload == value_capped_overload
+
+
+def test_should_hire_false_when_no_overload():
+    assert not should_hire(
+        projected_load=10, remaining_turns_today=20, hires_today=0, money=3000
+    )
+
+
+def test_should_hire_false_when_insufficient_money():
+    assert not should_hire(
+        projected_load=100, remaining_turns_today=20, hires_today=0, money=5
+    )
+
+
+def test_should_hire_true_when_value_clearly_exceeds_cost():
+    # Large overload, first hire of the day (cheapest fibonacci tier),
+    # plenty of money.
+    assert should_hire(
+        projected_load=100, remaining_turns_today=20, hires_today=0, money=3000
+    )
+
+
+def test_should_hire_false_when_cost_exceeds_marginal_value():
+    # Tiny overload late in the day (little value to recover) with a high
+    # hires_today count (fibonacci cost has escalated a lot already).
+    assert not should_hire(
+        projected_load=21, remaining_turns_today=20, hires_today=6, money=3000
+    )
+
+
+def test_should_hire_respects_safety_margin():
+    # A case that would pass with no margin should fail once a large
+    # enough safety margin is required.
+    assert should_hire(
+        projected_load=100, remaining_turns_today=20, hires_today=0, money=3000, safety_margin=0
+    )
+    assert not should_hire(
+        projected_load=100, remaining_turns_today=20, hires_today=0, money=3000, safety_margin=10_000
+    )
+
+
+def test_should_hire_accounts_for_capacity_already_provided_by_existing_hands():
+    """Real bug found via a full simulator run: with a static load estimate
+    that never decreases as hands are hired, should_hire kept approving
+    hire after hire in the same day (9 in a row with unlimited money),
+    which then made joint_assign's combinatorial search over that many
+    units explode. Each existing hand already provides `remaining_turns_today`
+    worth of capacity -- that must reduce the marginal value of hiring yet
+    another one, the same way each hire's own turns count toward the load
+    once hired.
+    """
+    # With zero existing hands, a moderate constant load justifies hiring.
+    assert should_hire(
+        projected_load=80, remaining_turns_today=24, hires_today=0, money=1_000_000, existing_hands=0
+    )
+    # The *same* load, once 3 hands' worth of capacity (24 turns each) is
+    # already enough to cover it, must no longer be worth another hire.
+    assert not should_hire(
+        projected_load=80, remaining_turns_today=24, hires_today=3, money=1_000_000, existing_hands=3
+    )
+
+
+def test_hiring_runaway_terminates_within_a_bounded_number_of_hires():
+    """Regression test for the exact bug: with a large constant load and
+    unlimited money, repeatedly asking "should I hire one more?" (correctly
+    passing the growing existing_hands count each time, as the real agent
+    does) must eventually return False on its own -- not loop until an
+    external safety cap kicks in. Whatever unit count this naturally
+    settles on, `joint_assign`'s own bounded-unit fallback (tested
+    separately) is what protects against combinatorial explosion if it's
+    still too large for exhaustive search.
+    """
+    load = 200
+    remaining = 24
+    hires_today = 0
+    count = 0
+    safety_limit = 20  # loop guard only, not the behavior under test
+    while count < safety_limit and should_hire(
+        load, remaining, hires_today, money=1_000_000, existing_hands=count
+    ):
+        count += 1
+        hires_today += 1
+    assert count < safety_limit  # terminated on its own economic logic
+
+
+def test_joint_assign_falls_back_to_greedy_for_too_many_units():
+    """Regression test for the exact bug found via a full simulator run:
+    joint_assign's exhaustive search over (max_candidates_per_unit + 1)^N
+    combinations must not be attempted once N grows too large -- it must
+    switch to a fast deterministic greedy fallback instead, per the v2
+    design's explicit "if supported unit bounds are exceeded, use a
+    deterministic greedy fallback ... do not fail silently" instruction.
+    """
+    n_units = 12  # comfortably past any practical exhaustive-search bound
+    unit_positions = [(i, 0) for i in range(n_units)]
+    tasks = [
+        Task(
+            task_id=TaskId(kind=TaskKind.DIG, x=i, y=1),
+            target=(i, 1),
+            priority_tier=PriorityTier.DAILY_CARE,
+            deadline_step=None,
+            expected_value=0.0,
+            action_cost=1,
+        )
+        for i in range(n_units)
+    ]
+
+    import time
+
+    start = time.monotonic()
+    assignment = joint_assign(unit_positions=unit_positions, tasks=tasks, current_assignments={})
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0  # must not attempt (8+1)^12 exhaustive search
+    claimed = [v for v in assignment.values() if v is not None]
+    assert len(claimed) == len(set(claimed))  # still no duplicate claims

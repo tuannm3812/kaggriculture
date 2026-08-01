@@ -61,7 +61,7 @@ local-tournament evidence exists. Superseded as champion by
 `task_teacher_v1` (below); kept as the immutable benchmark line and BC/
 fallback-submission candidate.
 
-## `task_teacher_v1` Scope (`agents/task_teacher_v1`) — Current Champion
+## `task_teacher_v1` Scope (`agents/task_teacher_v1`)
 
 New agent family, not a continuation of `roi_teacher_v*`'s numbering —
 structurally different (multi-tile task generation/ranking/routing vs. a
@@ -83,12 +83,38 @@ reload behavior, an O(1) service-capacity check, the market-timing
 constraint, and `sys.modules`-based packaging) and implemented test-first
 end to end. Still narrow by design: one farmer, no hands/land/animals/
 fertilizer — `task_teacher_v2→v6` add those incrementally per the agreed
-construction sequence (`docs/6_next_steps.md`).
+construction sequence (`docs/6_next_steps.md`). Superseded as champion by
+`task_teacher_v2`; kept as the immutable benchmark this result is measured
+against.
+
+## `task_teacher_v2` Scope (`agents/task_teacher_v2`) — Current Champion
+
+Adds daily hiring and bounded exhaustive multi-unit assignment on top of
+v1's task model — `src/kaggriculture_lib/tasking.py`'s `joint_assign`
+scores every valid combination of (farmer + hands) × their own top-8
+candidate tasks jointly, so an earlier-decided unit can't grab a task
+purely by its own ranking when a later unit is actually better positioned
+for it. Falls back to a fast deterministic greedy assignment once unit
+count exceeds `MAX_EXHAUSTIVE_UNITS` (4) — the design's own anticipated
+safety valve, needed in practice: real games commonly reach 7-8 active
+hands. Hiring is gated on an explicit marginal-value estimate
+(`should_hire`/`estimate_hire_value`) that must exceed the fibonacci-scaled
+cost, discounted by capacity existing hands already provide — an earlier
+version of this formula didn't discount for existing hands and approved
+hire after hire indefinitely, found via a full simulator run (see
+`docs/4_agent_version_log.md`).
+
+Beats every built-in at 1.000 win rate and beats v1 on average (+2779.6
+margin) but not a clean sweep (0.875 win rate) — unlike every prior
+version transition in this project, which were clean wins. Provisionally
+the champion given the positive average, but the occasional losses are
+flagged as worth investigating in `docs/6_next_steps.md` before treating
+this as unambiguously settled.
 
 ## Strategy Approach (unchanged from the design doc)
 
-Per `docs/superpowers/specs/2026-08-01-kaggriculture-competition-plan-design.md`
-§9's converged RL discussion: this heuristic serves as (a) a working ladder
+Per `docs/superpowers/specs/2026-08-01-kaggriculture-competition-plan-design.md`'s
+converged RL discussion: this heuristic serves as (a) a working ladder
 submission, (b) the scripted teacher for behavioral cloning, (c) a
 benchmark/fallback opponent for every later policy. It is not the intended
 final champion architecture.

@@ -140,7 +140,13 @@ Initial targets, recalibrated only with recorded evidence:
 - `roi_teacher_v3`: immutable single-tile competitive control.
 - `task_teacher_v1`: implemented multi-tile crop scheduler; locally verified
   over 100 full episodes with reported median 17 worked tiles and 179 total
-  passing tests at implementation time.
-- `task_teacher_v2`: proposed next version; focused decisions live in
-  `2026-08-01-task-teacher-v2-design.md`.
+  passing tests at implementation time. Superseded as champion by v2.
+- `task_teacher_v2`: implemented daily hiring and bounded exhaustive
+  multi-unit assignment; locally verified over 50 full episodes (median 25
+  worked tiles, avg 7.0 max hands active) with 202 total passing tests at
+  implementation time. Beats v1 on average (+2779.6 margin, 0.875 win
+  rate) but not a clean sweep — see `2026-08-01-task-teacher-v2-design.md`
+  and the project version ledger for the two real bugs (runaway hiring,
+  combinatorial performance) found and fixed via full simulator runs.
+  Provisional champion.
 

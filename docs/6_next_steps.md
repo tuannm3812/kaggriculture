@@ -2,74 +2,73 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
-## Current Recommendation (2026-08-01)
+## Current Recommendation (2026-08-02)
 
-`task_teacher_v1` is the new local champion — a step change, not an
-incremental one: 1.000 win rate and roughly 10x `roi_teacher_v3`'s margins
-against every opponent (+25244.9 direct vs. v3; see
-`docs/4_agent_version_log.md`), from using ~25 NW-quadrant tiles
-simultaneously instead of 1. Passed its full acceptance gate (100 episodes,
-100% `DONE`/finite rewards, median 17 distinct tiles worked, every
-`TaskKind` well-represented, deterministic). Built test-first end to end
-(`superpowers:test-driven-development`) after multiple rounds of Codex
-design review — every test passed on first implementation attempt.
+`task_teacher_v2` is provisionally the new local champion — adds daily
+hiring and bounded exhaustive multi-unit assignment on top of
+`task_teacher_v1`. Beats every built-in at 1.000 win rate, and beats
+`task_teacher_v1` on average (+2779.6 mean margin) but not a clean sweep
+(0.875 win rate — 2 of 16 games lost). Passed its acceptance-gate
+measurement (50 episodes, 100% `DONE`/finite, median 25/25 tiles worked,
+every action kind well-represented). See `docs/4_agent_version_log.md`
+for full numbers and two real bugs found (and fixed) via full simulator
+runs, not caught by unit tests alone: a runaway-hiring bug and a
+combinatorial-performance bug.
 
-The Kaggle platform smoke test passed earlier (`docs/2_environment_notes.md`)
-and the `1.29.3`/`1.32.2` version-gap was found and fixed
-(`docs/4_agent_version_log.md`'s correction entry) before this build
-started, so `task_teacher_v1` was built and tested against the
-ladder-matching environment version from the start.
+Given v2 doesn't cleanly dominate v1, the occasional losses are worth a
+closer look before treating v2 as unambiguously "done" — e.g. before using
+it as the BC teacher or before any ladder submission decision.
 
-Still not submitted to the ladder — user chose to keep iterating locally
-first. Per the execution-status audit, treat that as a point-in-time note,
-not standing authorization to delay indefinitely — re-ask before either
-submitting or continuing to delay, especially now that `task_teacher_v1`
-is a much stronger candidate than anything submittable so far.
+Still not submitted to the ladder — re-ask before submitting or continuing
+to delay, per the standing rule from earlier (design doc §9's execution-
+status audit).
 
 ## Immediate Next Tasks
 
 1. ~~Packaging step~~ — done 2026-08-01.
-2. ~~v2 — add Melon~~ — done 2026-08-01, confirmed a large win.
-3. ~~v3 — season-horizon gate~~ — done 2026-08-01, per Codex's code review;
-   confirmed a measurable win over v2.
-4. ~~Kaggle platform smoke test~~ — done 2026-08-01, passed. See
-   `docs/2_environment_notes.md`.
-5. ~~Version-gap check~~ — done 2026-08-01: diffed `1.29.3` (Kaggle's
-   kernel) against `1.32.2` (this project's prior local dev version),
-   found real differences, re-pinned and corrected `economy.py`. See
-   `docs/4_agent_version_log.md`.
-6. ~~Multi-tile task/route teacher (`task_teacher_v1`)~~ — done 2026-08-01,
-   new local champion. Full design discussion and implementation in
-   `docs/4_agent_version_log.md` and the design doc §9.
-7. **`task_teacher_v2`** (per the agreed construction sequence: workload
-   forecast, hiring, multi-unit assignment): the next version in the
-   planned `task_teacher_v1→v6` sub-sequence. `task_teacher_v1`'s
-   `AssignmentState`/`ReservationLedger` interfaces were deliberately kept
-   general enough for this — real minimum-cost matching across multiple
-   units was postponed to v2, not retrofitted.
-8. **Critical-path test coverage** — done for economy math, agent decision
-   logic (both `roi_teacher_*` and `task_teacher_v1`), the tournament
-   harness, and packaging. Extend to `task_teacher_v2`'s multi-unit
-   assignment logic once it exists.
-9. **Ongoing crops/animals ROI ranking** — still deferred (needs a
-   season-length + feed-cost model, per `docs/3_agent_strategy.md`);
-   `task_teacher_v3` in the construction sequence covers this
-   (ongoing crops + fertilizer timing).
-10. **Confirm submission-slot / ladder-tracking rules** (open item since
+2. ~~v2 (roi) — add Melon~~ — done 2026-08-01.
+3. ~~v3 (roi) — season-horizon gate~~ — done 2026-08-01.
+4. ~~Kaggle platform smoke test~~ — done 2026-08-01.
+5. ~~Version-gap check (`1.29.3` vs `1.32.2`)~~ — done 2026-08-01.
+6. ~~Multi-tile task/route teacher (`task_teacher_v1`)~~ — done 2026-08-01.
+7. ~~`task_teacher_v2` (hiring + multi-unit assignment)~~ — done 2026-08-02.
+   See `docs/4_agent_version_log.md`.
+8. **Investigate `task_teacher_v2`'s occasional losses to `task_teacher_v1`**
+   (2 of 16 games) before promoting v2 unambiguously — is this real
+   variance from hiring risk (money spent on hands that didn't pay off in
+   that specific seed/seat), or a fixable inefficiency in the greedy
+   fallback / hiring formula? Not yet investigated.
+9. **`task_teacher_v3`** (per the construction sequence: ongoing crops —
+   Tomato/Strawberry — and fertilizer timing): the next version. Needs the
+   ongoing-crop ROI ranking deferred in `docs/3_agent_strategy.md` (season-
+   length + feed-cost model) resolved first, or as part of this version.
+10. **Critical-path test coverage** — done for economy math, agent decision
+    logic (`roi_teacher_*`, `task_teacher_v1`, `task_teacher_v2`), the
+    tournament harness, and packaging. Extend to `task_teacher_v3`'s
+    ongoing-crop/fertilizer logic once it exists.
+11. **Confirm submission-slot / ladder-tracking rules** (open item since
     `docs/1_competition_instructions.md`): check `kaggle competitions
     submissions kaggriculture` behavior and the Rules page once a submission
     exists.
-11. **Confirm actual ladder episode configuration** (open item since
+12. **Confirm actual ladder episode configuration** (open item since
     `docs/2_environment_notes.md`): whether scored games vary `boardSize`/
     `episodeSteps`/etc. from defaults — relevant to whether the design doc's
     conditional C5 robustness stage is worth its GPU budget later.
-12. **Week-1 throughput benchmarking** (per the design doc §9's Codex
+13. **Week-1 throughput benchmarking** (per the design doc's Codex
     resolution): env-only steps/sec is measured (~1000–1100/sec, see
     `docs/2_environment_notes.md`); policy-inference and training steps/sec
     at multiple parallel-env counts, and checkpoint write/load time, are not
     yet measured — needed before any BC/PPO evaluation-size commitment.
-13. **Recalibrate `project_daily_load`'s constants** (`TRAVEL_ALLOWANCE`,
-    `END_OF_DAY_RESERVE` in `src/kaggriculture_lib/tasking.py`) from real
-    `task_teacher_v1` data once enough episodes accumulate — currently
-    initial estimates, per the design doc's "measure before fixing the
-    number" discipline.
+14. **Recalibrate `tasking.py`'s constants from real data**:
+    `TRAVEL_ALLOWANCE`/`END_OF_DAY_RESERVE` (service-capacity check),
+    `AVERAGE_VALUE_PER_RECOVERED_ACTION` (hiring value estimate) — all
+    still initial estimates, per the "measure before fixing the number"
+    discipline. `task_teacher_v2` now produces real hiring/load data to
+    calibrate against.
+15. **`MAX_EXHAUSTIVE_UNITS` (currently 4) and the greedy fallback's
+    quality gap** — the fallback is fast but not joint-optimal, and v2
+    regularly operates in fallback territory (7-8 hands active per the
+    acceptance-gate measurement). Worth profiling whether a smarter bounded
+    algorithm (not full exhaustive search) could extend joint-optimal
+    behavior to more units without the combinatorial cost, if v3+'s
+    profile shows this matters.

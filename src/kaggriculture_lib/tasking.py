@@ -10,6 +10,7 @@ promised to stay unchanged through v2-v6).
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 
@@ -215,6 +216,125 @@ def rank_tasks(
     return sorted(tasks, key=_key)
 
 
+MAX_CANDIDATES_PER_UNIT = 8
+
+# Exhaustive search is (max_candidates_per_unit + 1)^n_units. Beyond this
+# many units, fall back to a fast deterministic greedy assignment instead
+# -- per the v2 design's explicit "if supported unit bounds are exceeded,
+# use a deterministic greedy fallback ... do not fail silently" instruction.
+# Found via a real bug: an uncapped hiring policy let unit count grow
+# large enough (7-8) that exhaustive search over 9^7+ combinations made a
+# single full 720-turn episode take ~20s. Measured directly (25 tasks,
+# this repo's actual joint_assign): n=4 costs ~8ms/call, n=5 ~70ms, n=6
+# ~650ms -- the jump from n=5 to n=6 is what made whole episodes slow.
+# Capped at 4, matching the v2 design's own "expected farmer plus 1-3
+# hands" assumption plus one unit of headroom.
+MAX_EXHAUSTIVE_UNITS = 4
+
+
+def _task_id_sort_key(task_id: TaskId | None) -> tuple:
+    """Deterministic, always-comparable sort key -- `TaskId`'s own field
+    order can't safely compare `item=None` against `item="CARROT"` across
+    different task kinds, and `None` (PASS) needs to sort against real
+    `TaskId`s too."""
+    if task_id is None:
+        return (1,)
+    return (0, task_id.kind, task_id.x, task_id.y, task_id.item or "")
+
+
+def _greedy_assign(
+    unit_positions: list[tuple[int, int]],
+    tasks: list[Task],
+    current_assignments: dict[int, TaskId],
+) -> dict[int, TaskId | None]:
+    """Deterministic greedy fallback for when there are too many units for
+    exhaustive search: each unit, in order, claims its own top-ranked task
+    from whatever remains unclaimed. Not joint-optimal (an earlier unit can
+    still claim a task a later unit would have been better positioned
+    for), but fast and always correct (no duplicate claims)."""
+    remaining = list(tasks)
+    assignment: dict[int, TaskId | None] = {}
+    for i, pos in enumerate(unit_positions):
+        if not remaining:
+            assignment[i] = None
+            continue
+        ranked = rank_tasks(remaining, current_position=pos, current_assignment=current_assignments.get(i))
+        chosen = ranked[0]
+        assignment[i] = chosen.task_id
+        remaining = [t for t in remaining if t.task_id != chosen.task_id]
+    return assignment
+
+
+def joint_assign(
+    unit_positions: list[tuple[int, int]],
+    tasks: list[Task],
+    current_assignments: dict[int, TaskId],
+    max_candidates_per_unit: int = MAX_CANDIDATES_PER_UNIT,
+) -> dict[int, TaskId | None]:
+    """Bounded exhaustive joint assignment across units (farmer + hands).
+
+    Each unit's candidate set is its own top `max_candidates_per_unit`
+    feasible tasks (by `rank_tasks` from that unit's position) plus an
+    implicit `PASS` (`None`). Every combination that doesn't claim the same
+    task twice is scored by, in order: how many tasks get covered per
+    priority tier (more coverage of higher tiers always wins, checked
+    tier-by-tier before anything else), total travel distance, total
+    expected value, then a deterministic tiebreak.
+
+    This is what makes it superior to a naive "each unit picks its own
+    top-ranked task first" sequential pass: that lets an earlier-decided
+    unit claim a task purely because of its own ranking (e.g. tier
+    dominates distance), even when a later unit is better positioned for
+    it — see `docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md`.
+
+    Falls back to `_greedy_assign` (fast, not joint-optimal) if there are
+    more than `MAX_EXHAUSTIVE_UNITS` units, since exhaustive search over
+    `(max_candidates_per_unit + 1) ** len(unit_positions)` combinations
+    becomes impractically slow well before that.
+    """
+    if len(unit_positions) > MAX_EXHAUSTIVE_UNITS:
+        return _greedy_assign(unit_positions, tasks, current_assignments)
+
+    task_by_id = {t.task_id: t for t in tasks}
+    n_tiers = len(PriorityTier)
+
+    candidate_lists: list[list[TaskId | None]] = []
+    for i, pos in enumerate(unit_positions):
+        ranked = rank_tasks(tasks, current_position=pos, current_assignment=current_assignments.get(i))
+        candidate_lists.append([t.task_id for t in ranked[:max_candidates_per_unit]] + [None])
+
+    best_key = None
+    best_combo: tuple[TaskId | None, ...] = tuple(None for _ in unit_positions)
+
+    for combo in itertools.product(*candidate_lists):
+        claimed = [tid for tid in combo if tid is not None]
+        if len(claimed) != len(set(claimed)):
+            continue  # duplicate claim this combination -- invalid
+
+        tier_counts = [0] * n_tiers
+        total_distance = 0
+        total_value = 0.0
+        for i, tid in enumerate(combo):
+            if tid is None:
+                continue
+            task = task_by_id[tid]
+            tier_counts[task.priority_tier] += 1
+            total_distance += abs(task.target[0] - unit_positions[i][0]) + abs(task.target[1] - unit_positions[i][1])
+            total_value += task.expected_value
+
+        key = (
+            tuple(-c for c in tier_counts),  # more coverage per tier wins, tier order first
+            total_distance,
+            -total_value,
+            tuple(_task_id_sort_key(tid) for tid in combo),
+        )
+        if best_key is None or key < best_key:
+            best_key = key
+            best_combo = combo
+
+    return dict(enumerate(best_combo))
+
+
 @dataclass(frozen=True)
 class MarketIntent:
     """A future-turn market order: buying this now doesn't make a task
@@ -242,6 +362,61 @@ def project_daily_load(
     two calibrated constants for travel and end-of-day selling/cleanup.
     """
     return pending_water_tiles + scheduled_plant_actions + scheduled_harvest_actions + TRAVEL_ALLOWANCE + END_OF_DAY_RESERVE
+
+
+# Calibration constant for the hiring decision (task_teacher_v2): estimated
+# dollar value of one recovered service-capacity turn. Initial estimate,
+# not measured -- revise from real hiring/task-recovery data once it
+# exists, per the "measure before fixing the number" discipline used
+# throughout this project.
+AVERAGE_VALUE_PER_RECOVERED_ACTION = 15.0
+
+
+def estimate_hire_value(projected_load: int, remaining_turns_today: int, existing_hands: int = 0) -> float:
+    """Estimated dollar value of hiring one *more* hand today.
+
+    Value only exists if the projected service load exceeds the capacity
+    already available today — every existing unit (the farmer, plus each
+    hand already hired today) already contributes `remaining_turns_today`
+    of capacity, so hiring hand N+1 is only valuable if load still exceeds
+    what N hands (plus the farmer) can already absorb. Without this, a
+    static load estimate never decreases as hands are hired and
+    `should_hire` would keep approving hire after hire in the same day —
+    a real bug found via a full simulator run, where the resulting unit
+    count made `joint_assign`'s combinatorial search explode. The
+    recovered-turns proxy is additionally capped at how many turns are
+    left today, since a hand can't do more work today than today has turns
+    for.
+    """
+    existing_capacity = remaining_turns_today * (1 + existing_hands)  # farmer + hired hands
+    overload = projected_load - existing_capacity
+    if overload <= 0:
+        return 0.0
+    recovered_turns = min(overload, remaining_turns_today)
+    return recovered_turns * AVERAGE_VALUE_PER_RECOVERED_ACTION
+
+
+def should_hire(
+    projected_load: int,
+    remaining_turns_today: int,
+    hires_today: int,
+    money: float,
+    safety_margin: float = 0.0,
+    existing_hands: int = 0,
+) -> bool:
+    """Whether hiring one more hand today clears its fibonacci-scaled cost.
+
+    Per the v2 design: hire only when the estimated recovered value
+    exceeds the next hire's cost plus a configurable safety margin, and
+    only if affordable at all. Not a diversity-seeking heuristic — value
+    must be real and load-driven, per the design's explicit "do not hire
+    merely to create training action diversity" rule.
+    """
+    cost = economy.hire_cost(hires_today)
+    if money < cost:
+        return False
+    value = estimate_hire_value(projected_load, remaining_turns_today, existing_hands)
+    return value > cost + safety_margin
 
 
 def route_toward(
@@ -288,7 +463,26 @@ class TeacherState:
 
     assignments: dict[int, TaskId] = field(default_factory=dict)
     previous_step: int = -1
+    previous_day: int = -1
 
     def reset(self) -> None:
         self.assignments.clear()
         self.previous_step = -1
+        self.previous_day = -1
+
+
+def reset_hand_assignments_on_day_change(state: TeacherState, day: int) -> None:
+    """Clear non-farmer (unit index > 0) assignments when `day` changes.
+
+    Both the farmer's position and every hired hand reset unconditionally
+    at every end-of-day boundary in the real game (confirmed against
+    kaggriculture.py's `_end_of_day`) — a hand's index identity in
+    `obs["farms"][player]["hands"]` never survives a day boundary, even if
+    an identical hand is re-hired. The farmer's own assignment (unit 0)
+    is left untouched here; it revalidates naturally next turn, since
+    `rank_tasks`/`joint_assign` only apply hysteresis when the persisted
+    `TaskId` still matches a freshly generated task.
+    """
+    if day != state.previous_day:
+        state.assignments = {unit: task_id for unit, task_id in state.assignments.items() if unit == 0}
+        state.previous_day = day

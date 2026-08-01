@@ -186,7 +186,9 @@ not a competition submission.
 - `roi_teacher_v3`: local deterministic fallback, packaged and tested.
 - Platform smoke kernel: `kernel_complete`.
 - `task_teacher_v1`: implemented and locally verified; see version ledger.
-- `task_teacher_v2`: design pending in its focused component spec.
+- `task_teacher_v2`: implemented and locally verified (provisional
+  champion, does not cleanly sweep v1); see version ledger and
+  `2026-08-01-task-teacher-v2-design.md`.
 - BC dataset v1: blocked on teacher action/state coverage.
 - PPO: blocked on BC and checkpoint/resume verification.
 - Competition submission: blocked on explicit user authorization.
