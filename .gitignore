@@ -11,6 +11,11 @@ scratch/
 kaggriculture.zip
 build/
 
+# Staged notebook copy for scripts/push_kaggle_kernel.sh (source of truth
+# lives in notebooks/00_platform_smoke_test.ipynb; the kernel dir needs its
+# own copy alongside kernel-metadata.json)
+notebooks/kernels/*/*.ipynb
+
 # Training artifacts (large, regenerable, not for git)
 checkpoints/
 *.safetensors

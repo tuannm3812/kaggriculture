@@ -1,0 +1,16 @@
+{
+  "id": "tuannm3812/kaggriculture-platform-smoke-test",
+  "title": "Kaggriculture - Platform Smoke Test",
+  "code_file": "00_platform_smoke_test.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [
+    "kaggriculture"
+  ],
+  "kernel_sources": []
+}

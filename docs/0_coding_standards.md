@@ -15,8 +15,12 @@ Code, not notebooks, is the executable artifact Kaggle runs. Structure:
   doc's default of "only once reuse is proven."
 - `agents/<version>/main.py` — one immutable folder per tried agent version,
   each a self-contained `agent(obs)` submission candidate.
-- `scripts/` — local tournament runner, replay analyzer, submit wrapper.
-- `tests/` — unit tests for `src/kaggriculture_lib`, especially economy math.
+- `scripts/` — local tournament runner (`run_tournament.py`), submission
+  packaging (`package_agent.py`), Kaggle kernel push (`push_kaggle_kernel.sh`).
+- `tests/` — unit tests for `src/kaggriculture_lib`, agent decision logic,
+  the tournament harness, and packaging.
+- `notebooks/` — narrow exception, platform verification only, not agent
+  development. See §2.
 - `docs/` — numbered, in the same spirit as the master doc's §2, adapted for
   this genre: `0_coding_standards.md` → `1_competition_instructions.md` →
   `2_environment_notes.md` → `3_agent_strategy.md` → `4_agent_version_log.md`
@@ -26,17 +30,29 @@ Code, not notebooks, is the executable artifact Kaggle runs. Structure:
   finding (mirrors master doc §8's "lightweight artifacts only" rule).
 - No `data/` — there is no train/test data for this competition.
 
-## 2. Exception: `src/kaggriculture_lib` From Day One
+## 2. Exceptions to the Master Standard
 
-The master standard says only add `src/<package>` once shared logic is
-genuinely reused across multiple notebooks/agents. This project adds it at
-v1 instead, because the price-curve and yield formulas (9 resources ×
-asymmetric shape functions, one-time vs. ongoing yield math, `CARE` bonus
-banking) are complex enough that every agent version — heuristic teacher,
-BC-cloned policy, PPO-trained policy — must share exactly one correct
-implementation. Reimplementing this per agent version risks silent
-divergence between what an agent *thinks* is true and what the environment
-actually does. See the design doc §6 for the original reasoning.
+**`src/kaggriculture_lib` from day one.** The master standard says only add
+`src/<package>` once shared logic is genuinely reused across multiple
+notebooks/agents. This project adds it at v1 instead, because the
+price-curve and yield formulas (9 resources × asymmetric shape functions,
+one-time vs. ongoing yield math, `CARE` bonus banking) are complex enough
+that every agent version — heuristic teacher, BC-cloned policy,
+PPO-trained policy — must share exactly one correct implementation.
+Reimplementing this per agent version risks silent divergence between what
+an agent *thinks* is true and what the environment actually does.
+
+**`notebooks/` for platform verification only, added 2026-08-01.** This
+repo is otherwise code-first (§1) — but Kaggle's execution environment
+can't be verified without running actual code on Kaggle's own
+infrastructure, and `kaggriculture` isn't in the latest published
+`kaggle-environments` PyPI release (§6, `docs/2_environment_notes.md`), so
+whether Kaggle's kernel image has a compatible build is a genuine open
+question. `notebooks/00_platform_smoke_test.ipynb` +
+`notebooks/kernels/platform_smoke_test/` exist solely to answer that — not
+to become the executable source of truth for agent development.
+
+See the design doc §6 for the original reasoning behind both exceptions.
 
 ## 3. Code Style
 
