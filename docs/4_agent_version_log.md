@@ -167,3 +167,87 @@ available, and outcome/lesson.
   a similar gap discovered later, after building `task_teacher_v1→v6`
   (which will use all of those mechanics), would have been far more
   expensive to unwind.
+
+## task_teacher_v1 (`agents/task_teacher_v1/main.py`)
+
+- **Date:** 2026-08-01
+- **New agent family** (not `roi_teacher_v4`), per the approved design in
+  the design doc's "task_teacher_v1: final design" entry — a structurally
+  different architecture (multi-tile task generation/ranking/routing) from
+  `roi_teacher_v1-v3`'s single-tile ROI loop, built after multiple rounds
+  of Codex design review (module boundaries, typed task/state data model,
+  deterministic ranking/routing contract, explicit `TeacherState` reset
+  semantics, O(1) service-capacity check, market-timing correctness,
+  `sys.modules`-based packaging).
+- **Scope:** one farmer, initial unlocked (NW) quadrant only, one-time
+  crops only (Wheat/Carrot/Melon), multi-tile plant/water/harvest/dig,
+  deterministic task generation/ranking/routing, seed acquisition and
+  shed selling consistent with `1.29.3`'s turn order. No hands, land,
+  animals, fertilizer, `PICKUP`/`PLACE`, or manual `DROP` (a no-op under
+  `1.29.3` — modeled correctly: harvested produce reaches the shed via the
+  automatic end-of-day drop instead).
+- **New shared module:** `src/kaggriculture_lib/tasking.py` (`TaskKind`,
+  `PriorityTier`, `TaskId`, `ResourceNeed`, `Task`, `MarketIntent`,
+  `TeacherState`, `ReservationLedger`, `generate_tasks`, `rank_tasks`,
+  `route_toward`, `project_daily_load`). `economy.py` gained
+  `last_day_index`/`can_mature_in_time`, promoted from
+  `roi_teacher_v3`'s private per-tile feasibility check.
+- **Built test-first** (`superpowers:test-driven-development`): every
+  function has a test written and watched fail before implementation —
+  `tests/test_tasking.py` (33 tests: data model, task generation, ranking,
+  routing, market intent, service-capacity load), `tests/test_task_teacher_v1.py`
+  (9 tests: synthetic-obs decision logic, market-timing correctness,
+  explicit state-reset-on-`step==0` behavior, a small-sample acceptance-gate
+  regression), and `tests/test_package_agent.py` rewritten for the new
+  `sys.modules`-registration packaging approach (9 tests, including a
+  dataclass-`__module__` correctness check).
+- **Acceptance-gate measurement** (100 full 720-step episodes vs. `starter`,
+  seeds 1000–1099, per the design doc's numeric gate):
+
+  | Metric | Result | Gate |
+  | --- | --- | --- |
+  | `DONE` both players | 100/100 | 100% required |
+  | Invalid/non-`DONE` episodes | 0 | 0 required |
+  | Non-finite-reward episodes | 0 | 0 required |
+  | Distinct tiles worked/episode | median 17, p10 15, range [14, 21] | median ≥12, p10 ≥8 |
+  | Action-kind coverage (all episodes) | `PLANT`=2697, `WATER`=25356, `HARVEST`=2214, `DIG`=705 | every `TaskKind` present |
+  | Determinism (same seed, 2 runs) | identical rewards | required |
+
+  All criteria passed comfortably — natural weed spawning already produced
+  705 `DIG` occurrences across the sample, so no seeded weed-scenario
+  fixture was needed to hit that threshold.
+- **Local tournament** (`scripts/run_tournament.py`, 8 seed pairs / 16 games
+  per opponent, full 720-step episodes, base seed 0):
+
+  | Opponent | Win rate | Mean money margin |
+  | --- | ---: | ---: |
+  | `pass` | 1.000 | +29244.9 |
+  | `random` | 1.000 | +31164.9 |
+  | `starter` | 1.000 | +28158.4 |
+  | **`roi_teacher_v3` (direct)** | **1.000** | **+25244.9** |
+
+  A step change, not an incremental one: margins roughly 10x
+  `roi_teacher_v3`'s, consistent with using all ~25 NW-quadrant tiles
+  simultaneously instead of 1.
+- **Packaging:** `scripts/package_agent.py` rewritten to register real
+  modules in `sys.modules` under their true dotted names
+  (`kaggriculture_lib`, `kaggriculture_lib.economy`,
+  `kaggriculture_lib.tasking`, auto-discovered and topologically sorted —
+  no hardcoded module list), rather than the earlier namespace-object-alias
+  shim. Verified standalone (`PYTHONPATH` stripped) for `task_teacher_v1`
+  and re-verified for `roi_teacher_v1-v3`. Found and fixed a real test-
+  isolation bug along the way: executing generated packaged code
+  registers modules into the *real* `sys.modules`, which leaked a test
+  fixture's stub `kaggriculture_lib` into later tests importing the real
+  package — fixed with an autouse `sys.modules` snapshot/restore fixture
+  in `tests/test_package_agent.py`.
+- **Ladder result:** not yet submitted.
+- **Lesson carried forward:** the multi-round Codex design discussion
+  (typed enums over raw strings/floats, `deadline_step` over day-
+  granularity, the market-timing bug class, and especially the corrected
+  "no episode key needed" reasoning — see the design doc §9) produced a
+  design with zero rework needed during implementation; every test passed
+  on essentially the first attempt after fixing two test-premise bugs
+  (a Manhattan-distance tie in a ranking test, and an unrealistic price
+  assumption in a synthetic-obs test) — not implementation bugs. Confirms
+  the earlier investment in design review before code was worth it.

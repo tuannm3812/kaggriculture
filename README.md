@@ -6,12 +6,15 @@ economy simulation bot: https://www.kaggle.com/competitions/kaggriculture
 ## Status
 
 Week 1 in progress (2026-08-01). Deadline: **2026-09-30 23:59 UTC**. Local
-environment verified, economy math tested against the real simulator, and
-a series of ROI-heuristic teacher agents beat all three built-in agents in
-local tournament play. Current local champion: **`roi_teacher_v3`** (see
-`docs/4_agent_version_log.md` for the full v1→v3 progression). Packaging
-(`scripts/package_agent.py`) is done and verified; not yet submitted to the
-ladder — see `docs/6_next_steps.md` for the current recommendation.
+environment verified (including a passed Kaggle platform smoke test),
+economy math tested against the real simulator, and a series of agents
+have each beaten the last in local tournament play. Current local
+champion: **`task_teacher_v1`** — a multi-tile task/route scheduler that
+beats the prior single-tile champion (`roi_teacher_v3`) by roughly 10x
+margin (see `docs/4_agent_version_log.md` for the full progression).
+Packaging (`scripts/package_agent.py`) is done and verified for every
+agent; not yet submitted to the ladder — see `docs/6_next_steps.md` for
+the current recommendation.
 
 Full design (why this repo is structured this way, strategy approach, and
 the converged RL-pipeline discussion with Codex) is in
@@ -22,9 +25,13 @@ the converged RL-pipeline discussion with Codex) is in
 - `docs/`: numbered competition notes, environment verification, agent
   strategy, version log, next steps (see Documentation Map below).
 - `src/kaggriculture_lib/`: shared, tested library — game economy math
-  (price curve, yield formulas) mirrored from and validated against the
-  real environment. Single source of truth for every agent version.
-- `agents/<version>/main.py`: one immutable folder per tried agent version.
+  (price curve, yield formulas, season feasibility) in `economy.py`, and
+  multi-tile task generation/ranking/routing in `tasking.py`. Single
+  source of truth for every agent version.
+- `agents/<family>_<version>/main.py`: one immutable folder per tried
+  agent version. `roi_teacher_v*` (single-tile ROI heuristic) and
+  `task_teacher_v*` (multi-tile task/route scheduler) are separate
+  families — see `docs/3_agent_strategy.md`.
 - `scripts/`: local tournament runner (`run_tournament.py`), submission
   packaging (`package_agent.py`).
 - `tests/`: unit tests for `src/kaggriculture_lib`, agent decision logic,
@@ -49,14 +56,14 @@ Run the local tournament harness:
 
 ```bash
 PYTHONPATH=src .venv/bin/python scripts/run_tournament.py \
-    agents/roi_teacher_v3/main.py pass random starter \
+    agents/task_teacher_v1/main.py pass random starter \
     --episodes 10 --episode-steps 720
 ```
 
 Package an agent into a standalone submission artifact:
 
 ```bash
-.venv/bin/python scripts/package_agent.py agents/roi_teacher_v3
+.venv/bin/python scripts/package_agent.py agents/task_teacher_v1
 ```
 
 Run tests:

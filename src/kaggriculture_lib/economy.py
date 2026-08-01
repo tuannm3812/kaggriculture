@@ -178,6 +178,34 @@ def animal_production_days(animal: str) -> list[int]:
     return days
 
 
+DEFAULT_EPISODE_STEPS = 720
+DEFAULT_TURNS_PER_DAY = 24
+
+
+def last_day_index(config: dict | None) -> int:
+    """0-indexed final day of the season, from the real episode config.
+
+    Promoted from `agents/roi_teacher_v3/main.py`'s `_last_day_index` (see
+    the approved `task_teacher_v1` design in
+    docs/superpowers/specs/2026-08-01-kaggriculture-competition-plan-design.md):
+    every agent version that reasons about remaining season length needs
+    the identical calculation, not a per-agent reimplementation.
+    """
+    episode_steps = config.get("episodeSteps", DEFAULT_EPISODE_STEPS) if config else DEFAULT_EPISODE_STEPS
+    turns_per_day = config.get("turnsPerDay", DEFAULT_TURNS_PER_DAY) if config else DEFAULT_TURNS_PER_DAY
+    season_days = episode_steps // turns_per_day
+    return season_days - 1
+
+
+def can_mature_in_time(crop: str, current_day: int, last_day: int) -> bool:
+    """True iff a one-time crop planted today reaches `max_yield_day` age on
+    or before the season's last day, leaving turns that day to harvest.
+
+    Promoted from `agents/roi_teacher_v3/main.py`'s `_can_mature_in_time`.
+    """
+    return current_day + CROPS[crop]["max_yield_day"] <= last_day
+
+
 def one_time_crop_static_yield_per_tile_day(crop: str, watered_in_window: bool = True) -> float:
     """Simple static estimate of average yield/tile/day over the crop's life.
 

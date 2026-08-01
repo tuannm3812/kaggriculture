@@ -57,11 +57,33 @@ the episode ends — see `docs/4_agent_version_log.md`, a real gap Codex's
 code review found in v1/v2). Rationale for staying single-tile this far:
 get a genuinely-tested, ROI-aware baseline running today rather than
 spending the first implementation session on multi-tile pathing before any
-local-tournament evidence exists. **v3 is the current local champion**
-(beats v2 head-to-head; see `docs/4_agent_version_log.md` for full numbers
-on all three versions). Per Codex's review, this single-tile line should
-not be extended further before building multi-tile task/route coverage —
-see `docs/6_next_steps.md`.
+local-tournament evidence exists. Superseded as champion by
+`task_teacher_v1` (below); kept as the immutable benchmark line and BC/
+fallback-submission candidate.
+
+## `task_teacher_v1` Scope (`agents/task_teacher_v1`) — Current Champion
+
+New agent family, not a continuation of `roi_teacher_v*`'s numbering —
+structurally different (multi-tile task generation/ranking/routing vs. a
+single-tile ROI loop). Same crop scope as v2/v3 (Wheat/Carrot/Melon,
+one-time crops only) but uses every tile in the initial unlocked (NW)
+quadrant simultaneously via a deterministic task scheduler
+(`src/kaggriculture_lib/tasking.py`): generates a `PLANT`/`WATER`/
+`HARVEST`/`DIG` task per tile every turn, ranks by safety-tier first then
+distance/value/hysteresis, and routes the farmer via greedy Manhattan
+movement (confirmed no obstacles exist in this game). Result: a step
+change, not an incremental one — roughly 10x `roi_teacher_v3`'s margins
+(full numbers in `docs/4_agent_version_log.md`), from tile-count scaling
+alone, without any smarter per-tile decision-making than v3 already had.
+
+Built after multiple rounds of Codex design review (module boundaries,
+typed task/state data model, deterministic ranking/routing contract,
+explicit `TeacherState` reset semantics rather than relying on module-
+reload behavior, an O(1) service-capacity check, the market-timing
+constraint, and `sys.modules`-based packaging) and implemented test-first
+end to end. Still narrow by design: one farmer, no hands/land/animals/
+fertilizer — `task_teacher_v2→v6` add those incrementally per the agreed
+construction sequence (`docs/6_next_steps.md`).
 
 ## Strategy Approach (unchanged from the design doc)
 

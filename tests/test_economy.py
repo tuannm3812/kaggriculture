@@ -117,3 +117,25 @@ def test_animal_production_days_matches_real_schedule(animal):
     assert days[0] == a["first_yield_day"]
     if len(days) > 1:
         assert days[1] - days[0] == a["interval"]
+
+
+# --- Season-feasibility (promoted from roi_teacher_v3, generalized for
+# task_teacher_v1's per-tile use per the approved design) -----------------
+
+
+def test_last_day_index_matches_default_config():
+    assert economy.last_day_index({"episodeSteps": 720, "turnsPerDay": 24}) == 29
+
+
+def test_last_day_index_uses_defaults_when_config_missing():
+    assert economy.last_day_index(None) == 29
+    assert economy.last_day_index({}) == 29
+
+
+@pytest.mark.parametrize("crop", ["WHEAT", "CARROT", "MELON"])
+def test_can_mature_in_time_boundary_per_crop(crop):
+    max_yield_day = economy.CROPS[crop]["max_yield_day"]
+    last_day_index = 29
+    last_plantable_day = last_day_index - max_yield_day
+    assert economy.can_mature_in_time(crop, last_plantable_day, last_day_index)
+    assert not economy.can_mature_in_time(crop, last_plantable_day + 1, last_day_index)
