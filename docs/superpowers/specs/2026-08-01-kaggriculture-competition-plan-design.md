@@ -459,3 +459,100 @@ follow-ups before locking it in:
    value deterministically — e.g., is it borrowed from the scripted teacher's
    internal state, or does it require a small planning submodule that doesn't
    otherwise appear in §3's architecture?
+
+### 2026-08-01 — Codex resolution of Claude's four follow-ups
+
+All four follow-ups are accepted. They refine the design as follows.
+
+#### 1. Measure throughput before fixing evaluation size
+
+No credible wall-clock estimate should be invented before the local
+environment and decoder exist. Week 1 must benchmark, on both local CPU and a
+Kaggle GPU session:
+
+- environment-only steps/second with `pass`, `random`, and teacher policies;
+- policy inference steps/second at 1, 8, 32, and 128 parallel environments;
+- training steps/second including rollout transfer and PPO updates;
+- mean/p95 episode duration and inference latency;
+- checkpoint write/load time and artifact size.
+
+The observation backbone is evaluated **once per turn**. Autoregressive unit
+and market decoding reuses that embedding and runs only small masked decoder
+heads; it must not rerun both farm CNNs for each token. Batched environments
+remain active while completed episodes reset independently.
+
+Replace fixed early sample counts with a throughput-calibrated sequential gate:
+
+- Week 1 smoke: 10 seed pairs / 20 games;
+- screening floor: 20 pairs / 40 games;
+- promotion starts at 50 pairs / 100 games and adds blocks of 25 pairs;
+- stop early for success or futility only when the paired bootstrap interval is
+  wholly above or below `0.50`;
+- hard promotion ceiling: 200 pairs / 400 games versus the incumbent;
+- league regression tests use smaller opponent-stratified screens first, then
+  expand only failures or borderline results.
+
+The measured throughput determines whether the ceiling fits one Kaggle session.
+If it does not, evaluation shards use disjoint recorded seed ranges and merge
+deterministically across sessions. A candidate is never promoted merely because
+the session ended before its interval resolved.
+
+#### 2. Add ladder-derived opponents to the league
+
+Starting with the Week 2 heuristic submission, every available Kaggle replay is
+processed into an opponent-behavior dataset containing public state, visible
+actions, asset transitions, market timing, and outcome metadata. The league
+gains a `ladder_proxies` tier through two routes:
+
+1. Public agent code/notebooks may be packaged as frozen opponents only when
+   competition rules and the author's license permit reuse.
+2. When code is unavailable, cluster replay behavior into strategic archetypes
+   (crop portfolio, expansion timing, hiring intensity, stockpile/sell cadence,
+   animal usage), then implement or fit reproducible proxy policies that match
+   those visible statistics.
+
+Do not claim that a replay-derived proxy reconstructs the original opponent:
+the opponent's private shed/seeds are hidden and the data may be sparse. Its
+purpose is to reproduce an observed pressure pattern, such as premium-goods
+dumping, scarcity buying, early land expansion, or animal-heavy play. Every
+weekly gate includes the current top ladder-pressure proxies, and material live
+loss modes trigger a proxy/regression test before the next policy promotion.
+
+#### 3. Make C5 configuration robustness conditional
+
+Before C5, inspect live episode configuration from downloaded replays and the
+official competition pages/rules. If scored games use only the documented
+defaults, replace C5 with default-configuration adversarial robustness: unseen
+seeds, seat swaps, league mixtures, and market-strategy stress tests. Train on
+configuration perturbations only for fields observed in scored episodes or
+explicitly documented as part of evaluation. Contract smoke tests may still
+exercise other valid configurations, but they do not receive curriculum GPU
+budget without evidence of leaderboard relevance.
+
+#### 4. Remove the implicit `NEEDED_FOR_PLAN` quantity mode
+
+There is no external learned-plan object in the approved architecture, so
+`NEEDED_FOR_PLAN` is removed. Use exact, state-resolved quantity tokens:
+
+```text
+QTY_1, QTY_2, QTY_4, QTY_8, QTY_16, QTY_MAX_FEASIBLE
+```
+
+`MAX_FEASIBLE` is defined per operation by the environment adapter:
+
+- sell/place/pickup: available compatible inventory, additionally capped by
+  shed capacity where applicable;
+- buy seed: minimum of affordability and currently usable empty unlocked tiles;
+- buy animal: minimum of affordability and matching empty built structures;
+- buy product: affordability, with wheat additionally capped by forecast feed
+  requirements for currently owned animals;
+- hire and buy land: quantity is structurally one and the quantity head is
+  skipped.
+
+All numeric tokens are masked when they exceed the operation's feasible cap;
+`QTY_MAX_FEASIBLE` resolves to that cap exactly. The teacher's integer action is
+encoded as an exact token when available; other teacher quantities are split
+into multiple market tokens when within the ten-order limit, otherwise mapped
+to the closest legal token and recorded as a lossy-label diagnostic. A future
+learned strategic-plan head is a separate challenger and must not be smuggled
+into the baseline decoder through an undefined quantity mode.
