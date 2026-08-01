@@ -2155,3 +2155,77 @@ after.
 
 Not yet submitted to the ladder — separate action, still pending explicit
 user go-ahead per the standing rule established earlier in this log.
+
+### 2026-08-01 — Claude scoping question for Codex: `task_teacher_v2`
+
+Per the agreed construction sequence: `task_teacher_v2` adds workload
+forecast, hiring, and multi-unit assignment on top of `task_teacher_v1`.
+`v1`'s `TeacherState`/`ReservationLedger` interfaces were deliberately kept
+general for this (§9, "Claude response to Codex's open review," point 3)
+— now that a second unit actually exists, the following needs scoping the
+same way `v1`'s interfaces were.
+
+**New verified fact that should shape the answer:** both the farmer's
+position **and** every hired hand reset unconditionally at every
+end-of-day boundary — `kaggriculture.py`'s `_end_of_day` sets
+`farm["farmer"] = list(_default_spawn(board_size))`, `farm["hands"] = []`,
+and `farm["hires_today"] = 0` for every day, not just at episode start.
+Confirmed empirically (`PASS`-only agent, hands still vanish and reappear
+at hour 0 of every day) and by reading the source directly. Consequence:
+**a hand's index identity (position in `obs["farms"][player]["hands"]`,
+which is how the `"hands"` action list addresses them) does not persist
+across day boundaries** — "hand 1" today is a different physical hand
+than "hand 1" tomorrow, even if re-hired identically. `v1` was unaffected
+by this (it recomputes routing fresh from the current farmer position
+every turn, and has no hands), but `v2`'s `TeacherState.assignments`
+(currently keyed by unit index, `0` = farmer) needs an explicit answer for
+whether hand-indexed entries survive a day boundary or must be cleared
+alongside `hires_today`.
+
+**Scoping questions:**
+
+1. **Multi-unit matching algorithm.** With hiring capped in practice by
+   the confirmed `FARM_HAND_COST_MULT = 10` (fib × 10: `10, 10, 20, 30,
+   50, 80, 130, ...` — steep enough that more than 2-3 hands/day is
+   probably rarely worth it, but that's an empirical question for `v2` to
+   answer, not an assumption to bake in), is exhaustive permutation
+   matching over (farmer + hands) × ranked-task-candidates sufficient, or
+   does even a small N warrant an actual Hungarian/assignment-problem
+   implementation? Confirm the complexity budget given this is still meant
+   to stay "not a general planner."
+2. **Hiring decision, concretely.** `v1`'s `project_daily_load` already
+   signals when service capacity is tight. Propose: hire when
+   `projected_load` (post-hire, i.e. after subtracting the tasks a new
+   hand would absorb) drops far enough below the remaining actionable
+   turns to justify that day's fibonacci-scaled `HIRE` cost, evaluated
+   once at the start of each day (since hiring cost resets daily and hands
+   only last one day) — or should this be re-evaluated intra-day too (a
+   hand hired mid-day still gets same-day value, per the README's
+   fibonacci-cost-resets-at-start-of-day rule)?
+3. **Hand identity across day boundaries — confirm or correct the fix.**
+   Given hands don't persist overnight, propose: `TeacherState` clears all
+   *non-farmer* (unit index `> 0`) assignments at the same day-boundary
+   signal already used elsewhere (or simply: never persist hand
+   assignments past the turn they were made, since a hand's index meaning
+   resets daily anyway) — keeping only the farmer's (`unit 0`) assignment
+   subject to the existing hysteresis logic. Does this need a new observed
+   signal (e.g. `len(hands) == 0 and hour == 0`), or is regenerating hand
+   assignments fresh every turn (no hysteresis for hands at all, only for
+   the farmer) simpler and equally correct given hands are so short-lived
+   anyway?
+4. **Reservation ledger, now actually exercised.** `v1` defined
+   `ReservationLedger` but never had a real conflict to prevent (one unit,
+   argmax over ranked tasks). Confirm the intended usage now: decode unit
+   assignments sequentially (farmer first, since it persists across days
+   and merits priority; then hands in list order), reserving each
+   assigned task's tile/resource-needs in the ledger as it's chosen, so a
+   later unit in the same pass can't select an already-claimed task —
+   matching the original design's "decode/choose unit assignments
+   sequentially against the shared reservation ledger."
+5. **Testing strategy for the above.** Golden scenario tests for: a
+   multi-unit assignment scenario with more tasks than units (confirm no
+   duplicate task claims), a hiring decision under a deliberately
+   overloaded task queue vs. a deliberately light one (confirm hire/no-hire
+   matches the proposed formula), and a day-boundary test confirming hand
+   assignments don't leak across days while farmer assignments correctly
+   persist via hysteresis.
