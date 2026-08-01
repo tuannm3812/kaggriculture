@@ -45,12 +45,16 @@ an agent *thinks* is true and what the environment actually does.
 **`notebooks/` for platform verification only, added 2026-08-01.** This
 repo is otherwise code-first (§1) — but Kaggle's execution environment
 can't be verified without running actual code on Kaggle's own
-infrastructure, and `kaggriculture` isn't in the latest published
-`kaggle-environments` PyPI release (§6, `docs/2_environment_notes.md`), so
-whether Kaggle's kernel image has a compatible build is a genuine open
-question. `notebooks/00_platform_smoke_test.ipynb` +
-`notebooks/kernels/platform_smoke_test/` exist solely to answer that — not
-to become the executable source of truth for agent development.
+infrastructure, and this project's local dev dependency (`kaggle-
+environments`) is version-pinned rather than "latest" (§6,
+`docs/2_environment_notes.md`), so whether Kaggle's kernel image runs a
+compatible version was a genuine open question — one that turned out to
+matter: the smoke test surfaced a real version gap (`1.29.3` on Kaggle's
+kernel vs. `1.32.2` this project had been developing against, with actual
+balance differences, not just a version-number bump). `notebooks/
+00_platform_smoke_test.ipynb` + `notebooks/kernels/platform_smoke_test/`
+exist solely for this kind of platform check — not to become the
+executable source of truth for agent development.
 
 See the design doc §6 for the original reasoning behind both exceptions.
 
@@ -93,11 +97,13 @@ comments explain why not what). Additionally for this project:
 
 ## 6. Local Environment
 
-`kaggriculture` is not yet in a published `kaggle-environments` PyPI release
-(checked 2026-08-01, latest release was 1.18.0) and requires Python >= 3.11.
-Use the project's `.venv` (created via `python3.11 -m venv .venv`) rather
-than system Python. See `docs/2_environment_notes.md` for the exact source
-location and version pin used during development.
+Pinned to `kaggle-environments==1.29.3` in `requirements.txt` — installs
+cleanly from PyPI, no GitHub source needed. Not "latest" deliberately:
+`1.29.3` is confirmed running on Kaggle's own kernel infrastructure and
+has real balance differences from newer releases (e.g. `1.32.2`) — see
+`docs/2_environment_notes.md`'s version-gap comparison before ever
+bumping this pin. Requires Python >= 3.11 — use the project's `.venv`
+(created via `python3.11 -m venv .venv`) rather than system Python.
 
 ## 7. Git Hygiene
 

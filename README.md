@@ -34,9 +34,11 @@ the converged RL-pipeline discussion with Codex) is in
 
 ## Local Setup
 
-Requires Python >= 3.11 (`kaggriculture` isn't yet in a published
-`kaggle-environments` PyPI release as of 2026-08-01 — installed from GitHub
-source; see `docs/2_environment_notes.md`):
+Requires Python >= 3.11. Pinned to `kaggle-environments==1.29.3` (installs
+cleanly from PyPI) — deliberately not "latest": `1.29.3` is confirmed
+running on Kaggle's own kernel infrastructure and has real balance
+differences from newer releases; see `docs/2_environment_notes.md`'s
+version-gap comparison before bumping this pin:
 
 ```bash
 python3.11 -m venv .venv

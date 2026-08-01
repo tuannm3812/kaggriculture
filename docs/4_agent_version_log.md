@@ -126,3 +126,44 @@ available, and outcome/lesson.
   make a poor behavioral-cloning teacher, since it never demonstrates
   movement, hands, land, animals, structures, or multi-order market
   coordination. See `docs/6_next_steps.md`.
+
+## Correction: All Tournament Numbers Above Were Measured Against `1.32.2`, Not the Ladder-Matching `1.29.3`
+
+- **Date:** 2026-08-01
+- **What happened:** Codex's execution-status audit surfaced that Kaggle's
+  own kernel infrastructure runs `kaggle-environments==1.29.3`, not the
+  `1.32.2` (GitHub `master`) this project had been developing against. A
+  direct diff found real balance differences (`COW` cost, hire cost
+  multiplier, glut-sensitivity constants for premium goods, several config
+  defaults — full table in `docs/2_environment_notes.md`). All tournament
+  numbers in the v1/v2/v3 entries above were measured against `1.32.2`.
+- **What this does NOT invalidate:** every crop/animal's `base` price is
+  identical between versions, so the static ROI ranking
+  (`docs/3_agent_strategy.md`) and every *relative* comparison above
+  (v3 > v2 > v1 > starter > random > pass) were internally valid — each
+  comparison ran both agents inside the same consistently-versioned local
+  environment.
+- **Fix:** re-pinned `requirements.txt` to `kaggle-environments==1.29.3`,
+  corrected `economy.py`'s constants and docstring line-citations, rebuilt
+  `.venv`, corrected `tests/test_economy.py`'s expected sample-price
+  table, reran the full test suite (129 passing) and re-packaged all
+  three agents.
+- **Re-verified local tournament** (same protocol: 8 seed pairs / 16 games
+  per opponent, full 720-step episodes, base seed 0) — **rankings
+  unchanged**, absolute margins shifted somewhat (different
+  `startingMoney`/town-consumption defaults change the baseline scale):
+
+  | Agent | vs. `pass` | vs. `random` | vs. `starter` | vs. prior version |
+  | --- | ---: | ---: | ---: | ---: |
+  | `roi_teacher_v1` | +920.5 | +2944.3 | +407.1 | — |
+  | `roi_teacher_v2` | +3259.0 | +5259.0 | +2746.4 | +2343.8 vs. v1 |
+  | `roi_teacher_v3` | +3319.0 | +5319.0 | +2806.4 | +60.0 vs. v2 |
+
+  All win rates remained 1.000 (16/16 games) in every matchup above.
+- **Lesson carried forward:** verify which environment version a ladder
+  actually runs *before* extensive local iteration, not after — this was
+  cheap to fix here because v1–v3 never touched the specific constants
+  that changed (no hiring, no animals, no glut-sensitive bulk selling), but
+  a similar gap discovered later, after building `task_teacher_v1→v6`
+  (which will use all of those mechanics), would have been far more
+  expensive to unwind.

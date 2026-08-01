@@ -63,9 +63,10 @@ delay, now that the platform-compatibility gate is cleared.
     `docs/2_environment_notes.md`); policy-inference and training steps/sec
     at multiple parallel-env counts, and checkpoint write/load time, are not
     yet measured — needed before any BC/PPO evaluation-size commitment.
-11. **Version-gap check** (new open item since the smoke test): Kaggle's
-    kernel runtime has `kaggle-environments==1.29.3` pre-installed; this
-    project develops locally against `1.32.2` (GitHub `master`). Not yet
-    confirmed whether `kaggriculture`'s game logic differs between those
-    two versions — worth diffing if a future local-vs-ladder score gap
-    ever looks larger than expected.
+11. ~~Version-gap check~~ — done 2026-08-01: diffed `1.29.3` (Kaggle's
+    kernel) against `1.32.2` (this project's prior local dev version),
+    found real differences (hire cost 10x, `COW` cost, premium-good glut
+    sensitivity, several config defaults — full table in
+    `docs/2_environment_notes.md`). Re-pinned `requirements.txt` to
+    `1.29.3`, corrected `economy.py` and its tests, re-verified v1→v3
+    rankings hold (see `docs/4_agent_version_log.md`).

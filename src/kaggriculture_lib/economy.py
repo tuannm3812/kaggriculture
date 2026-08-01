@@ -18,20 +18,23 @@ ShapeFn = Literal["linear", "sq", "sqrt", "log", "log10"]
 MARKET_I0 = 10_000
 PRICE_FLOOR = 1
 
-# Mirrors kaggriculture.py:40-50 (MARKET_PARAMS) verbatim.
+# Mirrors kaggle-environments==1.29.3's kaggriculture.py MARKET_PARAMS
+# verbatim (pinned version — see requirements.txt and docs/2_environment_notes.md's
+# version-gap comparison: newer releases like 1.32.2 have different
+# above_target glut-sensitivity constants for premium goods).
 MARKET_PARAMS: dict[str, dict] = {
     "WHEAT":      {"base":  25, "I0": MARKET_I0, "T": 400, "below_func": "sqrt",   "below_target": 0.80, "above_func": "log",  "above_target": 0.20},
     "CARROT":     {"base":  35, "I0": MARKET_I0, "T": 450, "below_func": "log",    "below_target": 0.20, "above_func": "sqrt", "above_target": 0.70},
     "TOMATO":     {"base":  60, "I0": MARKET_I0, "T": 200, "below_func": "linear", "below_target": 0.40, "above_func": "sqrt", "above_target": 0.60},
-    "STRAWBERRY": {"base": 120, "I0": MARKET_I0, "T": 100, "below_func": "sqrt",   "below_target": 0.70, "above_func": "linear", "above_target": 1.60},
-    "MELON":      {"base": 250, "I0": MARKET_I0, "T": 300, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 3.60},
+    "STRAWBERRY": {"base": 120, "I0": MARKET_I0, "T": 100, "below_func": "sqrt",   "below_target": 0.70, "above_func": "linear", "above_target": 0.40},
+    "MELON":      {"base": 250, "I0": MARKET_I0, "T": 300, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 0.90},
     "EGG":        {"base":  50, "I0": MARKET_I0, "T": 332, "below_func": "linear", "below_target": 0.40, "above_func": "log",  "above_target": 0.20},
-    "MILK":       {"base": 160, "I0": MARKET_I0, "T": 122, "below_func": "sqrt",   "below_target": 0.60, "above_func": "linear", "above_target": 1.60},
-    "WOOL":       {"base": 200, "I0": MARKET_I0, "T": 105, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 3.20},
+    "MILK":       {"base": 160, "I0": MARKET_I0, "T": 122, "below_func": "sqrt",   "below_target": 0.60, "above_func": "linear", "above_target": 0.40},
+    "WOOL":       {"base": 200, "I0": MARKET_I0, "T": 105, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 0.80},
     "FERTILIZER": {"base": 100, "I0": MARKET_I0, "T": 200, "below_func": "linear", "below_target": 0.40, "above_func": "linear", "above_target": 0.40},
 }
 
-# Mirrors kaggriculture.py:11-17 (CROPS) verbatim.
+# Mirrors kaggle-environments==1.29.3's kaggriculture.py CROPS verbatim.
 CROPS: dict[str, dict] = {
     "WHEAT":      {"seed": 10, "first_yield_day": 2, "max_yield_day": 4, "interval": 0, "max_yield": 6, "ongoing": False},
     "CARROT":     {"seed": 20, "first_yield_day": 2, "max_yield_day": 3, "interval": 0, "max_yield": 4, "ongoing": False},
@@ -40,22 +43,25 @@ CROPS: dict[str, dict] = {
     "MELON":      {"seed": 80, "first_yield_day": 10, "max_yield_day": 12, "interval": 0, "max_yield": 6, "ongoing": False},
 }
 
-# Mirrors kaggriculture.py:19-23 (ANIMALS) verbatim.
+# Mirrors kaggle-environments==1.29.3's kaggriculture.py ANIMALS verbatim.
+# Note COW cost is 600 here vs. 400 in 1.32.2 — confirmed via direct diff,
+# not a transcription assumption.
 ANIMALS: dict[str, dict] = {
     "GOOSE": {"cost": 300, "structure": "COOP", "first_yield_day": 4, "interval": 1, "max_held": 4, "product": "EGG"},
-    "COW":   {"cost": 400, "structure": "PASTURE", "first_yield_day": 8, "interval": 2, "max_held": 6, "product": "MILK"},
+    "COW":   {"cost": 600, "structure": "PASTURE", "first_yield_day": 8, "interval": 2, "max_held": 6, "product": "MILK"},
     "SHEEP": {"cost": 500, "structure": "PASTURE", "first_yield_day": 6, "interval": 3, "max_held": 6, "product": "WOOL"},
 }
 
-# Mirrors kaggriculture.py:82-83 (LAND_ORDER / LAND_PRICES) verbatim.
+# Mirrors kaggle-environments==1.29.3's kaggriculture.py LAND_ORDER / LAND_PRICES verbatim.
 LAND_ORDER = ["NE", "SW", "SE"]
 LAND_PRICES = [1000, 2000, 4000]
 
-FARM_HAND_COST_MULT = 1
+# 1.29.3's default; confirmed 10x more expensive than 1.32.2's default of 1.
+FARM_HAND_COST_MULT = 10
 
 
 def _shape(func: ShapeFn, x: float) -> float:
-    """Mirrors kaggriculture.py:53-60 (`_shape`)."""
+    """Mirrors kaggle-environments==1.29.3's kaggriculture.py:51-60 (`_shape`)."""
     x = max(0.0, x)
     if func == "linear":
         return x
@@ -73,7 +79,7 @@ def _shape(func: ShapeFn, x: float) -> float:
 def market_price(item: str, inventory: float, params: dict | None = None) -> int:
     """Current sale price for `item` at the given market inventory level.
 
-    Mirrors kaggriculture.py:177-191 (`market_price`) exactly:
+    Mirrors kaggle-environments==1.29.3's kaggriculture.py:175-191 (`market_price`) exactly:
     `price(inv) = base + sign*amp*f(|inv-I0|)`, floored at `PRICE_FLOOR` and
     rounded to the nearest int. `sign` is +1 (scarcity) below I0, -1 (glut)
     above it; `amp` is derived so that moving `T` units past `I0` shifts
@@ -93,7 +99,8 @@ def market_price(item: str, inventory: float, params: dict | None = None) -> int
 
 
 def hire_cost(n_already_today: int, mult: int = FARM_HAND_COST_MULT) -> int:
-    """Cost of the next hire today. Mirrors kaggriculture.py:658-667.
+    """Cost of the next hire today. Mirrors kaggle-environments==1.29.3's
+    kaggriculture.py:651-662 (`_fib`, `_hire_cost`).
 
     `_fib(n)` is indexed so `_fib(0)=1, _fib(1)=1, _fib(2)=2, _fib(3)=3, ...`
     and resets to 0 at the start of each day (`farm["hires_today"]`).
@@ -107,7 +114,8 @@ def hire_cost(n_already_today: int, mult: int = FARM_HAND_COST_MULT) -> int:
 def land_cost(n_unlocked_extra: int) -> int | None:
     """Cost of the next `BUY_LAND` order, or None if all land is unlocked.
 
-    Mirrors kaggriculture.py:680-693 (`_do_buy_land`). `n_unlocked_extra` is
+    Mirrors kaggle-environments==1.29.3's kaggriculture.py:673-688
+    (`_do_buy_land`). `n_unlocked_extra` is
     the count of quadrants already bought beyond the always-unlocked NW.
     """
     if n_unlocked_extra >= len(LAND_ORDER):
@@ -118,7 +126,8 @@ def land_cost(n_unlocked_extra: int) -> int | None:
 def one_time_crop_watering_bonus_window(crop: str) -> tuple[int, int]:
     """Inclusive (start, end) age-in-days window where watering adds yield.
 
-    Mirrors kaggriculture.py:373-386 (`WATER` handler): window starts at
+    Mirrors kaggle-environments==1.29.3's kaggriculture.py:368-382
+    (`WATER` handler): window starts at
     `(max_yield_day + 1) // 2` (== ceil(max_yield_day / 2)) through
     `max_yield_day` inclusive. Only meaningful for non-ongoing crops.
     """
@@ -132,7 +141,8 @@ def one_time_crop_watering_bonus_window(crop: str) -> tuple[int, int]:
 def ongoing_crop_production_days(crop: str) -> list[int]:
     """Days-since-planting (0-indexed) on which an ongoing crop ticks yield.
 
-    Mirrors kaggriculture.py:738-771 (`_daily_refresh_plants`): production
+    Mirrors kaggle-environments==1.29.3's kaggriculture.py:731-766
+    (`_daily_refresh_plants`): production
     ticks when `(day_since_planting - first_yield_day) % interval == 0`,
     for up to `max_yield` ticks.
     """
@@ -152,7 +162,8 @@ def ongoing_crop_production_days(crop: str) -> list[int]:
 def animal_production_days(animal: str) -> list[int]:
     """Days-since-placement (0-indexed) on which an animal ticks a base yield.
 
-    Mirrors kaggriculture.py:774-802 (`_daily_refresh_animals`). Does not
+    Mirrors kaggle-environments==1.29.3's kaggriculture.py:767-797
+    (`_daily_refresh_animals`). Does not
     include CARE-bonus timing, which depends on per-day feed/care history
     rather than a fixed schedule.
     """
@@ -176,7 +187,7 @@ def one_time_crop_static_yield_per_tile_day(crop: str, watered_in_window: bool =
     matching the design doc's Phase-1 "static $/tile/day tables" deliverable.
     """
     cd = CROPS[crop]
-    base_units = 1  # tile always yields >= 1 unit on harvest (see kaggriculture.py:200-213)
+    base_units = 1  # tile always yields >= 1 unit on harvest (see 1.29.3's kaggriculture.py:198-211, `_new_plant`)
     if watered_in_window:
         start, end = one_time_crop_watering_bonus_window(crop)
         bonus_days = end - start + 1

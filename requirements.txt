@@ -2,9 +2,15 @@
 # requirement) — use a dedicated venv, e.g.:
 #   python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 #
-# kaggriculture is not yet in a PyPI kaggle-environments release (checked
-# 2026-08-01, latest release 1.18.0); install from GitHub main until it is.
-git+https://github.com/Kaggle/kaggle-environments.git
+# Pinned to 1.29.3, not "latest": confirmed 2026-08-01 (see
+# docs/2_environment_notes.md and the design doc §9's version-gap
+# comparison) that this is the version actually pre-installed on Kaggle's
+# own kernel infrastructure — newer releases (e.g. 1.32.2) have real
+# balance/mechanics differences (hire cost, animal cost, market glut
+# sensitivity, config defaults). Bump this deliberately, not silently, and
+# re-run the version-gap comparison against the then-current Kaggle kernel
+# image before doing so.
+kaggle-environments==1.29.3
 
 numpy
 pytest

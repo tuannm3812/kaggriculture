@@ -40,16 +40,20 @@ def test_market_price_matches_real_module(item, inventory_offset):
     assert economy.market_price(item, inventory) == real.market_price(item, inventory)
 
 
-# README's documented sample table (price at I0-T, I0+T, I0+2T per resource).
+# kaggle-environments==1.29.3's README sample table (price at I0-T, I0+T,
+# I0+2T per resource) -- pinned version, per docs/2_environment_notes.md's
+# version-gap comparison. Newer releases (e.g. 1.32.2) have different
+# above_target constants for STRAWBERRY/MELON/MILK/WOOL and would produce
+# different I0+T/I0+2T values here.
 README_SAMPLE_PRICES = {
     "WHEAT": (45, 20, 19),
     "CARROT": (42, 10, 1),
     "TOMATO": (84, 24, 9),
-    "STRAWBERRY": (204, 1, 1),
-    "MELON": (300, 1, 1),
+    "STRAWBERRY": (204, 72, 24),
+    "MELON": (300, 25, 1),
     "EGG": (70, 40, 39),
-    "MILK": (256, 1, 1),
-    "WOOL": (240, 1, 1),
+    "MILK": (256, 96, 32),
+    "WOOL": (240, 40, 1),
     "FERTILIZER": (140, 60, 20),
 }
 
