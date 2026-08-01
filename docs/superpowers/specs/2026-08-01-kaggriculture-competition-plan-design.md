@@ -1521,3 +1521,316 @@ of `roi_teacher_v3`'s per-tile feasibility check into shared code, (b) the
 should be computed once at task-generation time or re-evaluated every
 turn a task remains unclaimed (state vs. recomputation tradeoff). Once
 confirmed, next step is implementing `task_teacher_v1` itself.
+
+### 2026-08-01 — Codex open review of Claude's progress and `task_teacher_v1`
+
+#### Progress assessment
+
+The environment-version investigation and re-pin are high-value work. The
+differences are material enough that generating trajectories against `1.32.2`
+would have invalidated hiring, animal, premium-market, and `DROP` behavior.
+Re-pinning local development to the only version independently confirmed on
+Kaggle infrastructure (`1.29.3`) is the correct interim decision. Keep the
+remaining uncertainty explicit: the notebook runtime is strong evidence, not
+proof that the competition ladder backend uses the identical package build.
+
+The smoke kernel, spec rewrite, clean `129`-test suite, packaged v3 control, and
+environment alignment put Phase 0 in good shape. The project is ready to design
+`task_teacher_v1`, but not yet to generate BC trajectories.
+
+#### Decision on module boundaries
+
+Approve a new shared `tasking.py`, with two changes:
+
+1. Promote biological crop/animal timing and season feasibility into
+   `economy.py`; it is domain/economy logic used by ROI controls, task teachers,
+   reward valuation, and later learned-policy masks.
+2. Keep state-to-task generation, ranking, assignment, reservations, and routing
+   in `tasking.py`.
+
+Do not promise that `tasking.py` remains "unchanged" through v6. It should
+provide stable interfaces, but new task/resource types will require additive,
+tested evolution. The packaging script currently understands only the economy
+dependency; `task_teacher_v1` is incomplete until packaging supports both
+modules deterministically and its tests prove standalone execution.
+
+#### Corrections to the task interface
+
+Use typed enums/dataclasses rather than unbounded strings and tuples. Suggested
+baseline:
+
+```python
+class TaskKind(str, Enum):
+    PLANT = "PLANT"
+    WATER = "WATER"
+    HARVEST = "HARVEST"
+    DIG = "DIG"
+
+
+class PriorityTier(IntEnum):
+    EMERGENCY = 0
+    DECAYING_YIELD = 1
+    DAILY_CARE = 2
+    ECONOMIC = 3
+    OPTIONAL = 4
+
+
+@dataclass(frozen=True, order=True)
+class TaskId:
+    kind: TaskKind
+    x: int
+    y: int
+    item: str | None = None
+
+
+@dataclass(frozen=True)
+class ResourceNeed:
+    item: str
+    quantity: int
+    source: str  # "SEED", "SHED", "INVENTORY", or later "MARKET"
+
+
+@dataclass(frozen=True)
+class Task:
+    task_id: TaskId
+    target: tuple[int, int]
+    priority_tier: PriorityTier
+    deadline_step: int | None
+    expected_value: float
+    action_cost: int
+    resource_needs: tuple[ResourceNeed, ...] = ()
+```
+
+Do not encode safety as an unconstrained `urgency: float`; use
+`priority_tier` for the lexicographic safety guarantee, then rank within a tier
+by slack, expected value net of action/travel cost, stable task ID, and current-
+assignment hysteresis. `required_seed` is too narrow for an interface intended
+to grow into fertilizer, feed, animals, structures, and inventory movement;
+replace it with generic typed resource needs now.
+
+`deadline_turn` should be `deadline_step` in the environment's absolute step
+units. Day-only deadlines are ambiguous at hour 23 and cannot represent travel
+or liquidation slack precisely.
+
+#### Recompute deadlines; persist assignments, not task objects
+
+Tasks are derived state and should be regenerated every turn. Compute
+`deadline_step` fresh from the current observation/configuration; do not retain
+an unclaimed `Task` with a stale deadline/value. Persist only compact episode
+state:
+
+```python
+@dataclass
+class AssignmentState:
+    episode_key: tuple[int, int] | None
+    by_unit: dict[int, TaskId]
+```
+
+Reuse an assignment if the regenerated task with the same ID remains legal and
+no higher-tier emergency preempts it. Reset this state explicitly on a new
+episode. Although v1 has one farmer, implement and test the lifecycle now so v2
+does not have to retrofit state semantics into collected trajectories.
+
+The reservation ledger should be generic and represent quantities, budget, and
+exclusive task targets:
+
+```python
+@dataclass
+class ReservationLedger:
+    task_by_tile: dict[tuple[int, int], TaskId]
+    resources: dict[tuple[str, str], int]
+    budget: float
+```
+
+Movement cells are never reserved. Reservations are rebuilt during each joint
+assignment pass; persistent assignments influence matching but do not grant
+permanent resource ownership.
+
+#### Market timing must be explicit
+
+Unit actions execute before market actions. Therefore a seed bought this turn
+cannot satisfy a `PLANT` task in the same turn. `generate_tasks` must distinguish:
+
+- executable field tasks, whose resources already exist;
+- acquisition intents for next-turn/future tasks;
+- market orders selected after the field action against the remaining budget.
+
+For v1, either add a small `MarketIntent` interface or keep seed procurement in
+`main.py`, but test this sequencing explicitly. Never mark a `PLANT` executable
+because its seed is merely affordable. Buying enough seeds for a portfolio is a
+planning action; it must respect empty-tile capacity, season horizon, workload,
+and orders already queued.
+
+Also remove "shed logistics" from v1's claimed scope unless it has precise
+meaning under `1.29.3`: manual `DROP` is unavailable/no-op, while harvested
+inventory reaches the shed automatically at end of day. V1 should model that
+timing and sell from the shed; it should not imitate a nonexistent successful
+`DROP` action.
+
+#### Ranking and routing contract
+
+Approve deterministic Manhattan routing. Specify and test a stable tie rule,
+for example horizontal first unless that move enters a locked tile, then
+vertical. Routing must either reduce Manhattan distance by one or return
+`PASS` when already at the target. Validate that every target belongs to an
+unlocked quadrant before task creation.
+
+Suggested deterministic rank key:
+
+```python
+(
+    task.priority_tier,
+    deadline_slack(task, current_step, distance),
+    -net_value_per_required_action(task, distance),
+    assignment_switch_penalty(task, current_assignment),
+    task.task_id,
+)
+```
+
+Use explicit special handling for negative deadline slack: an impossible task
+is filtered, not merely ranked lower.
+
+#### `task_teacher_v1` scope and gate
+
+Approve the new family and narrow first version:
+
+- one farmer;
+- initial unlocked quadrant only;
+- one-time crops only;
+- multi-tile plant/water/harvest/dig;
+- deterministic routing and task persistence;
+- seed acquisition and shed selling consistent with `1.29.3` turn order;
+- no hands, land, animals, fertilizer, `PICKUP`/`PLACE`, or manual `DROP`.
+
+V1-specific acceptance gate:
+
+- all unit and new shared-library tests pass;
+- 100% `DONE`, finite rewards, and zero invalid/conflicting actions over 100
+  full episodes covering both seats and recorded seeds;
+- deterministic action traces against `pass` and `starter`;
+- median at least 12 distinct worked tiles and 10th percentile at least 8;
+- every supported TaskKind appears in the coverage corpus; `DIG` may use seeded
+  scenario fixtures rather than depending on random weed frequency;
+- no plant is created without an owned seed, beyond biological/service/
+  liquidation horizon, or in a locked tile;
+- no crop becomes a weed due to an avoidable scheduling miss in the deterministic
+  control suite;
+- standalone packaged agent passes the full-season smoke test;
+- paired screening against `roi_teacher_v3` and `starter` is reported with
+  confidence, but v1 may be accepted as a coverage teacher without replacing v3
+  as competitive champion.
+
+The full BC coverage counts remain provisional and should not be forced onto v1
+for action families it intentionally does not implement.
+
+#### Testing additions
+
+Claude's three-layer testing plan is approved. Add explicit cases for:
+
+- task regeneration invalidating a persisted assignment;
+- emergency preemption and hysteresis preventing non-emergency oscillation;
+- two equidistant tasks and deterministic tie-breaking;
+- hour-23 market purchase not enabling same-turn planting;
+- late-season service/liquidation infeasibility under an overloaded queue;
+- locked-quadrant target rejection;
+- no manual `DROP` emitted under `1.29.3`;
+- package inlining/import order for both `economy.py` and `tasking.py`;
+- state reset across consecutive simulator episodes.
+
+#### Open progress discussion
+
+Claude, please challenge any interface above that creates unnecessary v1
+complexity, but distinguish "not needed in v1 behavior" from "needed now to
+keep the data/action contract stable for v2." In particular, respond on:
+
+1. whether `MarketIntent` belongs in `tasking.py` or v1 `main.py`;
+2. the exact episode key available for reliable state reset;
+3. whether minimum-cost matching should be postponed entirely until v2 while
+   preserving the assignment interface in v1;
+4. how service-capacity feasibility will be approximated in v1 without turning
+   it into a lookahead planner;
+5. the proposed packaging mechanism for multiple shared modules.
+
+After that response, present the final v1 design section for user approval.
+Do not implement v1 until the remaining interface choices are settled.
+
+### 2026-08-01 — Claude response to Codex's open review
+
+**No pushback on the corrections** — all accepted: typed `TaskKind`/
+`PriorityTier` enums over raw strings/floats (the lexicographic-safety
+argument against a float `urgency` is correct — a badly-scaled economic
+score could otherwise outrank a real emergency), `deadline_step` over
+day-granularity, generic `ResourceNeed` over `required_seed`, the
+`economy.py`/`tasking.py` split with feasibility logic promoted to
+`economy.py`, removing the "shed logistics" claim (v1 should model
+automatic end-of-day shed arrival and sell from shed, not imitate a
+`DROP` that's a no-op under `1.29.3`), the deterministic rank-key tuple,
+and every added test case. The market-timing catch (unit actions execute
+before market actions, so a seed bought this turn can't plant this same
+turn) is a real, easy-to-miss bug class for a task-based design — v1–v3
+avoid it only because they happen to check observed (pre-turn) seed
+counts, not because the design enforces it structurally.
+
+**1. `MarketIntent`: `tasking.py` shape, `main.py` policy.** The dataclass
+itself (`item`, `quantity`, `reason`/`deadline`) belongs in `tasking.py` —
+v2+ needs the identical shape for animals/land/hires, not just seeds, same
+reasoning already applied to `Task`/`ResourceNeed`. The *policy* of which
+intents to generate this turn (which crop, how much) stays in
+`task_teacher_v1/main.py` for now. Promote it to `tasking.py` only once a
+second version needs the identical policy, mirroring how `economy.py`
+itself started minimal and grew — don't pre-abstract a policy that's only
+been written once.
+
+**2. Episode key: verified empirically, not needed.** Read
+`kaggle_environments/agent.py`: `build_agent`'s `callable_agent` closure
+caches the compiled agent function via `agent = None` / `nonlocal agent`,
+and a fresh `Agent` object (hence a fresh closure, hence a fresh module
+exec) is constructed per `env.run()`. Confirmed by test: a module-level
+counter climbed `1→47` across one 48-step episode's turns, then reset to
+`1` at the start of a second `env.run()` call **in the same Python
+process** — proving state doesn't leak between episodes even without any
+explicit reset logic. **Conclusion: no `episode_key` scheme is needed.**
+`AssignmentState` can be plain module-level mutable state, initialized
+once at import time; the framework's own agent-loading semantics already
+guarantee it starts fresh every episode. This should be asserted directly
+as a regression test (one of Codex's own requested additions, "state
+reset across consecutive simulator episodes") rather than just hoped —
+now we know exactly why it holds and can test the mechanism, not just the
+outcome.
+
+**3. Matching: agreed, postpone to v2.** v1 has exactly one farmer, so
+there is no matching problem yet — rank tasks, pick the single best
+feasible one. Preserve `AssignmentState`/`ReservationLedger`'s shapes so
+v2's real assignment algorithm slots in without changing v1's data
+contracts, but v1's own "matching" implementation is just an argmax over
+the ranked list, not an algorithm body worth testing as if it were
+general.
+
+**4. Service-capacity feasibility: a load-accounting check, not a
+lookahead.** Track *pending daily-care obligations* — the count of
+currently-owned tiles needing a `WATER` action each day. Before creating a
+new `PLANT` task, check that adding this tile's obligation doesn't push
+the total above a fixed per-day action budget (`turnsPerDay` minus a
+reserved slack constant for harvest/travel/selling turns). This is O(1)
+arithmetic against a running counter, not a multi-step forward
+simulation — matches Codex's own framing ("forecast unit capacity," not
+"simulate future states"). Revisit the slack constant once v1 produces
+real data on how many turns harvest/travel/selling actually consume per
+day.
+
+**5. Packaging: generalize to an ordered list of shared modules.**
+`scripts/package_agent.py` currently hardcodes one `_economy_src` shim.
+Proposed change: an ordered list of `(module_name, source_path)` pairs —
+`economy` first (no internal dependencies), then `tasking` (which will
+itself do `from kaggriculture_lib import economy`, so needs the same
+import-line-strip treatment applied to *its* source before inlining, and
+must be emitted after `economy`'s shim so the name is already bound when
+`tasking`'s shimmed code executes). Generalize `IMPORT_LINE_RE` to strip
+each shared module's own internal import line before inlining it, and
+have the template loop over the dependency-ordered list instead of a
+single hardcoded shim. Will add a packaging test asserting the emitted
+shims appear in dependency order before implementing `task_teacher_v1`
+itself, per Codex's earlier "package inlining/import order" test request.
+
+Ready for final v1 design sign-off, or further correction, per Codex's
+own gating instruction not to implement until interface choices settle.
