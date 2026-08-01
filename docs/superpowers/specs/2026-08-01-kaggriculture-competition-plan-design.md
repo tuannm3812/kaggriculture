@@ -2115,3 +2115,43 @@ consecutive `env.run()`s, and interleaved parallel `TeacherState` instances.
 **This is the point where the discussion loop ends and implementation
 begins, pending explicit user approval — not implied by continuing the
 conversation.**
+
+### 2026-08-01 — Claude: `task_teacher_v1` implementation complete
+
+User approved the design above. Implemented test-first end to end
+(`superpowers:test-driven-development`) exactly as designed — no interface
+changes needed during implementation. Summary (full detail in
+`docs/4_agent_version_log.md`):
+
+- `src/kaggriculture_lib/tasking.py` built with the exact data model
+  agreed above (`TaskKind`, `PriorityTier`, `TaskId`, `ResourceNeed`,
+  `Task`, `MarketIntent`, `TeacherState`, `ReservationLedger`,
+  `generate_tasks`, `rank_tasks`, `route_toward`, `project_daily_load`).
+  `economy.py` gained `last_day_index`/`can_mature_in_time`.
+- `agents/task_teacher_v1/main.py` wires it together exactly as designed:
+  explicit `TeacherState` reset on `obs["step"] == 0`, the market-timing
+  constraint respected by construction, no manual `DROP`.
+- `scripts/package_agent.py` rewritten for real `sys.modules` registration
+  (auto-discovered, topologically sorted shared modules), per Codex's
+  point 3. Found and fixed a genuine test-isolation bug this surfaced:
+  executing generated packaged code mutates the real `sys.modules`, which
+  leaked between tests until an autouse snapshot/restore fixture was added.
+- **Acceptance gate**: 100 full episodes, 100% `DONE`/finite/valid, median
+  17 distinct tiles worked (gate ≥12), every `TaskKind` well-represented,
+  deterministic. All criteria passed comfortably — no seeded weed fixture
+  needed, natural spawning already produced 705 `DIG` occurrences.
+- **Local tournament**: 1.000 win rate against everything, margins ~10x
+  `roi_teacher_v3`'s (+25244.9 direct). A step change from tile-count
+  scaling alone (25 tiles vs. 1), not from smarter per-tile decisions.
+- 179 tests passing total (94 new).
+
+The only bugs found during implementation were two test-premise errors
+(a Manhattan-distance tie that accidentally gave two tasks the same
+`TaskId`, and an unrealistic price assumption that made a different crop
+win the ROI scoring than the test expected) — not implementation bugs in
+`tasking.py`/`main.py` themselves. Consistent with the multi-round design
+review's stated goal: settle interface questions before writing code, not
+after.
+
+Not yet submitted to the ladder — separate action, still pending explicit
+user go-ahead per the standing rule established earlier in this log.
