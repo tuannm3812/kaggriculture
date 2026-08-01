@@ -4,19 +4,18 @@ Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
 ## Current Recommendation (2026-08-01)
 
-Do not submit `roi_teacher_v1` yet — the packaging step to bundle
-`src/kaggriculture_lib` alongside `main.py` for actual `kaggle competitions
-submit` doesn't exist. Build that next, since Week 2 of the design doc's
-milestone table calls for "a valid heuristic ladder submission" and ladder
-rating needs game volume to converge (start accumulating early).
+`roi_teacher_v1` is packaged (`scripts/package_agent.py` → `build/
+roi_teacher_v1/main.py`) and verified to run standalone with no dependency
+on this repo's `src/` layout, reproducing the un-packaged version's 1.000
+win rate against all three built-ins. **Ready to submit** — actual
+`kaggle competitions submit` is a separate, explicit action pending user
+go-ahead (it consumes a submission and becomes visible on the ladder under
+the user's account). Once submitted, start tracking ladder score in this
+doc and confirm the two open items below.
 
 ## Immediate Next Tasks
 
-1. **Packaging step** (blocks any real submission): a script that either
-   inlines `kaggriculture_lib` into a self-contained `main.py`, or bundles
-   `main.py` + `src/kaggriculture_lib` into a `.tar.gz` per `AGENTS.md`'s
-   multi-file submission format. Needed before `roi_teacher_v1` (or any
-   later version) can actually be submitted.
+1. ~~Packaging step~~ — done 2026-08-01, see above.
 2. **v2 candidate — add Melon**: `docs/3_agent_strategy.md` found Melon's
    ROI/day at base price (~109) is 5–6x wheat/carrot's (~18–21). Add it as a
    third candidate crop in `_best_crop`'s dynamic selection (one-variable

@@ -9,6 +9,7 @@ replays/**/*.json
 scratch/
 *.tar.gz
 kaggriculture.zip
+build/
 
 # Training artifacts (large, regenerable, not for git)
 checkpoints/

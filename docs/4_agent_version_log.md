@@ -20,11 +20,16 @@ available, and outcome/lesson.
   | `random` | 1.000 | +3993.0 | 10.7s (1079 steps/sec) |
   | `starter` | 1.000 | +461.6 | 9.6s (1198 steps/sec) |
 
-- **Ladder result:** not yet submitted. Open item before submitting: no
-  packaging step exists yet to bundle `src/kaggriculture_lib` alongside
-  `main.py` for actual `kaggle competitions submit` (main.py currently
-  assumes `kaggriculture_lib` is importable via `PYTHONPATH=src`, which only
-  works in local testing). Needed before this becomes a real submission.
+- **Packaging:** `scripts/package_agent.py` generates a self-contained
+  `build/roi_teacher_v1/main.py` (inlines `economy.py` as an in-memory
+  module so `from kaggriculture_lib import economy` isn't needed). Verified
+  2026-08-01: runs correctly in a subprocess with `PYTHONPATH` stripped
+  (the actual condition Kaggle's execution environment imposes), and
+  reproduces the same tournament results as the un-packaged version
+  (1.000 win rate vs. all three built-ins, 5 seed pairs / 10 games each).
+- **Ladder result:** not yet submitted — packaging is done and verified;
+  submission itself is a separate, explicit action (see
+  `docs/6_next_steps.md`).
 - **Outcome:** beats all three built-ins convincingly, including a solid
   margin over `starter` (the strongest built-in). Confirms the ROI-ranking
   approach and the tested `economy.py` formulas produce a genuinely
