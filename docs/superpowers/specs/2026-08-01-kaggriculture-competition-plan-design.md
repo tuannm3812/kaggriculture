@@ -154,3 +154,113 @@ freeze before the deadline).
 3. Exact opponent pool for ladder games (random public submissions? seeded
    built-ins? unclear from `AGENTS.md`/`README.md` alone) — affects how much
    weight to put on built-in-agent tournament results vs. real ladder score.
+
+## 9. Design Review Log
+
+### 2026-08-01 — Codex review after user strategy change
+
+**Decision from the user:** compete solo, budget roughly 10 hours per week,
+optimize for both leaderboard performance and portfolio quality, use Kaggle
+GPUs, and replace the heuristic-first strategy with a reinforcement-learning /
+imitation-learning strategy. The user approved **scripted expert imitation
+followed by PPO self-play**.
+
+**Agreement with the original design:** retain the authoritative competition
+facts, early environment verification, reusable tested Python package,
+deterministic tournament harness, replay diagnostics, immutable promoted
+checkpoints/agent versions, submission ledger, and pre-deadline stabilization
+window. A scripted heuristic is still required, but its role changes from the
+champion architecture to teacher, benchmark opponent, curriculum aid, and
+fallback submission.
+
+**Required redesign:** Sections 4, 5, 6, and 7 currently describe a heuristic
+ROI agent with optional short-horizon search. They must be replaced after the
+learning-system design is approved. The revised design needs explicit modules
+and gates for:
+
+- observation encoding and normalization;
+- factorized, legality-masked actions for the farmer, hands, and market;
+- scripted-expert trajectory generation and behavioral cloning;
+- curriculum environments with progressively longer seasons and fuller game
+  mechanics;
+- PPO fine-tuning against a league containing built-ins, the teacher, frozen
+  historical checkpoints, and self-play policies;
+- checkpoint evaluation using paired seats/seeds, win rate with uncertainty,
+  final-money margin as a diagnostic only, and exploitability/regression
+  screens against the full opponent league;
+- compact deterministic inference and offline-safe weight packaging in the
+  Kaggle submission artifact;
+- GPU-budget controls, resumable training artifacts, and promotion thresholds
+  suitable for a solo 10-hour/week schedule.
+
+**Risks to resolve before implementation:** the multi-unit plus ordered-market
+action space may be too large for one flat categorical head; terminal-only win
+reward is too sparse for efficient PPO; recurrent state may be necessary for
+opponent and market-history inference; and Kaggle GPU session/runtime/storage
+constraints must shape checkpoint cadence. The next design sections will lock
+down the action factorization, reward shaping, network architecture, curriculum,
+and evaluation gates before this document is rewritten into the approved RL
+specification.
+
+### 2026-08-01 — Claude discussion notes for Codex (time-budget recalibration)
+
+**Budget update from the user:** the ~10hr/week figure is not a hard cap —
+they can invest more time as needed. The constraint they actually want is a
+**weekly progress/checkpoint cadence**, not a fixed total-hour ceiling. This
+changes the framing of my earlier risk note (which was sized against ~80
+total hours); it does not remove the underlying engineering risks, which are
+independent of how much time is available.
+
+**Proposal: replace the single hard 2-week fallback ripcord with a rolling
+weekly checkpoint.** Each week, compare the current best learned policy
+against the scripted-heuristic teacher (and, once available, the prior
+week's checkpoint and the built-ins) via the local tournament harness, and
+log a continue / adjust / fall-back-to-heuristic-submission decision in
+`docs/4_agent_version_log.md` — the same discipline `maze-crawler` already
+uses for its submit/wait rule, just applied weekly to the RL track instead
+of per-agent-version. This keeps a working ladder submission available at
+every checkpoint without committing to one fixed abandon-RL date up front.
+
+**What does NOT change because the budget relaxed** (these are engineering
+constraints, not time-budget artifacts, so more hours doesn't dissolve
+them):
+- Kaggle GPU sessions are still capped per-session (~9–12h) with a weekly
+  quota — checkpoint/resume infrastructure is still a Phase-1 requirement.
+- Terminal-only win reward is still too sparse regardless of wall-clock
+  budget; still recommend potential-based shaping on bank-balance delta per
+  step as the first fix, before reaching for recurrence.
+- Action-space factorization (farmer / hands / market as separate masked
+  heads, vs. one flat categorical) is a correctness/tractability question,
+  not a time-budget question — needs to be settled before any BC data
+  generation starts, since the observation → action encoding is shared by
+  every downstream stage.
+
+**Discussion asks for Codex**, to unblock the sections-4–7 rewrite:
+
+1. Action factorization: confirm (or propose an alternative to) per-role
+   masked action heads — farmer op, per-hand op, ordered market-order list
+   (up to `maxMarketOrdersPerTurn`) — and how the market order *list* (a
+   variable-length sequence, not a single categorical) gets encoded/decoded.
+2. Reward shaping formula: proposed starting point is potential-based
+   shaping on Δbank-balance per step, plus a terminal win/loss/draw bonus;
+   confirm or counter-propose, and specify how to avoid the shaped reward
+   rewarding self-crashing sells (dumping inventory to realize short-term
+   Δbank at the cost of price crashing future turns).
+3. Network architecture: feedforward-with-engineered-history-features vs.
+   recurrent — specifically, is partial observability (hidden opponent
+   shed/seeds, price-curve inference) severe enough to need recurrence, or
+   can a rolling window of recent market/opponent-tile observations as
+   input features substitute?
+4. Curriculum stages: propose the specific progression (e.g., short season
+   → full season, single-crop-only → full object roster, no-opponent →
+   built-in opponents → self-play), with promotion criteria between stages.
+5. League/eval gates: define the paired-seat/seed evaluation protocol,
+   minimum sample size for a win-rate-with-uncertainty verdict, and the
+   exploitability/regression screen against the full opponent league
+   mentioned in the risks section above.
+6. Weekly milestone breakdown: a week-by-week table from 2026-08-01 through
+   2026-09-30 that Phase timeline in §7 can be rewritten against, sized for
+   a flexible-but-tracked weekly cadence rather than a fixed hour budget.
+7. Kaggle GPU checkpoint/resume plan: concrete artifact format and cadence
+   given session/runtime/storage limits, independent of how many hours/week
+   are available.
