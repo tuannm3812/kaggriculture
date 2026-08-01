@@ -41,3 +41,37 @@ available, and outcome/lesson.
   ever uses 1 of 25 available NW-quadrant tiles — multi-tile pathing is a
   separate, larger lever than crop choice and should be evaluated as its
   own one-variable change once v2's crop-selection change is measured.
+
+## roi_teacher_v2 (`agents/roi_teacher_v2/main.py`)
+
+- **Date:** 2026-08-01
+- **Config diff from v1:** one variable changed — `CANDIDATE_CROPS` extended
+  from `("WHEAT", "CARROT")` to `("WHEAT", "CARROT", "MELON")`. No other
+  logic changed.
+- **Local tournament** (`scripts/run_tournament.py`, 8 seed pairs / 16 games
+  per opponent, full 720-step episodes, base seed 0):
+
+  | Opponent | Win rate | Mean money margin |
+  | --- | ---: | ---: |
+  | `pass` | 1.000 | +3172.0 |
+  | `random` | 1.000 | +6147.6 |
+  | `starter` | 1.000 | +2674.0 |
+  | **`roi_teacher_v1` (direct)** | **1.000** | **+2222.8** |
+
+- **Outcome:** confirms the Phase-1 ROI finding decisively — adding Melon
+  as a single extra candidate crop roughly tripled the margin against every
+  built-in and beats v1 head-to-head at 100% win rate. **v2 is the new
+  local champion**, superseding v1 (v1's folder is kept, per
+  `docs/0_coding_standards.md` §4's immutability rule, as the benchmark this
+  result is measured against).
+- **Ladder result:** not yet submitted — user chose to keep iterating
+  locally before spending a submission (2026-08-01 decision).
+- **Lesson carried forward:** static ROI analysis before writing code
+  (`docs/3_agent_strategy.md`) correctly predicted the single highest-value
+  change, ahead of intuition-driven tuning. Next candidates to evaluate the
+  same way before implementing: (a) ongoing crops/animals ROI ranking
+  (deferred in `docs/3_agent_strategy.md` pending a season-length/feed-cost
+  model), (b) multi-tile pathing — still the largest untapped lever (this
+  agent uses 1 of 25 available NW tiles) but a bigger, separate change that
+  should be evaluated on its own, not bundled with further crop-selection
+  tweaks.

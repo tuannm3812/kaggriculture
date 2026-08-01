@@ -23,9 +23,11 @@ column undersells it because it measures raw yield, not yield × price.
 Melon's market curve barely reacts to scarcity but crashes hard on glut
 (`above_func: sq, above_target: 3.60`) — a real risk if several tiles sell
 melons simultaneously into a shared market, but not a concern for a single-
-tile agent selling a handful of units per ~13-day cycle. **This is the
-clearest next lever for v2**, not further wheat/carrot tuning — see
-`docs/6_next_steps.md`.
+tile agent selling a handful of units per ~13-day cycle. **Confirmed** by
+`agents/roi_teacher_v2` (adds Melon as a candidate, one variable changed
+from v1): beats v1 head-to-head at 1.000 win rate, +2222.8 mean money
+margin, and roughly triples the margin against every built-in — see
+`docs/4_agent_version_log.md`.
 
 ### Ongoing crops / animals (production schedule, not yet ROI-ranked)
 
@@ -43,17 +45,16 @@ one-time crops have), so a fair ROI/day comparison needs a season-length
 assumption and feed-cost accounting (wheat consumption for animals), not
 just a per-tick unit count. Deferred to the v2+ multi-tile iteration.
 
-## v1 Scope (`agents/roi_teacher_v1`)
+## v1/v2 Scope (`agents/roi_teacher_v1`, `agents/roi_teacher_v2`)
 
 Deliberately minimal — single farmer, single tile (the spawn tile, no
-movement), dynamic best-of-{wheat, carrot} selection, always waters, never
-buys land/hands/animals. Rationale: get a genuinely-tested, ROI-aware
-baseline running today rather than spending the first implementation
-session on multi-tile pathing before any local-tournament evidence exists.
-Confirmed via `scripts/run_tournament.py` (2026-08-01, 8 seed pairs / 16
-games per opponent, full 720-step episodes): beats `pass` (win rate 1.000,
-mean margin +955.0), `random` (1.000, +3993.0), and `starter` (1.000,
-+461.6). Full numbers in `docs/4_agent_version_log.md`.
+movement), dynamic best-of-{wheat, carrot} (v1) or best-of-{wheat, carrot,
+melon} (v2) selection, always waters, never buys land/hands/animals.
+Rationale: get a genuinely-tested, ROI-aware baseline running today rather
+than spending the first implementation session on multi-tile pathing
+before any local-tournament evidence exists. **v2 is the current local
+champion** (beats v1 head-to-head; see `docs/4_agent_version_log.md` for
+full numbers on both versions).
 
 ## Strategy Approach (unchanged from the design doc)
 
