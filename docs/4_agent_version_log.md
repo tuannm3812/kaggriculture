@@ -496,8 +496,9 @@ available, and outcome/lesson.
   promotion rerun only if behavior or screen results change materially;
   otherwise record equivalence and retain the existing promotion
   evidence"): 100-episode acceptance gate (100/100 `DONE`/finite,
-  deterministic, avg 5.0 max hands and avg 71.6 `HIRE` orders — both
-  essentially unchanged from the prior round's 4.9/70.4) and a 20-pair
+  deterministic, max hands active/episode min 4, max 5, avg 5.0, and avg
+  71.6 `HIRE` orders — both essentially unchanged from the prior round's
+  4.9/70.4) and a 20-pair
   screen vs. `task_teacher_v1` (0.950 win rate, Hoeffding CI
   `[0.570, 1.000]` — a one-pair difference from the prior round's 1.000,
   well within ordinary seed-to-seed variance given a different seed was

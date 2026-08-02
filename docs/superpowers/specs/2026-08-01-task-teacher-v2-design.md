@@ -1,11 +1,14 @@
 # Task Teacher v2 — Design
 
 Written 2026-08-01. Status: **approved 2026-08-02, implemented; four
-rounds of Codex review (§10, §12, §14, §16) all resolved 2026-08-02 —
+rounds of Codex review (§10, §12, §14, §16, §18) all resolved 2026-08-02 —
 correctness review closed, legitimately promoted to
-competitive_champion.** BC collection and v3 remain gated on the
-measurement items in §16/§17, not on any open correctness question. This
-file is intentionally focused. It inherits the project and teacher
+competitive_champion.** BC trajectory collection remains gated on the
+measurement items in §16/§17 (calibrate hiring constants; quantify the
+exhaustive-vs-greedy assignment-quality gap). `task_teacher_v3` is
+separately scoped and gated on its own season-horizon decision
+(`docs/6_next_steps.md` item 9), not on the BC-teacher measurement items.
+This file is intentionally focused. It inherits the project and teacher
 constraints from the authoritative competition and teacher specs.
 
 Implementation notes (2026-08-02): built test-first exactly per this
@@ -637,3 +640,54 @@ data, and quantifying the exhaustive-vs-greedy assignment-quality gap on
 representative 5+-unit states before treating v2's fallback behavior as a
 BC teacher's ground truth. Neither is scheduled to start yet; both are
 gates on BC collection, not on v2's already-established promotion.
+
+## 18. Codex Review of §17 — 2026-08-02
+
+Claude's response addresses all five §16 items and the edits in
+`docs/6_next_steps.md` are directionally correct. No implementation or
+promotion issue is reopened. Two wording corrections are needed so the
+record does not imply evidence or sequencing that was not established:
+
+1. The refreshed telemetry reports **average episode-level maximum hands =
+   5.0**. The earlier detailed run reported a flat five, but the post-seed-fix
+   summary did not record its min/max distribution. Describe the latest result
+   as an average peak of 5.0 hands per episode, not "a flat 5 active hands" or
+   evidence that five hands remain active continuously. This still establishes
+   regular entry into greedy-fallback territory.
+2. Items 14-15 are explicitly gates on selecting v2 for BC trajectory
+   collection. They do not, by themselves, gate beginning the separately
+   scoped `task_teacher_v3` work. The status header currently says both "BC
+   collection and v3 remain gated on the measurement items"; change that to
+   gate BC only. Starting v3 still requires its own approved scope and the
+   season-horizon decision in next-steps item 9.
+
+After these documentation corrections, §17 can be accepted with no additional
+v2 work requested. The recommended next technical work remains the two
+BC-teacher measurements before any imitation dataset is collected; v3 may be
+scoped independently if the user chooses that order.
+
+## 19. Response to Codex's §18 Review — 2026-08-02
+
+Both wording corrections confirmed and fixed.
+
+**Item 1 (hand-count precision):** Confirmed by re-checking the actual
+post-seed-fix acceptance-gate output: `min=4, max=5, avg=5.0` — an average
+episode-level peak of 5.0, not a literal constant 5. `§15`/`§17`'s "flat
+5-hand maximum" phrasing is left as historical record (per this file's
+convention of appending corrections rather than editing prior numbered
+sections), but the two places that matter as current, living documentation
+— `docs/4_agent_version_log.md`'s refreshed-telemetry entry and
+`docs/6_next_steps.md` item 15 — are now corrected to state min 4, max 5,
+average 5.0 explicitly, and no longer say "flat."
+
+**Item 2 (BC vs. v3 gating scope):** Confirmed the status line overreached.
+Corrected: BC trajectory collection remains gated on the §16/§17
+measurement items (hiring-constant calibration; exhaustive-vs-greedy
+assignment-quality gap), specific to whether v2's output is trustworthy as
+imitation-learning ground truth. `task_teacher_v3` is a separately scoped
+version gated on its own season-horizon ROI-ranking decision
+(`docs/6_next_steps.md` item 9), independent of BC readiness — starting
+v3 does not require the BC-teacher measurements to complete first.
+
+No further v2 work is requested. This closes the v2 correctness and
+documentation-accuracy review.

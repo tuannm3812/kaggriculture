@@ -106,8 +106,9 @@ status audit).
     exhaustive-vs-greedy assignment-quality gap** (Codex's 2026-08-02 §16
     item 5) — the greedy fallback (past `MAX_EXHAUSTIVE_UNITS = 4`, still
     4) is fast but not joint-optimal, and v2 regularly operates in fallback
-    territory (a flat 5 active hands per the refreshed acceptance-gate
-    measurement, down from an earlier, pre-fix 7-8). Behavioral cloning
+    territory (average episode-level peak of 5.0 hands, range 4-5, per the
+    refreshed acceptance-gate measurement, down from an earlier, pre-fix
+    7-8). Behavioral cloning
     would otherwise reproduce fallback behavior whose approximation error
     versus true joint-optimal assignment is currently unmeasured. Worth
     profiling on representative states before BC collection, and separately
