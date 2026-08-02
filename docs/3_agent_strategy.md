@@ -109,12 +109,17 @@ reached the running agent (a missing `existing_hands` argument at the call
 site, confirmed by Codex's 2026-08-02 review) — this produced an initial,
 premature "provisional champion" claim from an 8-pair sample with 2
 losses and no confidence interval, which conflicted with the project's own
-promotion rule (win rate/outcomes decide, margin is diagnostic only). After
-fixing the wiring bug, the full paired-bootstrap protocol
-(`docs/4_agent_version_log.md`) gave a 50-pair promotion-gate CI of
-`[0.930, 1.000]` vs. `task_teacher_v1` — wholly above 0.50 — plus clean
-20-pair regression sweeps vs. `roi_teacher_v3` and `starter`. This is a
-legitimate, rigorously-established promotion, not a margin-based guess.
+promotion rule (win rate/outcomes decide, margin is diagnostic only). A
+second Codex review round then caught two further issues: an end-of-day
+hiring-timing bug (a hire queued on the day's last hour recovers zero
+future actions before hands clear at the day boundary) and a percentile
+bootstrap confidence interval that gave false zero-width certainty on
+all-win samples. After fixing both, the full paired evaluation with a
+corrected Hoeffding confidence interval (`docs/4_agent_version_log.md`)
+gave a 50-pair promotion-gate CI of `[0.730, 1.000]` vs. `task_teacher_v1`
+— wholly above 0.50 — plus clean 20-pair regression sweeps vs.
+`roi_teacher_v3` and `starter`. This is a legitimate, rigorously-established
+promotion, not a margin-based guess.
 
 ## Strategy Approach (unchanged from the design doc)
 

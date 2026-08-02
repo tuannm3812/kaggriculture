@@ -16,13 +16,20 @@ actually wired into `agents/task_teacher_v2/main.py`'s call site.
 
 After fixing the wiring bug (test-first regression test, then the one-line
 call-site fix) and re-running the acceptance gate (100 episodes, 100%
-`DONE`/finite, all 25 tiles worked every episode, hand count now a flat
-5/5/5 instead of ranging 7-8), the full paired-bootstrap protocol was run:
-20-pair screen vs. `task_teacher_v1` (1.000 win rate, CI `[1.000, 1.000]`),
-then the 50-pair promotion gate (0.970 win rate, CI `[0.930, 1.000]` —
-wholly above 0.50), plus 20-pair regression screens vs. `roi_teacher_v3`
-and `starter` (both 1.000, CI `[1.000, 1.000]`). See
-`docs/4_agent_version_log.md` for full numbers.
+`DONE`/finite, all 25 tiles worked every episode), a second Codex review
+round caught two more issues: an end-of-day hiring-timing bug (a hire
+queued on the day's last hour is guaranteed zero future actions before
+hands clear at the day boundary) and a percentile-bootstrap confidence
+interval that gave false `[1.000, 1.000]` certainty on all-win samples.
+Both fixed test-first (`agents/task_teacher_v2/main.py`'s
+`_count_immediately_completing_tasks` and `future_action_turns`;
+`scripts/run_tournament.py::hoeffding_ci` replacing `bootstrap_ci`). The
+full paired evaluation, re-run with the corrected interval: 20-pair screen
+vs. `task_teacher_v1` (1.000 win rate, CI `[0.620, 1.000]`), then the
+50-pair promotion gate (0.970 win rate, CI `[0.730, 1.000]` — wholly above
+0.50), plus 20-pair regression screens vs. `roi_teacher_v3` and `starter`
+(both 1.000, CI `[0.620, 1.000]`). See `docs/4_agent_version_log.md` for
+full numbers.
 
 Still not submitted to the ladder — re-ask before submitting or continuing
 to delay, per the standing rule from earlier (design doc §9's execution-
@@ -42,10 +49,11 @@ status audit).
    — done 2026-08-02: the losses were caused by the confirmed hiring-wiring
    bug (existing hands' capacity never reached `should_hire`), not
    irreducible variance. Fixed; the 50-pair promotion gate afterward gave
-   CI `[0.930, 1.000]`, still not a perfect sweep but decisively above 0.50.
-   The remaining ~3% loss rate at 50 pairs could still be profiled further
-   (same hiring-risk-vs-fallback-inefficiency question) if it matters before
-   BC teacher selection, but is no longer a promotion blocker.
+   a (corrected, Hoeffding) CI `[0.730, 1.000]`, still not a perfect sweep
+   but decisively above 0.50. The remaining ~3% loss rate at 50 pairs could
+   still be profiled further (same hiring-risk-vs-fallback-inefficiency
+   question) if it matters before BC teacher selection, but is no longer a
+   promotion blocker.
 9. **`task_teacher_v3`** (per the construction sequence: ongoing crops —
    Tomato/Strawberry — and fertilizer timing): the next version. Needs the
    ongoing-crop ROI ranking deferred in `docs/3_agent_strategy.md` (season-

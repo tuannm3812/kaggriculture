@@ -187,16 +187,19 @@ not a competition submission.
 - Platform smoke kernel: `kernel_complete`.
 - `task_teacher_v1`: implemented and locally verified; see version ledger.
 - `task_teacher_v2`: implemented, locally verified, and **legitimately
-  promoted to competitive_champion** (2026-08-02) after fixing a confirmed
-  hiring-wiring bug and completing the full evaluation protocol in §6:
+  promoted to competitive_champion** (2026-08-02) after two rounds of
+  Codex review each caught a real, confirmed bug: (1) a hiring-wiring bug
+  where a correct library-level fix was never wired into the agent's call
+  site, and (2) an end-of-day hiring-timing bug plus a percentile
+  bootstrap confidence interval that gave false zero-width certainty on
+  all-win samples. Both fixed test-first; completed the full evaluation
+  protocol in §6 with the corrected Hoeffding confidence interval:
   100-episode acceptance gate, 20-pair screen and 50-pair promotion gate
-  vs. `task_teacher_v1` (paired bootstrap 95% CI `[0.930, 1.000]`, wholly
-  above 0.50), plus regression screens vs. `roi_teacher_v3` and `starter`.
-  An earlier "provisional champion" claim in this line was self-identified
-  as premature (margin-based, incomplete evidence, and built on a bug where
-  a correct library-level fix was never wired into the agent's call site);
-  see version ledger and `2026-08-01-task-teacher-v2-design.md` §10 for the
-  full account.
+  vs. `task_teacher_v1` (paired 95% CI `[0.730, 1.000]`, wholly above
+  0.50), plus regression screens vs. `roi_teacher_v3` and `starter`. An
+  earlier "provisional champion" claim in this line was self-identified
+  as premature (margin-based, incomplete evidence); see version ledger and
+  `2026-08-01-task-teacher-v2-design.md` §§10-13 for the full account.
 - BC dataset v1: blocked on teacher action/state coverage.
 - PPO: blocked on BC and checkpoint/resume verification.
 - Competition submission: blocked on explicit user authorization.

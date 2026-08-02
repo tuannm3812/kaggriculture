@@ -97,41 +97,79 @@ def test_run_pair_is_seat_symmetric_in_scoring():
     assert math.isclose(forward_margin, -reverse_margin)
 
 
-# --- paired bootstrap confidence interval ---------------------------------
+# --- bounded-mean confidence interval for paired scores -------------------
 # Per the authoritative design doc §6: "Stop for success/futility only when
 # the paired bootstrap interval is wholly above/below 0.50" -- this is
 # permanent evaluation infrastructure every promotion decision needs, not a
 # one-off for task_teacher_v2.
+#
+# An earlier version of this used a percentile bootstrap, which Codex's
+# 2026-08-02 follow-up review (§12.2) correctly flagged: resampling only the
+# observed pair scores means an all-identical sample (e.g. every pair a win)
+# produces a zero-width interval regardless of sample size -- that describes
+# resampling variation of the empirical sample, not uncertainty about the
+# true population win rate, and a handful of pairs cannot establish a true
+# rate of exactly 1.0. `hoeffding_ci` replaces it with a Hoeffding
+# concentration bound for a bounded-in-[0,1] mean, which stays nonzero even
+# on degenerate all-win/all-loss samples, and Bonferroni-corrects alpha
+# across a fixed number of pre-registered sequential looks (matching the
+# authoritative protocol's checkpoints: 20/50/75/.../200 pairs) so a chain
+# of looks stays simultaneously valid at the stated confidence level.
 
 
-def test_bootstrap_ci_degenerate_all_wins_is_a_point_at_one():
-    lo, hi = run_tournament.bootstrap_ci([1.0, 1.0, 1.0, 1.0], seed=0)
-    assert lo == hi == 1.0
+def test_hoeffding_ci_four_all_win_pairs_lower_bound_strictly_below_one():
+    lo, hi = run_tournament.hoeffding_ci([1.0, 1.0, 1.0, 1.0])
+    assert lo < 1.0
 
 
-def test_bootstrap_ci_degenerate_all_losses_is_a_point_at_zero():
-    lo, hi = run_tournament.bootstrap_ci([0.0, 0.0, 0.0], seed=0)
-    assert lo == hi == 0.0
+def test_hoeffding_ci_twenty_all_win_pairs_lower_bound_strictly_below_one():
+    lo, hi = run_tournament.hoeffding_ci([1.0] * 20)
+    assert lo < 1.0
 
 
-def test_bootstrap_ci_brackets_the_sample_mean():
+def test_hoeffding_ci_all_loss_upper_bound_strictly_above_zero():
+    lo, hi = run_tournament.hoeffding_ci([0.0, 0.0, 0.0])
+    assert hi > 0.0
+
+
+def test_hoeffding_ci_brackets_the_sample_mean():
     scores = [1.0, 0.0, 1.0, 1.0, 0.5, 1.0, 0.0, 1.0, 1.0, 1.0]
-    lo, hi = run_tournament.bootstrap_ci(scores, seed=0)
+    lo, hi = run_tournament.hoeffding_ci(scores)
     mean = sum(scores) / len(scores)
     assert lo <= mean <= hi
 
 
-def test_bootstrap_ci_is_seed_deterministic():
-    scores = [1.0, 0.0, 1.0, 0.5, 1.0, 0.0, 1.0, 1.0]
-    assert run_tournament.bootstrap_ci(scores, seed=42) == run_tournament.bootstrap_ci(scores, seed=42)
-
-
-def test_bootstrap_ci_narrows_with_more_pairs_at_the_same_win_rate():
+def test_hoeffding_ci_width_decreases_with_sample_size():
     """A 90%-win-rate sample repeated 10x (100 pairs) should give a tighter
     interval than the original 10 pairs -- more evidence at the same
     empirical rate should narrow the interval, not just recenter it."""
     small = [1.0] * 9 + [0.0]
     large = small * 10
-    lo_small, hi_small = run_tournament.bootstrap_ci(small, seed=0)
-    lo_large, hi_large = run_tournament.bootstrap_ci(large, seed=0)
+    lo_small, hi_small = run_tournament.hoeffding_ci(small)
+    lo_large, hi_large = run_tournament.hoeffding_ci(large)
     assert (hi_large - lo_large) < (hi_small - lo_small)
+
+
+def test_hoeffding_ci_is_deterministic_given_the_same_inputs():
+    """The alpha allocation across sequential looks is a fixed, documented
+    split (Bonferroni over `max_looks`), not randomized -- same inputs must
+    always give the same interval."""
+    scores = [1.0, 0.0, 1.0, 0.5, 1.0, 0.0, 1.0, 1.0]
+    assert run_tournament.hoeffding_ci(scores) == run_tournament.hoeffding_ci(scores)
+
+
+def test_hoeffding_ci_rejects_empty_input():
+    with pytest.raises(ValueError):
+        run_tournament.hoeffding_ci([])
+
+
+@pytest.mark.parametrize("bad_confidence", [0.0, 1.0, -0.1, 1.5])
+def test_hoeffding_ci_rejects_invalid_confidence(bad_confidence):
+    with pytest.raises(ValueError):
+        run_tournament.hoeffding_ci([1.0, 0.5], confidence=bad_confidence)
+
+
+@pytest.mark.parametrize("bad_max_looks", [0, -1])
+def test_hoeffding_ci_rejects_invalid_max_looks(bad_max_looks):
+    with pytest.raises(ValueError):
+        run_tournament.hoeffding_ci([1.0, 0.5], max_looks=bad_max_looks)

@@ -53,6 +53,24 @@ def _reset_if_new_episode(state: TeacherState, step: int) -> None:
     state.previous_step = step
 
 
+def _count_immediately_completing_tasks(unit_positions, assignment, task_by_id) -> int:
+    """Count assigned units already standing on their task's tile.
+
+    Those units emit the field action (not movement) this turn, so that
+    task resolves regardless of any hiring decision -- it must not also
+    count as still-outstanding load when sizing whether a new hire is
+    justified.
+    """
+    count = 0
+    for unit_idx, task_id in assignment.items():
+        if task_id is None or task_id.kind not in (TaskKind.WATER, TaskKind.PLANT, TaskKind.HARVEST):
+            continue
+        task = task_by_id.get(task_id)
+        if task is not None and unit_positions[unit_idx] == task.target:
+            count += 1
+    return count
+
+
 def agent(obs, config=None):
     _reset_if_new_episode(_state, obs["step"])
     reset_hand_assignments_on_day_change(_state, obs["day"])
@@ -91,11 +109,21 @@ def agent(obs, config=None):
     pending_plant = sum(1 for t in tasks if t.task_id.kind == TaskKind.PLANT)
     pending_harvest = sum(1 for t in tasks if t.task_id.kind == TaskKind.HARVEST)
     load = project_daily_load(pending_water, pending_plant, pending_harvest)
-    remaining_turns_today = max(0, turns_per_day - hour)
+    # A hire is a market order, resolved after this turn's unit actions, so a
+    # hand hired now gets its first action next turn -- its recoverable
+    # capacity (and, symmetrically, any existing unit's still-outstanding
+    # capacity) only spans turns *after* this one. A task an already-
+    # positioned unit is about to complete this turn resolves regardless of
+    # the hiring decision, so it isn't outstanding load for that decision
+    # either. See docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md
+    # §12.1.
+    future_action_turns = max(0, turns_per_day - hour - 1)
+    immediately_completing = _count_immediately_completing_tasks(unit_positions, assignment, task_by_id)
+    future_load = max(0, load - immediately_completing)
 
     available_money = me["money"]
     if should_hire(
-        load, remaining_turns_today, me["hires_today"], me["money"], existing_hands=len(me["hands"])
+        future_load, future_action_turns, me["hires_today"], me["money"], existing_hands=len(me["hands"])
     ):
         market_orders.append(["HIRE"])
         available_money -= economy.hire_cost(me["hires_today"])

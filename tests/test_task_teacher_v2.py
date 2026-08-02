@@ -167,6 +167,85 @@ def test_does_not_hire_again_when_existing_hand_already_covers_the_load():
     assert not any(order[0] == "HIRE" for order in action["market"])
 
 
+# --- end-of-day hiring timing (Codex's 2026-08-02 follow-up review §12.1) --
+# Hiring is a market order, resolved after this turn's unit actions, so a
+# hand hired at hour H gets its first action at hour H+1. A hire queued on
+# the day's last hour therefore recovers zero actions before every hand is
+# cleared at the day boundary -- a guaranteed-worthless hire.
+
+
+def test_never_hires_on_the_last_hour_of_the_day_even_when_heavily_overloaded():
+    module = load_agent_module("task_teacher_v2")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    for y in range(5):
+        for x in range(5):
+            tiles[y][x] = make_plant_tile("WHEAT", planted_day=0, watered_today=False)
+    last_hour = V2_CONFIG["turnsPerDay"] - 1
+    obs = make_obs(farmer=(4, 4), hands=[], hour=last_hour, hires_today=0, money=1_000_000, tiles=tiles)
+    action = module.agent(obs, V2_CONFIG)
+    assert not any(order[0] == "HIRE" for order in action["market"])
+
+
+def test_still_hires_one_hour_before_the_last_hour_when_genuinely_overloaded():
+    """Sanity check the fix isn't an overcorrection that kills hiring near
+    end of day generally -- one hour earlier, a new hire still gets a real
+    (if short) action window and should still be justified under enough
+    load."""
+    module = load_agent_module("task_teacher_v2")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    for y in range(5):
+        for x in range(5):
+            tiles[y][x] = make_plant_tile("WHEAT", planted_day=0, watered_today=False)
+    second_to_last_hour = V2_CONFIG["turnsPerDay"] - 2
+    obs = make_obs(
+        farmer=(4, 4), hands=[], hour=second_to_last_hour, hires_today=0, money=1_000_000, tiles=tiles
+    )
+    action = module.agent(obs, V2_CONFIG)
+    assert any(order[0] == "HIRE" for order in action["market"])
+
+
+def test_count_immediately_completing_tasks_counts_only_units_already_on_target():
+    """Direct test of the helper backing the second half of Codex's §12.1
+    finding: load is counted before this turn's assigned field actions
+    resolve, so a task an already-positioned unit is about to complete
+    this turn must not also count as still-outstanding demand when sizing
+    the hiring decision. A unit still travelling toward its assigned
+    task's tile has not resolved anything yet and must not be counted."""
+    module = load_agent_module("task_teacher_v2")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    tiles[0][0] = make_plant_tile("WHEAT", planted_day=0, watered_today=False)
+    tiles[4][4] = make_plant_tile("WHEAT", planted_day=0, watered_today=False)
+    tasks = module.generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=1,
+        last_day=29,
+        market_prices={},
+        candidate_crops=module.CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+    )
+    task_by_id = {t.task_id: t for t in tasks}
+    unit_positions = [(0, 0), (9, 9)]  # unit 0 on-target; unit 1 far from any task
+    assignment = module.joint_assign(unit_positions, tasks, {})
+    assert module._count_immediately_completing_tasks(unit_positions, assignment, task_by_id) == 1
+
+
+def test_full_episode_never_hires_on_the_last_hour_of_any_day():
+    module = load_agent_module("task_teacher_v2")
+    turns_per_day = V2_CONFIG["turnsPerDay"]
+    env = make("kaggriculture", configuration={"episodeSteps": 480, "seed": 4242}, debug=True)
+    env.run(["agents/task_teacher_v2/main.py", "starter"])
+    for step_index, step in enumerate(env.steps):
+        action = step[0].action
+        if not isinstance(action, dict):
+            continue
+        hour = step[0].observation["hour"]
+        if hour == turns_per_day - 1:
+            assert not any(order[0] == "HIRE" for order in action.get("market", []) or []), (
+                f"HIRE order at step {step_index}, hour {hour} (last hour of the day)"
+            )
+
+
 def test_at_most_one_hire_order_per_turn():
     module = load_agent_module("task_teacher_v2")
     tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]

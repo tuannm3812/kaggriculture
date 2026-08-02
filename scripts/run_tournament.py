@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import math
-import random
 import sys
 import time
 from pathlib import Path
@@ -94,28 +93,46 @@ def run_pair(agent_ref: str, opponent_ref: str, episode_steps: int, seed: int) -
     return agent_score, mean_margin, dt
 
 
-def bootstrap_ci(
-    pair_scores: list[float], n_resamples: int = 10000, ci: float = 0.95, seed: int = 0
+def hoeffding_ci(
+    pair_scores: list[float], confidence: float = 0.95, max_looks: int = 8
 ) -> tuple[float, float]:
-    """Percentile bootstrap CI for the mean of paired seed/seat scores.
+    """Hoeffding concentration-bound CI for the mean of paired seed/seat
+    scores, each bounded in [0, 1].
 
     Per the authoritative design doc §6: promotion/rejection is decided by
     whether this interval is wholly above/below 0.50, not by a point
-    estimate alone. Resamples whole pairs (each already averages both seat
-    assignments of one seed), not individual games, to respect the paired
-    design.
+    estimate alone. An earlier version of this used a percentile bootstrap,
+    which Codex's 2026-08-02 follow-up review (§12.2) correctly flagged:
+    resampling only the observed pair scores collapses to a zero-width
+    interval whenever every pair scored identically (e.g. an all-win
+    sample), which describes resampling variation of the *sample*, not
+    uncertainty about the true population win rate -- a handful of pairs
+    cannot establish a true rate of exactly 1.0.
+
+    This uses Hoeffding's inequality instead: for `n` iid observations
+    bounded in [0, 1], `P(|mean - true_mean| >= eps) <= 2*exp(-2*n*eps^2)`,
+    giving `eps = sqrt(ln(2/alpha) / (2n))` at level `alpha`. This bound
+    depends only on `n` and boundedness, never on the sample's variance, so
+    it stays nonzero even for a degenerate all-identical sample -- unlike
+    the bootstrap. `alpha` is Bonferroni-corrected across `max_looks`
+    (`alpha / max_looks`) so that a fixed sequence of sequential looks
+    (matching the authoritative protocol's checkpoints: 20/50/75/.../200
+    pairs -- at most 8 looks) stays simultaneously valid at `confidence`
+    overall, not just at any single look in isolation. The bound is
+    intentionally conservative (wider than a percentile bootstrap would
+    report); that conservatism is the point.
     """
     n = len(pair_scores)
-    rng = random.Random(seed)
-    means = []
-    for _ in range(n_resamples):
-        resample = [pair_scores[rng.randrange(n)] for _ in range(n)]
-        means.append(sum(resample) / n)
-    means.sort()
-    lower_tail = (1.0 - ci) / 2
-    lo_idx = int(lower_tail * n_resamples)
-    hi_idx = int((1.0 - lower_tail) * n_resamples) - 1
-    return means[lo_idx], means[max(lo_idx, hi_idx)]
+    if n == 0:
+        raise ValueError("pair_scores must be non-empty")
+    if not (0.0 < confidence < 1.0):
+        raise ValueError("confidence must be in (0, 1)")
+    if max_looks < 1:
+        raise ValueError("max_looks must be >= 1")
+    alpha_per_look = (1.0 - confidence) / max_looks
+    mean = sum(pair_scores) / n
+    epsilon = math.sqrt(math.log(2.0 / alpha_per_look) / (2 * n))
+    return max(0.0, mean - epsilon), min(1.0, mean + epsilon)
 
 
 def tournament(agent_ref: str, opponent_ref: str, episodes: int, episode_steps: int, base_seed: int) -> None:
@@ -133,9 +150,9 @@ def tournament(agent_ref: str, opponent_ref: str, episodes: int, episode_steps: 
     mean_margin = total_margin / episodes
     steps_per_sec = (n_games * episode_steps) / total_wall if total_wall > 0 else float("nan")
     ci_msg = ""
-    if episodes >= 2:
-        lo, hi = bootstrap_ci(pair_scores)
-        ci_msg = f", bootstrap_95%_ci=[{lo:.3f}, {hi:.3f}]"
+    if episodes >= 1:
+        lo, hi = hoeffding_ci(pair_scores)
+        ci_msg = f", hoeffding_95%_ci=[{lo:.3f}, {hi:.3f}]"
     print(
         f"{agent_ref!r} vs {opponent_ref!r}: "
         f"win_rate={win_rate:.3f} ({episodes} seed pairs / {n_games} games), "

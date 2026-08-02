@@ -380,6 +380,90 @@ available, and outcome/lesson.
   `roi_teacher_v3` and `starter`). This supersedes the premature claim
   above; `task_teacher_v1` is retained as the immutable benchmark this
   result is measured against, per `docs/0_coding_standards.md` §4.
+
+- **Codex follow-up review, second round (2026-08-02):** even after the
+  wiring fix above, Codex's review found two further issues (see
+  `2026-08-01-task-teacher-v2-design.md` §12), both independently verified
+  before acting on them:
+  1. **Confirmed end-of-day hiring bug.** Hiring is a market order,
+     resolved after the current turn's unit actions, so a hand hired at
+     hour H gets its first action at hour H+1. At the day's last hour
+     (`hour == turns_per_day - 1`), a new hire is guaranteed zero future
+     actions before every hand is cleared at the day boundary — yet
+     `remaining_turns_today = turns_per_day - hour` evaluated to `1` there
+     (not `0`), so `should_hire` still approved a guaranteed-worthless
+     hire under enough load. Reproduced directly: `should_hire` returned
+     `True` at hours 21, 22, and 23 for a loaded farm. Load was also
+     counted before the current turn's assigned field actions resolve, so
+     a task an already-positioned unit was about to complete this turn
+     still counted as outstanding demand.
+  2. **Bootstrap CI gave false zero-width certainty.** The percentile
+     `bootstrap_ci` resamples only the observed pair scores, so an
+     all-identical sample (e.g. every pair a win) produced a degenerate
+     `[1.000, 1.000]` interval regardless of sample size — describing
+     resampling variation of the *sample*, not uncertainty about the true
+     population win rate. A handful of pairs cannot establish a true rate
+     of exactly 1.0, and this matters directly because the docs called
+     that degenerate interval "rigorous."
+- **Fix (2026-08-02):**
+  1. Added `future_action_turns = max(0, turns_per_day - hour - 1)` in
+     `agents/task_teacher_v2/main.py`, replacing `remaining_turns_today`
+     for both the existing-unit and new-hire capacity terms, plus a new
+     `_count_immediately_completing_tasks` helper that subtracts tasks an
+     already-positioned unit will resolve this turn from the load used to
+     size the hiring decision. Built test-first: four new regression
+     tests in `tests/test_task_teacher_v2.py` (never hires on the day's
+     last hour even when heavily overloaded; still hires one hour
+     earlier when genuinely justified — confirming no overcorrection; a
+     direct unit test of the new helper; a full-episode regression
+     asserting no `HIRE` order ever occurs at the day's last hour).
+  2. Replaced `bootstrap_ci` with `hoeffding_ci` — a Hoeffding
+     concentration bound for a mean bounded in [0, 1], which stays
+     nonzero even on a degenerate all-win/all-loss sample because it
+     depends only on sample size and boundedness, not sample variance.
+     Alpha is Bonferroni-corrected across `max_looks` (default 8,
+     matching the authoritative protocol's 20/50/75/…/200-pair
+     checkpoints) so a chain of sequential looks stays simultaneously
+     valid. Built test-first: 8 new tests in `tests/test_tournament.py`
+     per Codex's exact required list (all-win lower bounds strictly below
+     1.0 at both 4 and 20 pairs, all-loss upper bound strictly above 0.0,
+     interval brackets the sample mean, width decreases with sample size,
+     deterministic given the same inputs, and clear failures on empty
+     input / invalid confidence / invalid `max_looks`).
+- **Re-measurement after both fixes** (100 full 720-step episodes vs.
+  `starter`, seeds 3000–3099):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` both players | 100/100 |
+  | Invalid/non-finite episodes | 0 |
+  | Distinct tiles worked/episode | median 25, p10 25, range [24, 25] |
+  | Action-kind coverage | `PLANT`=6143, `WATER`=43250, `HARVEST`=3176, `DIG`=3091 |
+  | `HIRE` orders/episode | min 64, max 74, avg 70.4 (down from 73.4) |
+  | Max hands active/episode | min 4, max 5, avg 4.9 (down from a flat 5.0) |
+  | Inference latency (ms/turn) | median 2.05, p95 16.89 (P95 measured under CPU contention from a concurrently-running job — isolated re-checks stayed at ~500+ steps/sec; not a real regression) |
+  | Determinism (same seed, 2 runs) | identical rewards |
+
+  Re-ran the full paired evaluation with the corrected `hoeffding_ci`:
+
+  | Comparison | Pairs/Games | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v1` (screen, seed 8000) | 20/40 | 1.000 | +6024.1 | [0.620, 1.000] |
+  | vs. `task_teacher_v1` (promotion, seed 10000) | 50/100 | 0.970 | +6526.5 | **[0.730, 1.000]** |
+  | vs. `roi_teacher_v3` (regression, seed 11000) | 20/40 | 1.000 | +32669.8 | [0.620, 1.000] |
+  | vs. `starter` (regression, seed 11000) | 20/40 | 1.000 | +35613.4 | [0.620, 1.000] |
+
+  The Hoeffding intervals are visibly wider than the old percentile
+  bootstrap's degenerate `[1.000, 1.000]`/`[0.930, 1.000]` — correctly so,
+  since they're honest about the real uncertainty in a 20-50 pair sample
+  — but the promotion-gate lower bound (`0.730`) is still comfortably
+  above 0.50, exactly as Codex predicted in §12.2 ("likely still
+  decisively above 0.50 under a conservative bounded-score interval").
+- **Outcome: `task_teacher_v2`'s promotion to `competitive_champion`
+  holds** under the corrected end-of-day hiring behavior and the
+  corrected, non-degenerate confidence interval. Per Codex's §12.3
+  disposition, promotion was treated as provisional until this
+  re-measurement confirmed the lower bound above 0.50 — it does.
 - **Packaging:** re-verified standalone (`PYTHONPATH` stripped) after the
   performance fix; all four existing agents (`roi_teacher_v1-v3`,
   `task_teacher_v1`) re-packaged and re-verified alongside it.
@@ -392,7 +476,17 @@ available, and outcome/lesson.
   lesson from this same version: a library-level fix with passing unit
   tests is not evidence the fix is *wired in* — when a symptom a fix was
   supposed to eliminate persists unchanged afterward, that persistence is
-  itself a signal to investigate, not a data point to rationalize. And a
+  itself a signal to investigate, not a data point to rationalize. A
   third: win rate/game outcomes, not money margin, decide promotion —
   positive mean margin over a small, unreplicated sample is not
-  promotion evidence on its own.
+  promotion evidence on its own. A fourth, from the follow-up round: a
+  statistical tool that degenerates to false certainty on convenient
+  (all-win) data is itself a bug worth the same scrutiny as application
+  code — "the interval is [1.000, 1.000]" felt like strong evidence
+  precisely because it was wrong, not because the underlying result was
+  actually that certain. And a fifth: an alarming timing regression
+  (18 steps/sec vs. an established ~550 steps/sec baseline) turned out to
+  be CPU contention from running two full-simulation background jobs
+  concurrently, not a code regression — confirmed by re-measuring in
+  isolation before investigating the application code, rather than
+  assuming the worst from the first number seen.

@@ -1,10 +1,10 @@
 # Task Teacher v2 — Design
 
 Written 2026-08-01. Status: **approved 2026-08-02, implemented, Codex
-review (§10) resolved 2026-08-02 — legitimately promoted to
-competitive_champion.** This file is intentionally focused. It inherits
-the project and teacher constraints from the authoritative competition and
-teacher specs.
+review (§10) and follow-up review (§12) both resolved 2026-08-02 —
+legitimately promoted to competitive_champion.** This file is
+intentionally focused. It inherits the project and teacher constraints
+from the authoritative competition and teacher specs.
 
 Implementation notes (2026-08-02): built test-first exactly per this
 design, with two real bugs found and fixed via full simulator runs (not
@@ -292,3 +292,166 @@ symptom left that exact symptom unchanged, which should have prompted
 investigation rather than a rationalized explanation. Both gaps are now
 closed, and the paired-bootstrap tooling this review prompted is kept as
 permanent infrastructure for every promotion decision going forward.
+
+## 12. Codex Follow-up Review — 2026-08-02
+
+The missing `existing_hands` argument is correctly fixed, the regression test
+now covers the wiring, the suite passes (`208 passed` in an independent run),
+the 100-episode acceptance run is complete, and approval provenance is now
+clear. Those parts of §10 are resolved.
+
+Two new issues remain. They do not erase v2's strong observed performance, but
+they block treating its hiring behavior and evaluation tooling as final inputs
+to BC/v3.
+
+### 12.1 Confirmed end-of-day hiring bug
+
+Hiring is processed after the current turn's unit actions. At hour 23, a newly
+hired hand has no future unit-action turn: end-of-day processing removes all
+hands before the next day. Current code computes:
+
+```python
+remaining_turns_today = turns_per_day - hour
+```
+
+and passes that value to `should_hire`. Independent reproduction against the
+current helper shows it returns `True` at hours 21, 22, and **23** for a loaded
+farm. The hour-23 hire is guaranteed to provide zero actions and is therefore
+an economically invalid teacher label.
+
+The load is also computed before current assigned field actions resolve, so it
+includes tasks that the farmer/hands will complete on this turn even though the
+hiring decision affects only future turns.
+
+Required test-first correction:
+
+```text
+future_action_turns = max(0, turns_per_day - hour - 1)
+future_load = projected_load - immediately_completed_tasks_this_turn
+```
+
+Use `future_action_turns` for both current-unit capacity and the new hand's
+recoverable capacity. Never hire when it is zero. Count an immediate completion
+only when an assigned unit is already on the task tile and will emit the field
+action this turn; movement and `PASS` do not complete a task. Add exact boundary
+tests for hours 21–23 plus a full-day regression asserting no zero-value final-
+turn hire.
+
+### 12.2 Percentile bootstrap gives false zero-width certainty
+
+`bootstrap_ci` resamples only the observed pair scores. When all observed scores
+are identical, every resample is identical, so the function returns a point
+interval such as `[1.000, 1.000]` even for four or twenty pairs. The tests
+currently require this degenerate behavior. That interval describes resampling
+variation of the empirical sample, not uncertainty about future matchups, and
+is unsuitable as the promotion confidence claim.
+
+This matters because the docs call `[1.000, 1.000]` a rigorous confidence
+interval and the authoritative process allows repeated sequential looks. A
+small all-win sample cannot establish a true population win rate of exactly
+one.
+
+Replace the promotion interval with an uncertainty method that remains nonzero
+for all-win/all-loss bounded pair scores. A conservative acceptable baseline is
+an anytime-valid or alpha-spent Hoeffding confidence sequence for scores in
+`[0, 1]`; alternatively pre-register fixed looks and use a bounded-mean interval
+with multiplicity correction. Keep percentile bootstrap only as a diagnostic if
+desired, and rename it accordingly.
+
+Required tests:
+
+- four and twenty all-win pairs produce lower bounds strictly below 1.0;
+- interval width decreases with sample size;
+- all-loss upper bound is strictly above 0.0;
+- the interval contains the observed mean;
+- sequential-look alpha allocation is deterministic and documented;
+- invalid empty input, confidence level, and resample/look parameters fail
+  clearly.
+
+Recompute the v2 promotion interval with the corrected method. Its observed
+`0.970` over 50 pairs is likely still decisively above 0.50 under a conservative
+bounded-score interval, but promotion evidence must report the corrected value,
+not the degenerate percentile-bootstrap claim.
+
+### 12.3 Disposition
+
+- V2 may remain the **observed local performance leader**, conditional on the
+  recorded 50-pair results.
+- Keep the formal `competitive_champion` promotion provisional until the
+  corrected uncertainty calculation confirms the lower bound above 0.50.
+- Do not collect BC trajectories containing zero-value end-of-day hires.
+- Do not start v3 until the hiring-timing regression and promotion-interval
+  correction pass and the 100-episode hiring telemetry is refreshed.
+
+## 13. Response to Codex's Follow-up Review — 2026-08-02
+
+Both §12 findings were independently verified before acting on them, and
+both required corrections are now complete and re-measured.
+
+**§12.1 (end-of-day hiring bug):** Verified by direct reproduction —
+`should_hire` returned `True` at hours 21, 22, and 23 for a loaded farm
+using the then-current `remaining_turns_today = turns_per_day - hour`,
+confirming a hire could be queued with zero possible future actions.
+Fixed test-first: `future_action_turns = max(0, turns_per_day - hour - 1)`
+now replaces `remaining_turns_today` for both the existing-unit and
+new-hire capacity terms in `agents/task_teacher_v2/main.py`, and a new
+`_count_immediately_completing_tasks` helper subtracts tasks an
+already-positioned unit is about to resolve this turn from the load used
+to size the decision. Four new tests in `tests/test_task_teacher_v2.py`:
+a boundary test confirming no `HIRE` on the day's last hour even under
+heavy overload (watched RED, then GREEN), a sanity check that hiring one
+hour earlier still fires when genuinely justified (guards against
+overcorrection), a direct unit test of the new helper, and a full-episode
+regression asserting no `HIRE` order ever occurs at the day's last hour.
+No thresholds were changed alongside the fix.
+
+**§12.2 (bootstrap CI false certainty):** Confirmed the percentile
+`bootstrap_ci` degenerates to `[1.000, 1.000]` on any all-identical
+sample regardless of size — a real defect in evaluation tooling, not just
+in the number it reported for v2. Replaced with `hoeffding_ci`
+(`scripts/run_tournament.py`), a Hoeffding concentration bound for a mean
+bounded in [0, 1] that depends only on sample size and boundedness, so it
+stays nonzero on degenerate samples, Bonferroni-corrected across
+`max_looks` (default 8, matching the authoritative protocol's
+20/50/75/…/200-pair checkpoints) for simultaneous validity across
+sequential looks. Built test-first against Codex's exact required list in
+`tests/test_tournament.py`: all-win lower bounds strictly below 1.0 at 4
+and 20 pairs, all-loss upper bound strictly above 0.0, interval brackets
+the sample mean, width decreases with sample size, deterministic given
+identical inputs, and clear `ValueError`s on empty input, invalid
+confidence, and invalid `max_looks`.
+
+**Re-measurement, per §12.3's disposition** that promotion stay
+provisional until the corrected interval confirms the lower bound above
+0.50: re-ran the 100-episode acceptance gate (100/100 `DONE`/finite,
+deterministic, hand count now avg 4.9 max 5 and `HIRE` orders avg 70.4 —
+both down slightly from the prior round) and the full paired evaluation
+with `hoeffding_ci`. Result: 20-pair screen vs. `task_teacher_v1` (1.000,
+CI `[0.620, 1.000]`), 50-pair promotion gate (0.970, CI **`[0.730, 1.000]`**
+— wholly above 0.50), and 20-pair regression screens vs. `roi_teacher_v3`
+and `starter` (both 1.000, CI `[0.620, 1.000]`). The corrected intervals
+are visibly wider than the old percentile bootstrap's degenerate
+`[1.000, 1.000]`/`[0.930, 1.000]` — correctly so, since they honestly
+reflect real uncertainty at 20-50 pairs — but the promotion-gate lower
+bound holds decisively above 0.50, exactly as Codex predicted ("likely
+still decisively above 0.50 under a conservative bounded-score interval").
+Full numbers in `docs/4_agent_version_log.md`.
+
+**Disposition (§12.3), resolved:** `task_teacher_v2`'s promotion to
+`competitive_champion` holds under the corrected end-of-day hiring
+behavior and the corrected confidence interval — it is no longer
+provisional. No BC trajectories have been collected yet, so the "no
+zero-value end-of-day hires in BC data" constraint is satisfied
+vacuously for now and will need to hold once BC collection starts. v3
+remains not started, per the standing instruction not to infer approval
+for it from this review.
+
+**An operational note, not a design finding:** re-running the paired
+evaluation initially showed an alarming 18 steps/sec (vs. an established
+~550 steps/sec baseline) that briefly looked like a performance
+regression from the fix. It was CPU contention from two full-simulation
+background jobs running concurrently — confirmed by re-measuring the same
+comparison in isolation (524-584 steps/sec, back to baseline) before
+concluding anything about the application code. Recorded in
+`docs/4_agent_version_log.md` as a process lesson: check for contention
+before assuming a regression.
