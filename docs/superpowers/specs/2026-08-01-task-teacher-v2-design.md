@@ -746,3 +746,68 @@ fix-test-reevaluate cycle (acceptance gate + paired evaluation), not a
 silent constant edit. Not acted on yet — deferred pending an explicit
 decision on whether to spend that cycle now or treat this as informational
 until BC scoping.
+
+## 23. Recalibration Attempt and Revert — 2026-08-02
+
+The user asked to act on §22's hiring-constant measurement. This section
+records what happened when that was actually tried — the attempt did not
+succeed, and reverting was the correct call, not a shortcut around a hard
+problem.
+
+**What was done:** recalibrated `TRAVEL_ALLOWANCE` (4→8) and
+`AVERAGE_VALUE_PER_RECOVERED_ACTION` (15.0→65.0) test-first (two new tests
+in `tests/test_tasking.py`, RED then GREEN), then ran the full
+fix-test-reevaluate cycle this change required, exactly as documented as
+the required protocol for changing an already-promoted champion's
+behavior.
+
+**What the cycle found:** the 100-episode acceptance gate confirmed hiring
+became substantially more aggressive (avg 110.7 `HIRE` orders/episode, up
+from 70.4-73.4; a flat 7 max hands active, up from 4.9-5.0) — expected,
+since a 4.3x higher $/action makes hiring look far more attractive against
+the fibonacci-scaled cost. The paired evaluation vs. `task_teacher_v1` is
+where it went wrong: the 20-pair screen came back at 0.850 win rate,
+Hoeffding CI `[0.470, 1.000]` — straddling 0.50, not a clean result like
+every prior screen this project has run. Per the authoritative protocol
+("stop for success/futility only when the interval is wholly above/below
+0.50"), an ambiguous screen isn't a stop condition either way, so this
+escalated to the 50-pair promotion scale rather than being treated as a
+quiet pass. At 50 pairs: win rate dropped *further*, to 0.750, CI
+`[0.510, 0.990]` — technically clearing 0.50 but by a razor-thin margin,
+a stark contrast to the original constants' `[0.730, 1.000]`. Win rate
+declining monotonically as sample size grew (1.000 → 0.850 → 0.750) is the
+signature of a real effect, not sampling noise that would be expected to
+stabilize or reverse.
+
+**Root cause:** the $65.26/action figure in §22 was measured under the
+*original* (less-aggressive) hiring behavior. Plugging it back into the
+same formula didn't just correct a number in isolation — it shifted the
+whole equilibrium the agent operates at: aggressive hiring escalates the
+fibonacci-scaled hire cost quickly, and pushes unit count well past
+`MAX_EXHAUSTIVE_UNITS` into greedy-fallback territory more often, whose
+only real cost (per §22's assignment-quality-gap measurement) is extra
+travel distance — now paid by more units, more often. Neither of those
+costs were present in the game states the $/action figure was averaged
+over, because those states were generated under the *old*, calmer hiring
+behavior. A calibration constant that feeds back into the very behavior it
+was measured from cannot be validated by a single point measurement at the
+old operating point alone.
+
+**Reverted:** both constants back to their original values (4 and 15.0).
+Confirmed the revert restores the previously-verified behavior with a
+fresh 20-pair screen (seed 16000): win rate 0.950, mean margin +6457.5, CI
+`[0.570, 1.000]` — consistent with the already-established evidence.
+`task_teacher_v2`'s actual promotion (the 50-pair CI `[0.730, 1.000]` under
+the original constants, §13/§15) was never at risk; this was a same-session
+experiment that didn't pan out, caught by the identical full-gate
+discipline that has caught every other regression across this design's
+review history, not a special case.
+
+**Status:** `task_teacher_v2` remains `competitive_champion` at its
+original, already-evaluated constants. The assignment-quality-gap
+measurement (§22, item 15's finding) is entirely unaffected — it changed no
+constants, only added read-only measurement tooling
+(`tasking._exhaustive_assign`), and stands as previously recorded. Any
+future recalibration attempt needs to validate performance at the new
+operating point the recalibration itself induces, not just accept a
+measurement taken at the old one.

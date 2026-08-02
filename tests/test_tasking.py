@@ -6,6 +6,7 @@ file is written before tasking.py exists.
 """
 
 from kaggriculture_lib.tasking import (
+    AVERAGE_VALUE_PER_RECOVERED_ACTION,
     END_OF_DAY_RESERVE,
     TRAVEL_ALLOWANCE,
     MarketIntent,
@@ -510,6 +511,35 @@ def test_reset_hand_assignments_keeps_hand_entries_within_same_day():
 
 
 # --- hiring policy (task_teacher_v2) --------------------------------------
+
+
+# --- calibration (2026-08-02, per docs/6_next_steps.md item 14) ----------
+# TRAVEL_ALLOWANCE=4 and AVERAGE_VALUE_PER_RECOVERED_ACTION=15.0 were initial
+# estimates, never measured against real games. Measured directly (20
+# episodes, task_teacher_v2 vs. starter, seeds 21000-21019): TRAVEL_ALLOWANCE
+# actual mean 7.51 turns/unit/day (max 19); $/field-action actual mean
+# $65.26 (range [$57.86, $72.17]). Both were substantially underestimated
+# (~1.9x and ~4.3x respectively) by that single-shot measurement -- but a
+# full evaluation gate re-run with the recalibrated values (8 and 65.0)
+# showed the win rate vs. task_teacher_v1 measurably *dropping* (0.970 ->
+# 0.750 over 50 pairs, CI [0.730, 1.000] -> a barely-above-0.50
+# [0.510, 0.990]), because the higher $/action drove much more aggressive
+# hiring (flat 7 hands vs. the ~5 hands the $65.26 figure was itself
+# measured under) whose real costs (fibonacci-scaled hire cost escalation,
+# more greedy-fallback travel inefficiency at higher unit counts) the
+# naive point measurement didn't capture. Reverted -- see
+# docs/4_agent_version_log.md and
+# docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md §23 for the
+# full account. These tests guard against silently re-applying that
+# specific naive recalibration without redoing the full evaluation gate.
+
+
+def test_travel_allowance_kept_at_original_value_after_failed_recalibration():
+    assert TRAVEL_ALLOWANCE == 4
+
+
+def test_average_value_per_recovered_action_kept_at_original_value_after_failed_recalibration():
+    assert AVERAGE_VALUE_PER_RECOVERED_ACTION == 15.0
 
 
 def test_estimate_hire_value_zero_when_no_overload():

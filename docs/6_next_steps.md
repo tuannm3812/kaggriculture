@@ -107,13 +107,25 @@ status audit).
     substantially underestimated versus real play. `TRAVEL_ALLOWANCE`'s gap
     is corroborated independently by item 15's measurement below (greedy
     fallback travels ~3 extra tiles/turn versus optimal — travel really
-    is a bigger real cost than assumed). Recalibrating either constant
-    changes `should_hire`'s real firing rate on an already-promoted
-    champion, so it needs its own fix-test-reevaluate cycle (full
-    acceptance gate + paired evaluation), not a silent edit — **deferred
-    pending an explicit decision on whether to spend that cycle now or
-    treat this as informational until BC scoping**. Not a promotion
-    blocker; a BC-teacher-readiness gate.
+    is a bigger real cost than assumed).
+
+    **Attempted and reverted, 2026-08-02:** recalibrated to `8` and `65.0`
+    respectively, ran the required full fix-test-reevaluate cycle, and it
+    made things measurably worse — win rate vs. `task_teacher_v1` dropped
+    from 0.970/CI `[0.730, 1.000]` to 0.750/CI `[0.510, 0.990]` over 50
+    pairs (declining monotonically as sample size grew: 1.000 → 0.850 →
+    0.750, the signature of a real effect). The higher $/action drove much
+    more aggressive hiring (flat 7 hands, ~111 orders/episode vs. the
+    original ~71), whose real costs (fibonacci hire-cost escalation, more
+    greedy-fallback travel inefficiency at higher unit counts) weren't
+    reflected in a $/action figure measured under the calmer, original
+    hiring regime. Reverted both constants; confirmed the revert restores
+    the original, already-verified promotion evidence. See
+    `docs/4_agent_version_log.md` for the full account. **Naive
+    single-shot recalibration of a constant that feeds back into the
+    behavior it was measured from doesn't work — any future attempt needs
+    to validate at the new operating point the recalibration itself
+    induces, not just the point it was measured at.**
 15. ~~Measurement gate before selecting v2 as the BC teacher: quantify the
     exhaustive-vs-greedy assignment-quality gap~~ (Codex's 2026-08-02 §16
     item 5) — **measured 2026-08-02** (30 episodes, seeds 20000–20029,

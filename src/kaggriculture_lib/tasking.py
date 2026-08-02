@@ -362,9 +362,16 @@ class MarketIntent:
     reason: str  # e.g. "PLANT" -- why this intent was created
 
 
-# Calibrated constants for the service-capacity load check (§ below);
-# revise from real task_teacher_v1 data once it exists, per the "measure
-# before fixing the number" discipline used throughout this project.
+# Calibrated constants for the service-capacity load check (§ below).
+# A 2026-08-02 recalibration attempt (TRAVEL_ALLOWANCE 4->8,
+# AVERAGE_VALUE_PER_RECOVERED_ACTION 15.0->65.0 below, from real
+# task_teacher_v2 telemetry) was reverted after full-gate re-evaluation
+# showed it was a net regression, not an improvement -- see
+# docs/4_agent_version_log.md and
+# docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md §23 for the
+# full account of why a single-shot measurement under one hiring regime
+# didn't transfer once it changed that regime. Kept at the original,
+# already-evaluated values pending a non-naive recalibration approach.
 TRAVEL_ALLOWANCE = 4  # turns/day reserved for moving between tiles
 END_OF_DAY_RESERVE = 2  # turns/day reserved for selling/end-of-day cleanup
 
@@ -381,10 +388,16 @@ def project_daily_load(
 
 
 # Calibration constant for the hiring decision (task_teacher_v2): estimated
-# dollar value of one recovered service-capacity turn. Initial estimate,
-# not measured -- revise from real hiring/task-recovery data once it
-# exists, per the "measure before fixing the number" discipline used
-# throughout this project.
+# dollar value of one recovered service-capacity turn. Measured 2026-08-02
+# at $65.26/action under the original (less-aggressive) hiring behavior --
+# but plugging that number back in drove much more aggressive hiring (flat
+# 7 hands, ~111 hire orders/episode vs. the original ~71), which measurably
+# hurt win rate against task_teacher_v1 (0.970 -> 0.750 over 50 pairs, CI
+# dropping from [0.730, 1.000] to a barely-above-0.50 [0.510, 0.990]) --
+# see docs/4_agent_version_log.md for the full account. Reverted to the
+# original estimate, which is a worse point estimate of $/action but a
+# better-performing operating point once its own feedback effect on
+# hiring behavior is accounted for.
 AVERAGE_VALUE_PER_RECOVERED_ACTION = 15.0
 
 

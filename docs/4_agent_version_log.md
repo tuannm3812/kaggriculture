@@ -568,9 +568,50 @@ available, and outcome/lesson.
      reconstruct per-order sale pricing. `TRAVEL_ALLOWANCE` and
      `AVERAGE_VALUE_PER_RECOVERED_ACTION` are both substantially
      underestimated (~1.9x and ~4.3x respectively) versus real play.
-  - **Not yet acted on:** recalibrating either constant changes
-    `should_hire`'s real firing rate on an already-promoted champion,
-    requiring its own fix-test-reevaluate cycle (full acceptance gate +
-    paired evaluation vs. `task_teacher_v1`/`roi_teacher_v3`/`starter`),
-    not a silent edit. Deferred pending an explicit decision on whether to
-    spend that cycle now.
+- **Recalibration attempt and revert (2026-08-02):** the user asked to act
+  on the hiring-constant measurement above. Recalibrated test-first
+  (`TRAVEL_ALLOWANCE` 4→8, `AVERAGE_VALUE_PER_RECOVERED_ACTION` 15.0→65.0;
+  `END_OF_DAY_RESERVE` left unchanged, per the "roughly in range" finding),
+  then ran the full fix-test-reevaluate cycle this required:
+  - **100-episode acceptance gate:** hiring became substantially more
+    aggressive as expected — avg 110.7 `HIRE` orders/episode (up from
+    70.4-73.4) and a flat 7 max hands active (up from 4.9-5.0), since the
+    higher $/action made hiring look far more attractive against the
+    fibonacci-scaled cost.
+  - **Paired evaluation vs. `task_teacher_v1`:** this is where it went
+    wrong. 20-pair screen: win rate dropped to 0.850 (from a clean 1.000),
+    Hoeffding CI `[0.470, 1.000]` — straddling 0.50, not wholly above it.
+    Escalated to the 50-pair promotion scale rather than stopping on an
+    ambiguous screen: win rate dropped *further* to 0.750, CI
+    `[0.510, 0.990]` — barely clearing 0.50, a razor-thin margin versus the
+    original constants' `[0.730, 1.000]`. Win rate declining monotonically
+    as sample size grew (1.000 → 0.850 → 0.750) is the signature of a real
+    effect, not noise.
+  - **Root cause:** the $65.26/action figure was measured under the
+    *original* (less-aggressive) hiring behavior. Plugging it back in
+    didn't just correct a number — it changed the equilibrium: aggressive
+    hiring escalates the fibonacci-scaled hire cost fast, pushes unit count
+    well past `MAX_EXHAUSTIVE_UNITS` into greedy-fallback territory (whose
+    only real cost, per the assignment-quality-gap measurement above, is
+    extra travel — now paid by more units, more often), and neither of
+    those costs were reflected in a $/action figure measured under a
+    calmer hiring regime. A single-shot point measurement doesn't account
+    for its own feedback effect on the behavior it's meant to calibrate.
+  - **Reverted:** `TRAVEL_ALLOWANCE` back to 4, `AVERAGE_VALUE_PER_RECOVERED_ACTION`
+    back to 15.0. Confirmed the revert restores the previously-verified
+    behavior with a fresh 20-pair screen (seed 16000): win rate 0.950, mean
+    margin +6457.5, CI `[0.570, 1.000]` — consistent with the
+    already-established promotion evidence. `task_teacher_v2`'s existing
+    promotion (50-pair CI `[0.730, 1.000]` from the original constants)
+    was never actually at risk; this was a same-session experiment that
+    didn't pan out, caught by the same full-gate discipline that's caught
+    every other regression this project has found.
+  - **Lesson:** "measure before fixing the number" isn't enough on its own
+    when the number being fixed influences the very behavior it was
+    measured from — a calibration constant that feeds back into the
+    system it calibrates needs to be validated at the *new* operating
+    point it induces, not just accepted from a measurement taken at the
+    old one. The assignment-quality-gap measurement (item 15) is
+    unaffected by any of this — it changed no constants, only added
+    read-only measurement tooling (`_exhaustive_assign`), and stands as
+    previously recorded.

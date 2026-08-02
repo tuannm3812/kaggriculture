@@ -353,18 +353,26 @@ def test_does_not_hire_when_seedless_plant_would_have_falsely_suppressed_the_hir
 
 
 def test_full_episode_never_hires_on_the_last_hour_of_any_day():
+    """`env.steps[i].action` is the decision made from `env.steps[i-1].observation`,
+    not from `env.steps[i].observation`'s own hour (kaggle_environments records
+    the action that caused the transition *into* step i at index i, one step
+    ahead of the observation it was decided from) -- confirmed by direct
+    instrumentation of `should_hire`'s real call arguments. Comparing an
+    action against the *same* index's observation silently checks the wrong
+    hour entirely; must look at the *previous* step's observation instead."""
     module = load_agent_module("task_teacher_v2")
     turns_per_day = V2_CONFIG["turnsPerDay"]
     env = make("kaggriculture", configuration={"episodeSteps": 480, "seed": 4242}, debug=True)
     env.run(["agents/task_teacher_v2/main.py", "starter"])
-    for step_index, step in enumerate(env.steps):
-        action = step[0].action
+    for step_index in range(1, len(env.steps)):
+        action = env.steps[step_index][0].action
         if not isinstance(action, dict):
             continue
-        hour = step[0].observation["hour"]
-        if hour == turns_per_day - 1:
+        decided_from_hour = env.steps[step_index - 1][0].observation["hour"]
+        if decided_from_hour == turns_per_day - 1:
             assert not any(order[0] == "HIRE" for order in action.get("market", []) or []), (
-                f"HIRE order at step {step_index}, hour {hour} (last hour of the day)"
+                f"HIRE order at step {step_index}, decided from hour {decided_from_hour} "
+                "(last hour of the day)"
             )
 
 
