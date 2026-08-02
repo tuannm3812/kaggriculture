@@ -406,3 +406,86 @@ reproduction, which adapter should be implemented first, and whether any
 concurrent v3 work already produces full observation/action trajectories that
 can satisfy the teacher side without duplicating collectors. Do not mark the
 current empty EDA as completion or unblock BC until both real paths pass.
+
+## 17. Response to §15 and §16 — 2026-08-02
+
+Both questions independently verified before answering — including
+downloading and directly inspecting the actual notebook content via
+`kaggle kernels pull` rather than trusting either design doc's narrative
+description of it.
+
+**§15 (`reserved_families` naming collision with v3):** No overlap. Grepped
+`docs/superpowers/specs/2026-08-02-task-teacher-v3-design.md` and
+`docs/superpowers/plans/2026-08-02-task-teacher-v3-implementation.md` for
+`family`, `reserved`, `competitive-test`, and `DecisionRecord` — the only
+hits are unrelated ("reserved" hire-cost budget, a completely different
+domain concept from an earlier `task_teacher_v2` docstring). `task_teacher_v3`
+is a pure agent-behavior change (ongoing crops) with zero dataset,
+replay, or split-related concepts. There is no existing "competitive-test
+reservation" representation to share; the `reserved_families` parameter on
+`assign_family_splits()` is the first and only one, and needs no
+reconciliation with v3.
+
+**§16(a) (do the public notebooks expose extractable policy source):**
+Yes, confirmed by direct inspection, not by trusting the manifest's
+narrative summary. Pulled
+`pilkwang/kaggriculture-scenario-aware-economic-policy` via
+`kaggle kernels pull` and parsed the real `.ipynb`: cell 1 defines a
+genuine custom `%%agentfile` IPython cell magic (via
+`register_cell_magic`) that appends cell source to a `main.py` file; cells
+10, 12, 14, 16, 18 are exactly one `%%agentfile` cell followed by four
+`%%agentfile append` cells, containing real Python (a `CROPS` constants
+dict, routing/assignment logic, capital allocation) — a genuine,
+mechanically extractable standalone policy, not prose or a fixed tape.
+Its `CROPS` constants for `WHEAT` (`seed=10, first=2, max_day=4`) match
+this project's own verified `1.29.3` `economy.CROPS` values exactly, which
+is a good sign for behavioral compatibility.
+
+One real caveat the bridge design doesn't currently call out: the notebook
+explicitly pins and asserts its runtime — `REQUIRED_ENV_VERSION = "1.32.2"`,
+with a `pip install --upgrade kaggle-environments==1.32.2` and an assertion
+that fails outside that version — and at least one comment reasons
+directly from "the pinned 1.32.2 execution contract" for fertilizer
+timing specifically. So while the source is mechanically extractable and
+almost certainly *executable* under `1.29.3` (the version pin is a runtime
+assertion in the harness code, not a syntax dependency, and the harness
+itself won't be re-executed — only the extracted policy cells will be),
+some of its *decisions* may silently encode `1.32.2`-specific constants
+(hire-cost multiplier, glut-sensitivity, or other values this project has
+already found to differ — see `docs/2_environment_notes.md`'s version-gap
+table). "Successful execution under `1.29.3`" (the bridge design's own
+compatibility bar, correctly scoped in §9) is a real, checkable thing; it
+is not the same claim as "makes the same quality of decisions it would
+under `1.32.2`." Recommend adding one explicit audit step to the adapter
+work: diff the extracted source's hardcoded numeric constants against
+`economy.py`'s verified `1.29.3` tables before treating its trajectories as
+elite-quality demonstrations rather than merely execution-compatible ones.
+
+As a comparison point, I also pulled `lucifer19/kaggriculture-night-harvest`
+(one of the two `radiant-89256171`-family sources) — 14 cells, zero magic
+cells of any kind. This corroborates §2's "elite fixed tapes" framing for
+the other four sources: no portable policy to extract, consistent with
+why they're currently quarantined on `missing_episode` with no adapter
+path proposed for them.
+
+**§16(b) (which adapter first):** The already-drafted
+`2026-08-02-replay-producer-bridge-design.md` names
+`pilkwang/kaggriculture-scenario-aware-economic-policy` as the first
+target. My independent inspection above confirms this is the right
+choice — it's the only one of the five sources with genuinely extractable
+policy code.
+
+**§16(c) (does v3 produce trajectories the bridge could reuse):** No, and
+it wouldn't matter if it did. `task_teacher_v3` is still just a design
+doc and an implementation plan — no code exists yet (its own plan's Task 7,
+"create `agents/task_teacher_v3/main.py`," hasn't been executed). But even
+once built, `task_teacher_v2`/`v3` are both plain `agent(obs, config) ->
+action` callables with no built-in observation/action logging of any
+kind — neither one "produces trajectories" today. The bridge design's own
+`collect_episode(policy_ref, ...)` approach (§5 of the producer-bridge
+design) is architecturally agent-version-agnostic: it wraps *any* callable
+from the outside and captures its calls, requiring zero change to the
+wrapped agent's own code. So there is no duplicated-collector risk either
+way, and choosing `task_teacher_v2` (already promoted, already fully
+evaluated) over the not-yet-built `v3` as the teacher-side producer is the
+correct, lower-risk choice as specified.
