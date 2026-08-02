@@ -65,7 +65,7 @@ class TurnMetrics:
     storage_capacity: float
     storage_utilization: float
     storage_pressure: bool
-    terminal_stranded_units: float
+    terminal_stranded_units: float | None
     productive_actions: int
     travel_actions: int
     logistics_actions: int
@@ -93,7 +93,13 @@ class TurnMetrics:
     terminal_result: str | None
 
     def __post_init__(self) -> None:
-        for name in ("money", "observed_next_bank", "observed_bank_delta", "final_bank"):
+        for name in (
+            "money",
+            "observed_next_bank",
+            "observed_bank_delta",
+            "final_bank",
+            "terminal_stranded_units",
+        ):
             value = getattr(self, name)
             if value is not None and not isfinite(value):
                 raise ValueError(f"{name} must be finite")
@@ -149,9 +155,11 @@ class EpisodeSummary:
     sell_quantity_by_product: Mapping[str, float]
     sell_concentration_by_product: Mapping[str, float]
     sell_product_hhi: float | None
+    sell_turn_count: int
+    observed_sell_bank_delta_turn_count: int
     observed_bank_delta_on_sell_turns: float | None
     storage_pressure_turns: int
-    terminal_stranded_units: float
+    terminal_stranded_units: float | None
     final_bank: float | None
     status: str
     result: str | None
@@ -159,7 +167,12 @@ class EpisodeSummary:
     bank_recovery_turns_after_purchase: tuple[int | None, ...]
 
     def __post_init__(self) -> None:
-        for name in ("final_bank", "observed_bank_delta_on_sell_turns", "sell_product_hhi"):
+        for name in (
+            "final_bank",
+            "observed_bank_delta_on_sell_turns",
+            "sell_product_hhi",
+            "terminal_stranded_units",
+        ):
             value = getattr(self, name)
             if value is not None and not isfinite(value):
                 raise ValueError(f"{name} must be finite")
@@ -357,7 +370,7 @@ def extract_turn_metrics(
         storage_capacity=storage_capacity,
         storage_utilization=storage_utilization,
         storage_pressure=storage_pressure,
-        terminal_stranded_units=shed_units + carried_units if is_terminal else 0.0,
+        terminal_stranded_units=shed_units + carried_units if is_terminal else None,
         productive_actions=family_counts["productive"],
         travel_actions=family_counts["travel"],
         logistics_actions=family_counts["logistics"],
@@ -489,11 +502,14 @@ def summarize_episode(rows: Sequence[TurnMetrics]) -> EpisodeSummary:
 
     sell_quantity_by_product: defaultdict[str, float] = defaultdict(float)
     observed_sell_deltas: list[float] = []
+    sell_turn_count = 0
     for row in rows:
         for product, quantity in row.sell_quantity_by_product.items():
             sell_quantity_by_product[product] += quantity
-        if row.sell_quantity > 0 and row.observed_bank_delta is not None:
-            observed_sell_deltas.append(row.observed_bank_delta)
+        if row.sell_quantity > 0:
+            sell_turn_count += 1
+            if row.observed_bank_delta is not None:
+                observed_sell_deltas.append(row.observed_bank_delta)
     total_sell_quantity = sum(sell_quantity_by_product.values())
     concentration = {
         product: quantity / total_sell_quantity
@@ -536,7 +552,13 @@ def summarize_episode(rows: Sequence[TurnMetrics]) -> EpisodeSummary:
         sell_quantity_by_product=dict(sorted(sell_quantity_by_product.items())),
         sell_concentration_by_product=concentration,
         sell_product_hhi=sum(share * share for share in concentration.values()) if concentration else None,
-        observed_bank_delta_on_sell_turns=sum(observed_sell_deltas) if observed_sell_deltas else None,
+        sell_turn_count=sell_turn_count,
+        observed_sell_bank_delta_turn_count=len(observed_sell_deltas),
+        observed_bank_delta_on_sell_turns=(
+            sum(observed_sell_deltas)
+            if len(observed_sell_deltas) == sell_turn_count
+            else None
+        ),
         storage_pressure_turns=sum(row.storage_pressure for row in rows),
         terminal_stranded_units=last.terminal_stranded_units,
         final_bank=final_bank,
@@ -549,12 +571,22 @@ def summarize_episode(rows: Sequence[TurnMetrics]) -> EpisodeSummary:
 
 def _optional_mean(values: Sequence[float | int | None]) -> float | None:
     present = [float(value) for value in values if value is not None]
-    return mean(present) if present else None
+    if not present:
+        return None
+    result = mean(present)
+    if not isfinite(result):
+        raise ValueError("source aggregate must be finite")
+    return result
 
 
 def _optional_sum(values: Sequence[float | int | None]) -> float | None:
     present = [float(value) for value in values if value is not None]
-    return sum(present) if present else None
+    if not present:
+        return None
+    result = sum(present)
+    if not isfinite(result):
+        raise ValueError("source aggregate must be finite")
+    return result
 
 
 def compare_sources(summaries: Sequence[EpisodeSummary]) -> list[dict[str, Any]]:
@@ -566,6 +598,14 @@ def compare_sources(summaries: Sequence[EpisodeSummary]) -> list[dict[str, Any]]
     comparison: list[dict[str, Any]] = []
     for source_family in sorted(grouped):
         group = grouped[source_family]
+        sell_turn_count = sum(summary.sell_turn_count for summary in group)
+        observed_sell_turn_count = sum(
+            summary.observed_sell_bank_delta_turn_count for summary in group
+        )
+        missing_sell_delta = any(
+            summary.observed_sell_bank_delta_turn_count < summary.sell_turn_count
+            for summary in group
+        )
         action_totals = {
             name: sum(getattr(summary, name) for summary in group)
             for name in (
@@ -604,12 +644,35 @@ def compare_sources(summaries: Sequence[EpisodeSummary]) -> list[dict[str, Any]]
                 "idle_action_share": action_totals["idle_actions"] / action_count if action_count else 0.0,
                 "other_action_share": action_totals["other_actions"] / action_count if action_count else 0.0,
                 "sell_quantity": sum(summary.sell_quantity for summary in group),
-                "observed_bank_delta_on_sell_turns": _optional_sum(
-                    [summary.observed_bank_delta_on_sell_turns for summary in group]
+                "sell_episode_count": sum(summary.sell_turn_count > 0 for summary in group),
+                "no_sale_episode_count": sum(summary.sell_turn_count == 0 for summary in group),
+                "missing_sell_bank_delta_episode_count": sum(
+                    summary.observed_sell_bank_delta_turn_count < summary.sell_turn_count
+                    for summary in group
+                ),
+                "sell_turn_count": sell_turn_count,
+                "observed_sell_bank_delta_turn_count": observed_sell_turn_count,
+                "sell_bank_delta_coverage": (
+                    observed_sell_turn_count / sell_turn_count if sell_turn_count else None
+                ),
+                "observed_bank_delta_on_sell_turns": (
+                    None
+                    if missing_sell_delta
+                    else _optional_sum(
+                        [summary.observed_bank_delta_on_sell_turns for summary in group]
+                    )
                 ),
                 "mean_sell_product_hhi": _optional_mean([summary.sell_product_hhi for summary in group]),
                 "storage_pressure_turns": sum(summary.storage_pressure_turns for summary in group),
-                "mean_terminal_stranded_units": mean(summary.terminal_stranded_units for summary in group),
+                "mean_terminal_stranded_units": _optional_mean(
+                    [summary.terminal_stranded_units for summary in group]
+                ),
+                "terminal_stranding_observed_episode_count": sum(
+                    summary.terminal_stranded_units is not None for summary in group
+                ),
+                "terminal_stranding_coverage": sum(
+                    summary.terminal_stranded_units is not None for summary in group
+                ) / len(group),
                 "mean_final_8_action_cash_change": _optional_mean(
                     [summary.final_8_action_cash_change for summary in group]
                 ),

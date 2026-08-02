@@ -1,5 +1,6 @@
 from dataclasses import replace
 import math
+import sys
 
 import pytest
 
@@ -116,6 +117,39 @@ def test_terminal_stranded_value_counts_carried_and_shed_products():
     assert metrics.terminal_stranded_units == 10
 
 
+def test_incomplete_terminal_stranding_is_missing_not_observed_zero():
+    incomplete = summarize_episode(
+        [
+            extract_turn_metrics(
+                _record(
+                    0,
+                    observation=_observation(
+                        shed={"MILK": 4},
+                        inventories=[{"EGG": 2}],
+                    ),
+                ),
+                None,
+            )
+        ]
+    )
+    observed_zero = summarize_episode(
+        [
+            extract_turn_metrics(
+                replace(_record(0, terminal=True), episode_id="episode-2"),
+                None,
+            )
+        ]
+    )
+
+    assert incomplete.terminal_stranded_units is None
+    assert observed_zero.terminal_stranded_units == 0.0
+
+    comparison = compare_sources([incomplete, observed_zero])[0]
+    assert comparison["mean_terminal_stranded_units"] == 0.0
+    assert comparison["terminal_stranding_observed_episode_count"] == 1
+    assert comparison["terminal_stranding_coverage"] == 0.5
+
+
 def test_worker_allocation_separates_productive_travel_logistics_and_idle():
     records = [
         _record(
@@ -153,6 +187,34 @@ def test_sell_proceeds_use_observed_bank_delta_not_spot_times_quantity():
     assert metrics.observed_bank_delta == 37.0
     assert metrics.realized_bank_delta == 37.0
     assert metrics.realized_bank_delta != 4 * sale_record.observation["market"]["prices"]["MILK"]
+
+
+def test_episode_sell_delta_is_missing_when_any_positive_sale_lacks_a_successor():
+    rows = [
+        extract_turn_metrics(
+            _record(
+                0,
+                observation=_observation(money=100.0),
+                market=(("SELL", "MILK", 1),),
+            ),
+            _observation(money=110.0),
+        ),
+        extract_turn_metrics(
+            _record(
+                1,
+                terminal=True,
+                observation=_observation(money=110.0),
+                market=(("SELL", "EGG", 1),),
+            ),
+            None,
+        ),
+    ]
+
+    summary = summarize_episode(rows)
+
+    assert summary.sell_turn_count == 2
+    assert summary.observed_sell_bank_delta_turn_count == 1
+    assert summary.observed_bank_delta_on_sell_turns is None
 
 
 def test_turn_metrics_extract_state_market_actions_and_visible_opponent_assets():
@@ -421,3 +483,56 @@ def test_compare_sources_preserves_missing_observed_sell_deltas():
     )
 
     assert compare_sources([summary])[0]["observed_bank_delta_on_sell_turns"] is None
+
+
+def test_compare_sources_distinguishes_no_sales_from_missing_sell_delta_evidence():
+    no_sale = summarize_episode(
+        [extract_turn_metrics(_record(0, terminal=True), None)]
+    )
+    missing_sale = summarize_episode(
+        [
+            extract_turn_metrics(
+                replace(
+                    _record(0, terminal=True, market=(("SELL", "MILK", 1),)),
+                    episode_id="episode-2",
+                ),
+                None,
+            )
+        ]
+    )
+
+    comparison = compare_sources([no_sale, missing_sale])[0]
+
+    assert no_sale.observed_bank_delta_on_sell_turns == 0.0
+    assert missing_sale.observed_bank_delta_on_sell_turns is None
+    assert comparison["no_sale_episode_count"] == 1
+    assert comparison["missing_sell_bank_delta_episode_count"] == 1
+    assert comparison["sell_episode_count"] == 1
+    assert comparison["sell_bank_delta_coverage"] == 0.0
+    assert comparison["observed_bank_delta_on_sell_turns"] is None
+
+
+def test_compare_sources_rejects_non_finite_derived_bank_delta_sum():
+    summaries = []
+    for episode_id in ("episode-1", "episode-2"):
+        summaries.append(
+            summarize_episode(
+                [
+                    extract_turn_metrics(
+                        replace(
+                            _record(
+                                0,
+                                terminal=True,
+                                observation=_observation(money=0.0),
+                                market=(("SELL", "MILK", 1),),
+                            ),
+                            episode_id=episode_id,
+                        ),
+                        _observation(money=sys.float_info.max),
+                    )
+                ]
+            )
+        )
+
+    with pytest.raises(ValueError, match="source aggregate must be finite"):
+        compare_sources(summaries)
