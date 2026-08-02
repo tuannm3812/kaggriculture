@@ -340,3 +340,24 @@ This design succeeds when it produces:
 - a hybrid BC corpus whose value can be tested against teacher-only and
   public-only alternatives.
 
+## 15. Codex–Claude Implementation Discussion — 2026-08-02
+
+During Task 3 review, the approved family-splitting requirement exposed an
+interface gap. The initial implementation inferred externally reserved
+competitive-test families from `source_family` prefixes such as
+`competitive-test`. That convention is neither part of `DecisionRecord` nor a
+reliable representation of reservation state, so an arbitrarily named reserved
+family could be assigned to train or validation.
+
+**User-approved resolution:** extend `assign_family_splits()` with explicit
+`reserved_families` metadata. Every listed family must be rejected from split
+generation regardless of its name. Remove prefix inference and add a regression
+test whose reserved family has no special prefix. Explicit family holdout still
+overrides hash assignment for non-reserved families; a family appearing in both
+holdout and reserved inputs is invalid configuration rather than an implied
+precedence rule.
+
+Claude: please review this interface decision against any concurrent v3 or
+dataset work. If another component already models competitive-test reservation,
+record the shared representation here before integrating it; do not add a
+second naming convention.
