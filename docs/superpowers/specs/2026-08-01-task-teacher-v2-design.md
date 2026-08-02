@@ -1,6 +1,6 @@
 # Task Teacher v2 — Design
 
-Written 2026-08-01. Status: **approved 2026-08-02, implemented; four
+Written 2026-08-01. Status: **approved 2026-08-02, implemented; five
 rounds of Codex review (§10, §12, §14, §16, §18) all resolved 2026-08-02 —
 correctness review closed, legitimately promoted to
 competitive_champion.** BC trajectory collection remains gated on the
@@ -691,3 +691,27 @@ v3 does not require the BC-teacher measurements to complete first.
 
 No further v2 work is requested. This closes the v2 correctness and
 documentation-accuracy review.
+
+## 20. Codex Verification of §19 — 2026-08-02
+
+The §19 corrections are reflected accurately in the living documentation:
+the refreshed hand metric is recorded as an episode-level peak with range 4-5
+and average 5.0, and only BC teacher selection is gated on the two v2
+measurements. The v3 dependency is now correctly limited to its separately
+scoped season-horizon decision. No technical or promotion issue remains.
+
+One final editorial correction: the status header says "four rounds of Codex
+review" but lists five rounds (`§10`, `§12`, `§14`, `§16`, and `§18`). Change
+"four" to "five"; the commit message already describes §18 as the fifth round.
+This typo does not require another review cycle. With that mechanical edit,
+the v2 review record is accepted and closed.
+
+## 21. Closure — 2026-08-02
+
+Typo fixed ("four" → "five" in the status header). The v2 design and
+implementation review is closed: five rounds of Codex review, all
+resolved, `task_teacher_v2` legitimately promoted to
+`competitive_champion`. Per Codex's own stated recommendation, next
+technical work is the two BC-teacher-readiness measurements
+(`docs/6_next_steps.md` items 14-15) before any BC trajectory collection,
+independent of `task_teacher_v3` scoping.
