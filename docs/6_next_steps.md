@@ -43,6 +43,33 @@ Still not submitted to the ladder — re-ask before submitting or continuing
 to delay, per the standing rule from earlier (design doc §9's execution-
 status audit).
 
+## Elite Replay EDA Gate (2026-08-02)
+
+The decision report is [`docs/7_elite_replay_eda.md`](7_elite_replay_eda.md).
+All five attributed notebook sources are currently quarantined: no normalized
+public trajectory JSONL is available, three sources also declare an incompatible
+`1.32.2` runtime, and no pinned-runtime `task_teacher_v2` comparison trajectory
+was supplied. The report therefore records
+`REJECT: insufficient compatible evidence` for all six strategy questions and
+the EDA/data gate does not pass.
+
+Only these replay/teacher follow-ups are supported by the measured result:
+
+1. Obtain or reproduce normalized public episode decisions with their existing
+   manifest attribution, then run the `1.29.3` compatibility gate; keep every
+   unavailable or incompatible source quarantined with its reason codes.
+2. Generate attributed `task_teacher_v2` comparison trajectories under pinned
+   `1.29.3`, both seats and multiple opponent families, then rebuild the
+   coverage table. This is an evidence task, not authorization to change the
+   teacher.
+3. Package a public policy as a frozen benchmark only after its normalized tape
+   passes compatibility; none is approved from the present notebook-authored
+   descriptions alone.
+
+Do not begin BC collection or infer land, portfolio, labor, terminal, or
+opponent-policy changes until the report's compatible-evidence decisions are
+reviewed and the EDA/data gate explicitly passes.
+
 ## Immediate Next Tasks
 
 1. ~~Packaging step~~ — done 2026-08-01.

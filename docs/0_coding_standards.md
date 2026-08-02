@@ -19,12 +19,13 @@ Code, not notebooks, is the executable artifact Kaggle runs. Structure:
   packaging (`package_agent.py`), Kaggle kernel push (`push_kaggle_kernel.sh`).
 - `tests/` — unit tests for `src/kaggriculture_lib`, agent decision logic,
   the tournament harness, and packaging.
-- `notebooks/` — narrow exception, platform verification only, not agent
-  development. See §2.
+- `notebooks/` — narrow exceptions for platform verification and rendering
+  tracked analysis tables, not agent development or metric computation. See
+  §2.
 - `docs/` — numbered, in the same spirit as the master doc's §2, adapted for
   this genre: `0_coding_standards.md` → `1_competition_instructions.md` →
   `2_environment_notes.md` → `3_agent_strategy.md` → `4_agent_version_log.md`
-  → `5_replay_strategy.md` → `6_next_steps.md`.
+  → `5_replay_strategy.md` → `6_next_steps.md` → `7_elite_replay_eda.md`.
 - `replays/` — gitignored raw episode JSON; `replays/analysis/` derived
   summaries are small enough to keep in git when they document a real
   finding (mirrors master doc §8's "lightweight artifacts only" rule).
@@ -42,7 +43,7 @@ PPO-trained policy — must share exactly one correct implementation.
 Reimplementing this per agent version risks silent divergence between what
 an agent *thinks* is true and what the environment actually does.
 
-**`notebooks/` for platform verification only, added 2026-08-01.** This
+**`notebooks/` platform-verification exception, added 2026-08-01.** This
 repo is otherwise code-first (§1) — but Kaggle's execution environment
 can't be verified without running actual code on Kaggle's own
 infrastructure, and this project's local dev dependency (`kaggle-
@@ -55,6 +56,16 @@ balance differences, not just a version-number bump). `notebooks/
 00_platform_smoke_test.ipynb` + `notebooks/kernels/platform_smoke_test/`
 exist solely for this kind of platform check — not to become the
 executable source of truth for agent development.
+
+**Analysis-only replay EDA notebook, added 2026-08-02.**
+`notebooks/02_elite_replay_eda.ipynb` is a second narrow notebook exception:
+it may import pandas/matplotlib/seaborn, read the tracked
+`replays/analysis/elite_*.csv` tables, reshape them for plots, and render
+figures. It must not retrieve artifacts, normalize or split trajectories,
+evaluate compatibility, compute replay metrics, repair actions, or implement
+policy logic. Tested library code and `scripts/build_elite_eda.py` remain the
+source of truth; an empty plot is preferable to manufacturing a measurement
+from notebook-authored prose.
 
 See the design doc §6 for the original reasoning behind both exceptions.
 
