@@ -715,3 +715,34 @@ resolved, `task_teacher_v2` legitimately promoted to
 technical work is the two BC-teacher-readiness measurements
 (`docs/6_next_steps.md` items 14-15) before any BC trajectory collection,
 independent of `task_teacher_v3` scoping.
+
+## 22. BC-Teacher-Readiness Measurements — 2026-08-02
+
+Both measurements Codex's §16 items 4-5 requested are complete; full
+numbers in `docs/4_agent_version_log.md` and `docs/6_next_steps.md`
+items 14-15.
+
+**Assignment-quality gap:** `tasking.joint_assign`'s exhaustive-search
+scoring was factored into a new `_exhaustive_assign` function (pure
+refactor — no behavior change, all 232 tests stayed green) so it could be
+invoked directly on real 5+-unit states past `MAX_EXHAUSTIVE_UNITS`.
+Across 1086 real states, the greedy fallback almost never picks the exact
+same assignment as the true optimum (6.8% exact match) but achieves
+identical tier-coverage and expected-value scores every time — the entire
+gap is extra travel distance (mean 3.089 tiles/turn). This is reassuring
+for BC purposes and argues against urgency on a smarter bounded algorithm.
+
+**Hiring-constant calibration:** real measurements show `TRAVEL_ALLOWANCE`
+(assumed 4) and `AVERAGE_VALUE_PER_RECOVERED_ACTION` (assumed $15.0) are
+both substantially underestimated (measured means ~7.51 and ~$65.26
+respectively — roughly 1.9x and 4.3x higher). `END_OF_DAY_RESERVE`
+(assumed 2, measured mean 1.23) is roughly in range on average despite
+high per-day variance.
+
+**Disposition:** these are real, measured discrepancies, but recalibrating
+either constant would change `should_hire`'s actual firing behavior on an
+already-promoted `competitive_champion`, requiring its own full
+fix-test-reevaluate cycle (acceptance gate + paired evaluation), not a
+silent constant edit. Not acted on yet — deferred pending an explicit
+decision on whether to spend that cycle now or treat this as informational
+until BC scoping.

@@ -265,7 +265,7 @@ def _greedy_assign(
     return assignment
 
 
-def joint_assign(
+def _exhaustive_assign(
     unit_positions: list[tuple[int, int]],
     tasks: list[Task],
     current_assignments: dict[int, TaskId],
@@ -287,14 +287,12 @@ def joint_assign(
     dominates distance), even when a later unit is better positioned for
     it — see `docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md`.
 
-    Falls back to `_greedy_assign` (fast, not joint-optimal) if there are
-    more than `MAX_EXHAUSTIVE_UNITS` units, since exhaustive search over
-    `(max_candidates_per_unit + 1) ** len(unit_positions)` combinations
-    becomes impractically slow well before that.
+    Factored out of `joint_assign` (which applies the `MAX_EXHAUSTIVE_UNITS`
+    production cap) so offline measurement tooling can invoke exhaustive
+    search directly on larger unit counts to quantify the greedy fallback's
+    quality gap (`docs/6_next_steps.md` item 15) -- exponential cost is
+    acceptable for that one-off analysis even though it's too slow per-turn.
     """
-    if len(unit_positions) > MAX_EXHAUSTIVE_UNITS:
-        return _greedy_assign(unit_positions, tasks, current_assignments)
-
     task_by_id = {t.task_id: t for t in tasks}
     n_tiers = len(PriorityTier)
 
@@ -333,6 +331,24 @@ def joint_assign(
             best_combo = combo
 
     return dict(enumerate(best_combo))
+
+
+def joint_assign(
+    unit_positions: list[tuple[int, int]],
+    tasks: list[Task],
+    current_assignments: dict[int, TaskId],
+    max_candidates_per_unit: int = MAX_CANDIDATES_PER_UNIT,
+) -> dict[int, TaskId | None]:
+    """Bounded exhaustive joint assignment across units (farmer + hands),
+    falling back to `_greedy_assign` (fast, not joint-optimal) if there are
+    more than `MAX_EXHAUSTIVE_UNITS` units, since exhaustive search over
+    `(max_candidates_per_unit + 1) ** len(unit_positions)` combinations
+    becomes impractically slow well before that. See `_exhaustive_assign`
+    for the scoring objective.
+    """
+    if len(unit_positions) > MAX_EXHAUSTIVE_UNITS:
+        return _greedy_assign(unit_positions, tasks, current_assignments)
+    return _exhaustive_assign(unit_positions, tasks, current_assignments, max_candidates_per_unit)
 
 
 @dataclass(frozen=True)

@@ -539,3 +539,38 @@ available, and outcome/lesson.
   end-of-day fix because none of them happened to involve a `PLANT` task,
   only `WATER`, so the gap in scope went untested rather than
   deliberately excluded.
+
+- **BC-teacher-readiness measurements (2026-08-02)**, per Codex's §16
+  items 4-5 (`docs/6_next_steps.md` items 14-15) — not promotion gates,
+  but measured before treating v2's output as imitation-learning ground
+  truth:
+  1. **Assignment-quality gap, exhaustive vs. greedy fallback** (30
+     episodes, seeds 20000–20029; `tasking.joint_assign`'s exhaustive
+     search factored out into `_exhaustive_assign` so it could be invoked
+     directly on real 5+-unit states past `MAX_EXHAUSTIVE_UNITS`, purely
+     for this offline measurement — a pure refactor, all 232 tests stayed
+     green throughout): 1086 real states captured. The greedy fallback
+     matched the exact exhaustive-optimal assignment only 74/1086 (6.8%)
+     of the time, but tier-coverage loss and expected-value loss vs.
+     optimum were both exactly zero on every single state — the entire
+     measured gap is extra travel distance (mean 3.089 tiles/turn, max
+     17). Reassuring: BC from v2 would not learn a systematically worse
+     *economic* policy from the fallback, only a somewhat less
+     travel-efficient one.
+  2. **Hiring-constant calibration** (20 episodes, seeds 21000–21019):
+     `TRAVEL_ALLOWANCE` (assumed 4) measured mean 7.51 turns/unit/day (max
+     19) — corroborated independently by measurement 1's extra-travel
+     finding. `END_OF_DAY_RESERVE` (assumed 2) measured mean 1.23
+     turns/unit/day (max 21, high variance). `AVERAGE_VALUE_PER_RECOVERED_ACTION`
+     (assumed $15.0) measured mean $65.26/field-action (range
+     [$57.86, $72.17] across episodes) — real net money change per
+     `WATER`/`PLANT`/`HARVEST`/`DIG` action, avoiding any need to
+     reconstruct per-order sale pricing. `TRAVEL_ALLOWANCE` and
+     `AVERAGE_VALUE_PER_RECOVERED_ACTION` are both substantially
+     underestimated (~1.9x and ~4.3x respectively) versus real play.
+  - **Not yet acted on:** recalibrating either constant changes
+    `should_hire`'s real firing rate on an already-promoted champion,
+    requiring its own fix-test-reevaluate cycle (full acceptance gate +
+    paired evaluation vs. `task_teacher_v1`/`roi_teacher_v3`/`starter`),
+    not a silent edit. Deferred pending an explicit decision on whether to
+    spend that cycle now.

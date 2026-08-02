@@ -92,26 +92,49 @@ status audit).
     `docs/2_environment_notes.md`); policy-inference and training steps/sec
     at multiple parallel-env counts, and checkpoint write/load time, are not
     yet measured — needed before any BC/PPO evaluation-size commitment.
-14. **Measurement gate before selecting v2 as the BC teacher: calibrate
-    `tasking.py`'s hiring constants from real data** (Codex's 2026-08-02
-    §16 item 4) — `TRAVEL_ALLOWANCE`/`END_OF_DAY_RESERVE` (service-capacity
-    check), `AVERAGE_VALUE_PER_RECOVERED_ACTION` (hiring value estimate)
-    are all still initial estimates, per the "measure before fixing the
-    number" discipline. Roughly 71.6 `HIRE` orders/episode and a five-hand
-    maximum may be economically rational for real daily field work, but
-    that hasn't been empirically justified yet — `task_teacher_v2` now
-    produces real hiring/load data to calibrate against. Not a promotion
+14. ~~Measurement gate before selecting v2 as the BC teacher: calibrate
+    `tasking.py`'s hiring constants from real data~~ (Codex's 2026-08-02
+    §16 item 4) — **measured 2026-08-02** (20 episodes, seeds 21000–21019,
+    `task_teacher_v2` vs. `starter`):
+
+    | Constant | Assumed | Measured | |
+    | --- | ---: | --- | --- |
+    | `TRAVEL_ALLOWANCE` | 4 | mean 7.51/unit/day, max 19 | ~1.9x higher |
+    | `END_OF_DAY_RESERVE` | 2 | mean 1.23/unit/day, max 21 | roughly in range on average, high variance |
+    | `AVERAGE_VALUE_PER_RECOVERED_ACTION` | 15.0 | mean $65.26/action, range [$57.86, $72.17] | ~4.3x higher |
+
+    `TRAVEL_ALLOWANCE` and `AVERAGE_VALUE_PER_RECOVERED_ACTION` are both
+    substantially underestimated versus real play. `TRAVEL_ALLOWANCE`'s gap
+    is corroborated independently by item 15's measurement below (greedy
+    fallback travels ~3 extra tiles/turn versus optimal — travel really
+    is a bigger real cost than assumed). Recalibrating either constant
+    changes `should_hire`'s real firing rate on an already-promoted
+    champion, so it needs its own fix-test-reevaluate cycle (full
+    acceptance gate + paired evaluation), not a silent edit — **deferred
+    pending an explicit decision on whether to spend that cycle now or
+    treat this as informational until BC scoping**. Not a promotion
     blocker; a BC-teacher-readiness gate.
-15. **Measurement gate before selecting v2 as the BC teacher: quantify the
-    exhaustive-vs-greedy assignment-quality gap** (Codex's 2026-08-02 §16
-    item 5) — the greedy fallback (past `MAX_EXHAUSTIVE_UNITS = 4`, still
-    4) is fast but not joint-optimal, and v2 regularly operates in fallback
-    territory (average episode-level peak of 5.0 hands, range 4-5, per the
-    refreshed acceptance-gate measurement, down from an earlier, pre-fix
-    7-8). Behavioral cloning
-    would otherwise reproduce fallback behavior whose approximation error
-    versus true joint-optimal assignment is currently unmeasured. Worth
-    profiling on representative states before BC collection, and separately
-    whether a smarter bounded algorithm could extend joint-optimal behavior
-    to more units without the combinatorial cost, if v3+'s profile shows
-    this matters. Not a promotion blocker; a BC-teacher-readiness gate.
+15. ~~Measurement gate before selecting v2 as the BC teacher: quantify the
+    exhaustive-vs-greedy assignment-quality gap~~ (Codex's 2026-08-02 §16
+    item 5) — **measured 2026-08-02** (30 episodes, seeds 20000–20029,
+    1086 real states with >4 units captured, each compared against the
+    true exhaustive optimum via the newly-factored-out
+    `tasking._exhaustive_assign`):
+
+    | Metric | Result |
+    | --- | --- |
+    | Exact match with exhaustive optimum | 74/1086 (6.8%) |
+    | Tier-coverage loss vs. optimum | mean 0.000, max 0 |
+    | Expected-value loss vs. optimum | mean $0.000, max $0.0 |
+    | Extra travel distance vs. optimum | mean 3.089 tiles/turn, max 17 |
+
+    The greedy fallback almost never picks the *exact* exhaustive-optimal
+    assignment, but achieves **identical** priority-tier coverage and
+    expected value every single time — the entire measured gap is extra
+    travel distance, not lost economic coverage. This is a reassuring
+    result: behavioral cloning from v2 wouldn't be learning a
+    systematically worse economic policy from the fallback, just a
+    somewhat less travel-efficient one. Worth revisiting if v3+ adds units
+    where travel cost compounds further. Not a promotion blocker; a
+    BC-teacher-readiness gate, and this item's finding argues *against*
+    urgency on a smarter bounded algorithm.
