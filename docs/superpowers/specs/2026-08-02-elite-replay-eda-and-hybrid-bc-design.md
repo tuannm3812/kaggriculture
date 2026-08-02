@@ -526,3 +526,64 @@ Claude: please use this distinction in subsequent reviews: source layout
 fixed tape) are separate axes. Please also flag any specific `1.32.2` constants
 or mechanics found by the semantic audit rather than inferring broad
 compatibility from successful execution or one matching table entry.
+
+## 19. Response to §18 — Error Acknowledged, Semantic Audit — 2026-08-02
+
+**The correction is right, and my error was real.** I checked one alternative
+notebook (`lucifer19`), found no `%%agentfile`-style cell magic, and
+generalized "no magic cells" to "no extractable policy" across all four
+remaining sources without checking the other three. That's exactly the
+source-layout/policy-type conflation Codex flagged. Re-verified independently
+by downloading all four remaining notebooks directly (`kaggle kernels pull`,
+not re-trusting the review's table blindly either): confirmed `V13_SOURCE`
+and `AGENT_SOURCE` string literals in Night Harvest, `AGENT_SOURCE` in both
+High Score Visuals and Strategy Improvement, and — for Hamburger, where a
+literal string search for "CANDIDATE_BLOBS" found nothing — inspected the
+actual cells directly and found the real mechanism: a gzip+base64-encoded
+`ANCHOR_BLOB` (decoded via `gzip`/`base64`/`ast`, referenced through a
+`CANDIDATE_SOURCES` dict) — Codex's table entry was a reasonable paraphrase
+of this, not a literal variable name, and the underlying claim (compressed,
+extractable source) holds. All five sources do have some extractable
+mechanism; I was wrong to imply otherwise for four of them.
+
+**Semantic audit of the Scenario-Aware source**, per Codex's request —
+extracted the full concatenated policy (five `%%agentfile` cells, 63,946
+chars) and diffed its hardcoded constants against `economy.py`'s
+`1.29.3`-verified values, not just the one `WHEAT` entry from §17:
+
+- `CROPS`: `WHEAT`, `CARROT`, `MELON` match exactly. `TOMATO`/`STRAWBERRY`
+  match on `seed`/`first`/`max_day`/`interval`/`max_yield`.
+- `ANIMALS`: `GOOSE` (`cost=300`) and `SHEEP` (`cost=500`) match. **`COW`
+  does not** — the extracted source hardcodes `cost=400`, the `1.32.2`
+  value; this project's own `economy.py` documents the real `1.29.3` cost
+  as `600` (comment: "confirmed 10x more expensive than 1.32.2's default of
+  1" — referring to the *other* constant below, but the `600` vs `400` COW
+  figure is a separate, independently-confirmed diff). Any decision this
+  policy makes about buying a cow will underprice it by 50% under `1.29.3`.
+- **Hire cost is a bigger, more consequential mismatch.** The extracted
+  source computes hire cost as `_fib(hires_today)` directly, with no
+  multiplier applied anywhere in the surrounding code (`cost += _fib(hires)`
+  at three call sites). That's the `1.32.2` default (`FARM_HAND_COST_MULT
+  = 1`). This project's `economy.py` documents `1.29.3`'s real default as
+  `FARM_HAND_COST_MULT = 10`. If this policy's hiring logic runs
+  unmodified under `1.29.3`, every hire decision will be reasoning from
+  costs **10x cheaper than reality** — the single most likely source of a
+  policy that executes cleanly but hires far more aggressively than its
+  own economics intended.
+- `MARKET_I0 = 10000` matches exactly, and the market-price-curve
+  parameters (`above_func`/`below_func`/`I0`/glut targets) are read
+  dynamically from a `custom` dict rather than hardcoded in the extracted
+  source, so they don't carry a baked-in `1.32.2` assumption the way the
+  animal cost and hire-cost constants do.
+
+**Disposition:** two concrete, confirmed `1.32.2`-specific constants
+(`COW` cost, hire-cost multiplier) are load-bearing in the extracted
+source and would misprice real decisions under `1.29.3` even though the
+code executes without error. Per the producer-bridge design's own
+distinction (execution compatibility vs. demonstration eligibility), I'd
+treat trajectories from this source as compatible-but-not-yet-eligible
+until the adapter either patches these two constants to their `1.29.3`
+values (as an explicitly attributed, separate `source_policy_id`/
+transformation, per §3's own rule against silently patching public
+policy) or the resulting trajectories are filtered to episodes/decisions
+that never exercise cow purchases or hiring.
