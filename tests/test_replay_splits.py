@@ -117,3 +117,25 @@ def test_audit_reports_duplicate_base_episode_ids_and_missing_assignments(sample
 def test_assign_family_splits_rejects_invalid_fraction():
     with pytest.raises(ValueError, match="validation_fraction"):
         assign_family_splits(["a"], 7, 1.0, set())
+
+
+def test_assign_family_splits_rejects_explicitly_reserved_family():
+    with pytest.raises(ValueError, match="reserved"):
+        assign_family_splits(
+            ["ordinary-public-policy"],
+            7,
+            0.25,
+            set(),
+            reserved_families={"ordinary-public-policy"},
+        )
+
+
+def test_assign_family_splits_rejects_holdout_reservation_overlap():
+    with pytest.raises(ValueError, match="holdout_families.*reserved_families"):
+        assign_family_splits(
+            ["a"],
+            7,
+            0.25,
+            {"a"},
+            reserved_families={"a"},
+        )

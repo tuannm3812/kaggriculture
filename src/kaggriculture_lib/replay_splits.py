@@ -72,7 +72,6 @@ class LeakageReport:
 
 
 _BASE_EPISODE = re.compile(r"^(\d+)(?:[-_:].*)?$")
-_RESERVED_COMPETITIVE_PREFIXES = ("competitive-test", "competitive_test")
 
 
 def _family_fraction(seed: int, family: str) -> float:
@@ -86,16 +85,13 @@ def _base_episode_id(episode_id: str) -> str:
     return match.group(1) if match else episode_id
 
 
-def _is_competitive_reservation(family: str) -> bool:
-    normalized = family.lower()
-    return any(normalized == prefix or normalized.startswith(f"{prefix}:") for prefix in _RESERVED_COMPETITIVE_PREFIXES)
-
-
 def assign_family_splits(
     families: Sequence[str],
     seed: int,
     validation_fraction: float,
     holdout_families: AbstractSet[str],
+    *,
+    reserved_families: AbstractSet[str] = frozenset(),
 ) -> SplitAssignment:
     """Assign each unique source family to one non-competitive training split."""
     if isinstance(seed, bool) or not isinstance(seed, int):
@@ -106,11 +102,19 @@ def assign_family_splits(
         raise ValueError("families must contain non-empty strings")
     if any(not isinstance(family, str) or not family for family in holdout_families):
         raise ValueError("holdout_families must contain non-empty strings")
+    if any(not isinstance(family, str) or not family for family in reserved_families):
+        raise ValueError("reserved_families must contain non-empty strings")
+    overlap = sorted(holdout_families & reserved_families)
+    if overlap:
+        raise ValueError(
+            "holdout_families and reserved_families must not overlap: "
+            + ", ".join(overlap)
+        )
 
     unique_families = set(families)
-    reserved = sorted(family for family in unique_families if _is_competitive_reservation(family))
+    reserved = sorted(unique_families & reserved_families)
     if reserved:
-        raise ValueError(f"competitive-test families are externally reserved: {', '.join(reserved)}")
+        raise ValueError(f"reserved families cannot be split: {', '.join(reserved)}")
 
     return {
         family: (
