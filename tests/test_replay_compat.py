@@ -1,4 +1,5 @@
 import csv
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
@@ -152,6 +153,31 @@ def test_validation_cli_admits_complete_pinned_decision_tape(tmp_path):
     assert row["final_bank_0"] == "2100.0"
     assert len(row["action_sha256"]) == 64
     assert quarantine_rows == []
+
+
+def test_record_evaluation_requires_terminal_evidence():
+    from scripts.validate_public_replays import _evaluate_records
+
+    records = [_pass_record(step) for step in range(719)]
+    records[-1] = replace(records[-1], terminal_result=None, final_banks=None)
+    row = _evaluate_records(_artifact(), records)
+    assert row["eligible"] == "false"
+    assert "incomplete_game" in row["reason_codes"].split(";")
+
+
+def test_record_evaluation_rejects_spliced_episode_provenance():
+    from scripts.validate_public_replays import _evaluate_records
+
+    records = [_pass_record(step) for step in range(719)]
+    records[300] = replace(
+        records[300],
+        opponent_family="different-opponent",
+        configuration={"seed": 99},
+        observation={"farms": [{"hands": []}, {"hands": []}], "player": 1},
+    )
+    row = _evaluate_records(_artifact(), records)
+    assert row["eligible"] == "false"
+    assert "unreproducible_source" in row["reason_codes"].split(";")
 
 
 def test_validation_cli_runs_directly_from_repository_root():

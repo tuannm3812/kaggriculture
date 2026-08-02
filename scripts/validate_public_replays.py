@@ -114,14 +114,28 @@ def _evaluate_records(artifact: PublicArtifact, records: Sequence[DecisionRecord
         for record in records
     )
     seats = {record.seat for record in records}
-    if not records or not identity_matches or len(seats) != 1:
+    first_configuration = records[0].configuration if records else None
+    first_opponent = records[0].opponent_family if records else None
+    provenance_consistent = all(
+        record.configuration == first_configuration
+        and record.opponent_family == first_opponent
+        and record.observation.get("player") == record.seat
+        for record in records
+    )
+    if not records or not identity_matches or len(seats) != 1 or not provenance_consistent:
         reasons.append("unreproducible_source")
 
     complete_steps = [record.step for record in records] == list(range(EXPECTED_ACTION_CALLS))
+    terminal_evidence = bool(
+        records
+        and records[-1].terminal_result
+        and records[-1].final_banks is not None
+    )
     incomplete = (
         len(records) != EXPECTED_ACTION_CALLS
         or not complete_steps
         or any(not record.completeness_ok for record in records)
+        or not terminal_evidence
     )
     status = "INCOMPLETE" if incomplete else "DONE"
     if incomplete:
