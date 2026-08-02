@@ -127,6 +127,8 @@ class DecisionRecord:
         repaired = self.action_origin is ActionOrigin.PUBLIC_REPAIRED
         if repaired and (self.original_action is None or self.repair_reason is None):
             raise ValueError("repair fields are required for public_repaired actions")
+        if repaired and self.original_action == self.action:
+            raise ValueError("repaired action must differ from original_action")
         if not repaired and (self.original_action is not None or self.repair_reason is not None):
             raise ValueError("repair fields are only allowed for public_repaired actions")
         if self.original_action is not None and not isinstance(self.original_action, NormalizedAction):

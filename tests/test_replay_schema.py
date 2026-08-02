@@ -65,6 +65,16 @@ def test_repaired_record_keeps_original_and_reason(sample_record):
     assert repaired.repair_reason == "seed unavailable"
 
 
+def test_repaired_record_rejects_unchanged_action(sample_record):
+    with pytest.raises(ValueError, match="repaired action must differ from original_action"):
+        replace(
+            sample_record,
+            action_origin=ActionOrigin.PUBLIC_REPAIRED,
+            original_action=sample_record.action,
+            repair_reason="seed unavailable",
+        )
+
+
 def test_jsonl_round_trip_is_lossless(tmp_path: Path, sample_record):
     path = tmp_path / "decisions.jsonl"
     write_decisions([sample_record], path)
