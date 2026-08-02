@@ -173,3 +173,22 @@ def test_hoeffding_ci_rejects_invalid_confidence(bad_confidence):
 def test_hoeffding_ci_rejects_invalid_max_looks(bad_max_looks):
     with pytest.raises(ValueError):
         run_tournament.hoeffding_ci([1.0, 0.5], max_looks=bad_max_looks)
+
+
+# --- defensive validation (Codex's 2026-08-02 §14.2 hardening request) -----
+# run_pair() currently only ever produces scores in {0, 0.5, 1}, so this
+# doesn't affect any reported promotion result -- but hoeffding_ci is
+# permanent shared infrastructure other callers may use later, so it should
+# fail clearly rather than silently produce a nonsense interval.
+
+
+@pytest.mark.parametrize("bad_score", [float("nan"), float("inf"), float("-inf")])
+def test_hoeffding_ci_rejects_non_finite_scores(bad_score):
+    with pytest.raises(ValueError):
+        run_tournament.hoeffding_ci([1.0, bad_score])
+
+
+@pytest.mark.parametrize("bad_score", [-0.1, 1.1, -1.0, 2.0])
+def test_hoeffding_ci_rejects_out_of_range_scores(bad_score):
+    with pytest.raises(ValueError):
+        run_tournament.hoeffding_ci([1.0, bad_score])

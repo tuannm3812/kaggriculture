@@ -53,21 +53,36 @@ def _reset_if_new_episode(state: TeacherState, step: int) -> None:
     state.previous_step = step
 
 
-def _count_immediately_completing_tasks(unit_positions, assignment, task_by_id) -> int:
-    """Count assigned units already standing on their task's tile.
+def _count_immediately_completing_tasks(unit_positions, assignment, task_by_id, seeds_remaining) -> int:
+    """Count assigned units already standing on their task's tile whose
+    action will actually resolve this turn.
 
     Those units emit the field action (not movement) this turn, so that
     task resolves regardless of any hiring decision -- it must not also
     count as still-outstanding load when sizing whether a new hire is
-    justified.
+    justified. WATER and HARVEST always resolve when on-target (generated
+    tasks are already legality-filtered). PLANT only resolves if a
+    matching seed is held -- mirroring `resolve_unit_action`'s own check --
+    otherwise it emits PASS and queues a deferred BUY_SEED, completing
+    nothing. Seed availability is consumed from a local copy in the same
+    farmer-then-hands order `resolve_unit_action` uses, so two on-target
+    PLANT assignments sharing one scarce seed aren't both counted.
     """
+    available_seeds = dict(seeds_remaining)
     count = 0
-    for unit_idx, task_id in assignment.items():
+    for unit_idx in sorted(assignment):
+        task_id = assignment[unit_idx]
         if task_id is None or task_id.kind not in (TaskKind.WATER, TaskKind.PLANT, TaskKind.HARVEST):
             continue
         task = task_by_id.get(task_id)
-        if task is not None and unit_positions[unit_idx] == task.target:
-            count += 1
+        if task is None or unit_positions[unit_idx] != task.target:
+            continue
+        if task_id.kind == TaskKind.PLANT:
+            crop = task_id.item
+            if available_seeds.get(crop, 0) <= 0:
+                continue
+            available_seeds[crop] -= 1
+        count += 1
     return count
 
 
@@ -118,7 +133,9 @@ def agent(obs, config=None):
     # either. See docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md
     # §12.1.
     future_action_turns = max(0, turns_per_day - hour - 1)
-    immediately_completing = _count_immediately_completing_tasks(unit_positions, assignment, task_by_id)
+    immediately_completing = _count_immediately_completing_tasks(
+        unit_positions, assignment, task_by_id, private["seeds"]
+    )
     future_load = max(0, load - immediately_completing)
 
     available_money = me["money"]

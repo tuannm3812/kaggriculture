@@ -464,6 +464,47 @@ available, and outcome/lesson.
   corrected, non-degenerate confidence interval. Per Codex's §12.3
   disposition, promotion was treated as provisional until this
   re-measurement confirmed the lower bound above 0.50 — it does.
+
+- **Codex verification round, third pass (2026-08-02):** Codex
+  independently verified the §12 fixes above (confirmed correct) and found
+  one further narrow defect (see `2026-08-01-task-teacher-v2-design.md`
+  §14), verified before acting on it: `_count_immediately_completing_tasks`
+  counted any on-target `PLANT`/`WATER`/`HARVEST` assignment as completing
+  this turn, but `resolve_unit_action` only actually plants when a matching
+  seed is held — otherwise it emits `PASS` and queues a deferred
+  `BUY_SEED`, completing nothing. Reproduced directly: an on-target `PLANT
+  MELON` assignment with zero held `MELON` seeds was still counted,
+  understating `future_load` by one and able to suppress a marginally
+  justified hire.
+- **Fix (2026-08-02):** `_count_immediately_completing_tasks` now takes
+  `seeds_remaining` and only counts an on-target `PLANT` when its crop's
+  count is positive, consuming a local copy in farmer-then-hands order (the
+  same order `resolve_unit_action` consumes the real one) so two on-target
+  `PLANT` assignments sharing one scarce seed aren't both counted;
+  `WATER`/`HARVEST` are unaffected (generated tasks are already
+  legality-filtered, no consumable resource involved). Built test-first:
+  four direct unit tests (zero seed excludes; one matching seed includes;
+  two on-target assignments sharing one seed count once, not twice; seed
+  counts are independent per crop) plus one agent-level boundary test
+  tuned so incorrectly crediting a seedless `PLANT` would suppress a hire
+  that correctly excluding it still justifies. Also hardened `hoeffding_ci`
+  per Codex's §14.2 request: rejects non-finite or out-of-[0,1] pair
+  scores with a clear `ValueError` (defensive, since `run_pair` currently
+  only ever produces `{0, 0.5, 1}` — doesn't change any reported result,
+  but the function is shared infrastructure other callers may use later).
+- **Refreshed telemetry, per §14.3's disposition** ("escalate to the full
+  promotion rerun only if behavior or screen results change materially;
+  otherwise record equivalence and retain the existing promotion
+  evidence"): 100-episode acceptance gate (100/100 `DONE`/finite,
+  deterministic, avg 5.0 max hands and avg 71.6 `HIRE` orders — both
+  essentially unchanged from the prior round's 4.9/70.4) and a 20-pair
+  screen vs. `task_teacher_v1` (0.950 win rate, Hoeffding CI
+  `[0.570, 1.000]` — a one-pair difference from the prior round's 1.000,
+  well within ordinary seed-to-seed variance given a different seed was
+  used, not a behavior change). Neither is materially different from the
+  prior round; **the existing 50-pair promotion evidence
+  (CI `[0.730, 1.000]`) is retained rather than re-run**, per Codex's own
+  stated criterion.
 - **Packaging:** re-verified standalone (`PYTHONPATH` stripped) after the
   performance fix; all four existing agents (`roi_teacher_v1-v3`,
   `task_teacher_v1`) re-packaged and re-verified alongside it.
@@ -489,4 +530,11 @@ available, and outcome/lesson.
   be CPU contention from running two full-simulation background jobs
   concurrently, not a code regression — confirmed by re-measuring in
   isolation before investigating the application code, rather than
-  assuming the worst from the first number seen.
+  assuming the worst from the first number seen. And a sixth, from the
+  third review round: a helper that mirrors another function's real
+  behavior (`resolve_unit_action`'s seed check) needs to mirror *all* of
+  it, not just the part that was top of mind (on-target-ness) — the
+  seedless-`PLANT` gap wasn't caught by the tests written for the
+  end-of-day fix because none of them happened to involve a `PLANT` task,
+  only `WATER`, so the gap in scope went untested rather than
+  deliberately excluded.

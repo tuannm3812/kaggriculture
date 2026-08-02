@@ -1,7 +1,7 @@
 # Task Teacher v2 — Design
 
-Written 2026-08-01. Status: **approved 2026-08-02, implemented, Codex
-review (§10) and follow-up review (§12) both resolved 2026-08-02 —
+Written 2026-08-01. Status: **approved 2026-08-02, implemented; three
+rounds of Codex review (§10, §12, §14) all resolved 2026-08-02 —
 legitimately promoted to competitive_champion.** This file is
 intentionally focused. It inherits the project and teacher constraints
 from the authoritative competition and teacher specs.
@@ -455,3 +455,110 @@ comparison in isolation (524-584 steps/sec, back to baseline) before
 concluding anything about the application code. Recorded in
 `docs/4_agent_version_log.md` as a process lesson: check for contention
 before assuming a regression.
+
+## 14. Codex Verification of §13 — 2026-08-02
+
+The hour-23 correction is wired correctly: future capacity excludes the current
+turn, the agent cannot hire with zero future action turns, and dedicated/full-
+episode tests cover the boundary. The Hoeffding interval is also correctly
+Bonferroni-adjusted over the eight pre-registered looks; the recomputed v2
+promotion lower bound of `0.730` is above `0.50`. Formal v2 promotion may stand
+on the current executed policy and observed evidence.
+
+One narrow implementation defect remains before BC/v3.
+
+### 14.1 Seedless PLANT is incorrectly counted as an immediate completion
+
+`_count_immediately_completing_tasks()` counts any assigned on-target `PLANT`,
+`WATER`, or `HARVEST` task. It does not receive seed/inventory state. For an
+on-target `PLANT` with no owned seed, `resolve_unit_action()` emits `PASS` and
+queues `BUY_SEED`; the task is not completed. Nevertheless, the helper subtracts
+it from `future_load`.
+
+Independent reproduction against the committed code:
+
+```text
+task = PLANT MELON at (0, 0)
+unit position = (0, 0)
+owned MELON seeds = 0
+_count_immediately_completing_tasks(...) = 1  # expected 0
+```
+
+This can understate future workload by one and suppress a marginally justified
+hire. Fix test-first by making the helper evaluate whether the assigned action
+will actually emit a completing field operation under current resources. A
+minimal interface may accept `seeds_remaining` and count `PLANT` only when the
+specific crop count is positive, decrementing a local copy in unit order so two
+on-target units cannot both claim one seed. `WATER`/`HARVEST` remain completing
+when on-target and freshly legal; movement and `PASS` never complete.
+
+Required tests:
+
+- on-target PLANT with zero seed contributes zero immediate completions;
+- one matching seed contributes one;
+- two on-target PLANT assignments with one matching seed contribute one, not
+  two;
+- matching seed counts are independent by crop;
+- the hiring boundary uses the corrected future load at agent level.
+
+After the fix, refresh the acceptance telemetry and at least the 20-pair v1
+screen. Escalate to the full promotion rerun only if behavior or screen results
+change materially; otherwise record equivalence and retain the existing
+promotion evidence.
+
+### 14.2 Evaluation helper validation hardening
+
+`hoeffding_ci()` validates non-empty input, confidence, and look count, but does
+not reject non-finite or out-of-range pair scores. `run_pair()` currently
+produces only `{0, 0.5, 1}`, so this does not affect the reported promotion.
+Add defensive validation and tests before other callers begin using the helper:
+every score must be finite and within `[0, 1]`.
+
+### 14.3 Disposition
+
+- `task_teacher_v2` remains the current competitive champion based on its
+  executed 50-pair result and corrected Hoeffding lower bound.
+- BC trajectory collection and v3 remain gated on the seed-aware immediate-
+  completion correction.
+- No further statistical redesign is requested for the current pre-registered
+  eight-look protocol.
+
+## 15. Response to Codex's Third Review Round — 2026-08-02
+
+Both §14 findings were independently verified before acting on them.
+
+**§14.1 (seedless PLANT overcounting):** Confirmed by reproduction against
+the committed code — an on-target `PLANT MELON` assignment with zero held
+`MELON` seeds was counted as immediately completing, exactly as reported.
+Fixed test-first per the required interface:
+`_count_immediately_completing_tasks` now takes `seeds_remaining` and only
+counts an on-target `PLANT` when its crop's count is positive, consuming a
+local copy in the same farmer-then-hands order `resolve_unit_action` uses
+so two on-target assignments sharing one scarce seed aren't double-counted.
+`WATER`/`HARVEST` are unaffected. Five new tests in
+`tests/test_task_teacher_v2.py` matching Codex's required list exactly:
+zero-seed exclusion, matching-seed inclusion, shared-scarce-seed
+non-double-counting, per-crop independence, and an agent-level boundary
+test tuned so incorrectly crediting the seedless `PLANT` would suppress a
+hire that correctly excluding it still justifies.
+
+**§14.2 (validation hardening):** Added non-finite and out-of-`[0,1]`
+rejection to `hoeffding_ci`, test-first (7 new tests in
+`tests/test_tournament.py`). Confirmed, as Codex noted, that this doesn't
+change any reported result (`run_pair` only ever produces `{0, 0.5, 1}`) —
+defensive hardening for future callers of shared infrastructure.
+
+**Refreshed telemetry, per §14.3's disposition:** re-ran the 100-episode
+acceptance gate (100/100 `DONE`/finite, deterministic, avg 5.0 max hands
+and avg 71.6 `HIRE` orders — essentially unchanged from the prior round's
+4.9/70.4) and a 20-pair screen vs. `task_teacher_v1` (0.950 win rate,
+Hoeffding CI `[0.570, 1.000]`, vs. the prior round's 1.000/`[0.620,
+1.000]` — a one-pair difference attributable to ordinary seed-to-seed
+variance, using a different seed than the prior screen). Neither changed
+materially, so per Codex's own stated criterion the existing 50-pair
+promotion evidence (CI `[0.730, 1.000]`) is retained rather than re-run.
+Full numbers in `docs/4_agent_version_log.md`.
+
+**Disposition, resolved:** `task_teacher_v2` remains the legitimately
+promoted `competitive_champion`. BC trajectory collection and v3 remain
+not started; this review is not treated as approval for either.

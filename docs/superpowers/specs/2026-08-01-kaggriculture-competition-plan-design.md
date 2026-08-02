@@ -199,7 +199,7 @@ not a competition submission.
   0.50), plus regression screens vs. `roi_teacher_v3` and `starter`. An
   earlier "provisional champion" claim in this line was self-identified
   as premature (margin-based, incomplete evidence); see version ledger and
-  `2026-08-01-task-teacher-v2-design.md` §§10-13 for the full account.
+  `2026-08-01-task-teacher-v2-design.md` §§10-15 for the full account (a third review round found and fixed one further narrow bug in the same helper, a seedless-PLANT overcounting defect; the promotion conclusion is unchanged).
 - BC dataset v1: blocked on teacher action/state coverage.
 - PPO: blocked on BC and checkpoint/resume verification.
 - Competition submission: blocked on explicit user authorization.

@@ -129,6 +129,11 @@ def hoeffding_ci(
         raise ValueError("confidence must be in (0, 1)")
     if max_looks < 1:
         raise ValueError("max_looks must be >= 1")
+    for score in pair_scores:
+        if not math.isfinite(score):
+            raise ValueError(f"pair score must be finite, got {score!r}")
+        if not (0.0 <= score <= 1.0):
+            raise ValueError(f"pair score must be in [0, 1], got {score!r}")
     alpha_per_look = (1.0 - confidence) / max_looks
     mean = sum(pair_scores) / n
     epsilon = math.sqrt(math.log(2.0 / alpha_per_look) / (2 * n))

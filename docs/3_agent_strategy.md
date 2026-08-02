@@ -118,7 +118,11 @@ all-win samples. After fixing both, the full paired evaluation with a
 corrected Hoeffding confidence interval (`docs/4_agent_version_log.md`)
 gave a 50-pair promotion-gate CI of `[0.730, 1.000]` vs. `task_teacher_v1`
 — wholly above 0.50 — plus clean 20-pair regression sweeps vs.
-`roi_teacher_v3` and `starter`. This is a legitimate, rigorously-established
+`roi_teacher_v3` and `starter`. A third review round then found one
+further narrow defect in the same end-of-day fix's helper (a seedless
+`PLANT` counted as completing when it wouldn't actually resolve); fixed,
+and refreshed telemetry showed no material change, so the 50-pair
+evidence above stands. This is a legitimate, rigorously-established
 promotion, not a margin-based guess.
 
 ## Strategy Approach (unchanged from the design doc)

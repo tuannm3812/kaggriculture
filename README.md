@@ -11,19 +11,21 @@ test), economy math tested against the real simulator, and a series of
 agents have each beaten the last in local tournament play. Current local
 champion: **`task_teacher_v2`** — adds daily hiring and bounded exhaustive
 multi-unit assignment on top of `task_teacher_v1`'s multi-tile task
-scheduler. Two rounds of Codex review (2026-08-02) each caught a real,
+scheduler. Three rounds of Codex review (2026-08-02) each caught a real,
 confirmed bug before promotion was legitimate: (1) a hiring-value fix that
 was correct in the shared library but never actually passed to the running
-agent's hiring call, and (2) an end-of-day hiring-timing bug (a hire queued
+agent's hiring call, (2) an end-of-day hiring-timing bug (a hire queued
 on the day's last hour is guaranteed zero future actions before hands
 clear at the day boundary) plus a percentile-bootstrap confidence interval
-that degenerated to false `[1.000, 1.000]` certainty on all-win samples.
-After fixing both and re-running the full evidence gate with a corrected
+that degenerated to false `[1.000, 1.000]` certainty on all-win samples,
+and (3) a narrower defect in the same end-of-day fix's helper that counted
+a seedless `PLANT` as completing when it wouldn't actually resolve. After
+fixing all three and re-running the evidence gate with a corrected
 Hoeffding confidence interval — 100-episode acceptance run, then paired
 evaluation at 20 pairs (screen) and 50 pairs (promotion, 95% CI
 `[0.730, 1.000]`, wholly above 0.50) — `task_teacher_v2` is legitimately
 promoted. See `docs/4_agent_version_log.md` for full numbers and
-`docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md` §§10-13 for
+`docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md` §§10-15 for
 Codex's review and the response. Packaging (`scripts/package_agent.py`)
 is done and verified for every agent; not yet submitted to the ladder —
 see `docs/6_next_steps.md` for the current recommendation.

@@ -28,8 +28,13 @@ full paired evaluation, re-run with the corrected interval: 20-pair screen
 vs. `task_teacher_v1` (1.000 win rate, CI `[0.620, 1.000]`), then the
 50-pair promotion gate (0.970 win rate, CI `[0.730, 1.000]` — wholly above
 0.50), plus 20-pair regression screens vs. `roi_teacher_v3` and `starter`
-(both 1.000, CI `[0.620, 1.000]`). See `docs/4_agent_version_log.md` for
-full numbers.
+(both 1.000, CI `[0.620, 1.000]`). A third Codex review round then found
+one further narrow defect in the same helper (a seedless `PLANT` assignment
+was counted as completing this turn when it wouldn't actually resolve
+without a held seed); fixed test-first, and refreshed acceptance/screen
+telemetry showed no material change, so the 50-pair promotion evidence
+above stands unchanged. See `docs/4_agent_version_log.md` for full
+numbers.
 
 Still not submitted to the ladder — re-ask before submitting or continuing
 to delay, per the standing rule from earlier (design doc §9's execution-

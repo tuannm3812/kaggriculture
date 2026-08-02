@@ -153,7 +153,7 @@ Initial targets, recalibrated only with recorded evidence:
   confidence interval, gave a 50-pair promotion-gate CI of
   `[0.730, 1.000]` vs. v1 (wholly above 0.50) plus clean 20-pair
   regression sweeps vs. `roi_teacher_v3` and `starter` — see
-  `2026-08-01-task-teacher-v2-design.md` §§10-13 and the project version
+  `2026-08-01-task-teacher-v2-design.md` §§10-15 (a third review round fixed one further narrow bug, a seedless-PLANT overcounting defect in the same helper; conclusion unchanged) and the project version
   ledger for the full account, including the process lessons (win
   rate/outcomes decide promotion, not margin; a statistical tool that
   degenerates to false certainty is itself a bug). **Legitimately
