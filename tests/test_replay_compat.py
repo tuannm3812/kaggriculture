@@ -1,5 +1,6 @@
 import csv
 from dataclasses import replace
+from hashlib import sha256
 from pathlib import Path
 import subprocess
 import sys
@@ -84,6 +85,25 @@ def test_pass_tape_completes_both_seats_under_pinned_runtime():
 def test_runtime_rejects_boolean_seat():
     with pytest.raises(ValueError, match="seat"):
         run_tape_compatibility(lambda obs: {}, seed=31, seat=False)
+
+
+def test_runtime_reports_environment_construction_failure(monkeypatch):
+    def fail_construction(*args, **kwargs):
+        raise RuntimeError("environment unavailable")
+
+    monkeypatch.setattr("kaggriculture_lib.replay_compat.make", fail_construction)
+
+    report = run_tape_compatibility(lambda obs: {}, seed=31, seat=0)
+
+    assert report.status == "ERROR"
+    assert report.action_calls == 0
+    assert report.exception == "RuntimeError: environment unavailable"
+    assert report.issues == ()
+    assert report.final_banks is None
+    assert report.state_rewards is None
+    assert report.score is None
+    assert report.action_sha256 == sha256(b"").hexdigest()
+    assert report.eligible is False
 
 
 def test_validation_cli_quarantines_manifest_entry_without_episode(tmp_path):

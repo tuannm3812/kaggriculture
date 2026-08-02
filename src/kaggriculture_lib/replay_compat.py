@@ -298,8 +298,9 @@ def run_tape_compatibility(
 
     agents: list[Any] = [opponent, opponent]
     agents[seat] = recording_policy
-    env = make("kaggriculture", configuration={"seed": seed})
+    env = None
     try:
+        env = make("kaggriculture", configuration={"seed": seed})
         env.run(agents)
     except Exception as error:
         if captured_exception is None:
@@ -308,7 +309,7 @@ def run_tape_compatibility(
     status = "ERROR"
     final_banks: tuple[float, float] | None = None
     state_rewards: tuple[float | None, float | None] | None = None
-    if getattr(env, "state", None):
+    if env is not None and getattr(env, "state", None):
         status = str(env.state[seat].status)
         try:
             farms = env.state[0].observation.farms
