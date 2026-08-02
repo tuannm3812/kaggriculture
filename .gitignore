@@ -6,6 +6,10 @@ __pycache__/
 # Raw competition/game files and generated artifacts
 replays/**/*.json
 !replays/.gitkeep
+!replays/public/manifest.json
+replays/public/raw/
+replays/public/*.jsonl
+scripts/public_artifacts.json
 scratch/
 *.tar.gz
 kaggriculture.zip

@@ -1,0 +1,52 @@
+[
+  {
+    "declared_environment": "unknown",
+    "episode_id": "89256171",
+    "notebook_url": "https://www.kaggle.com/code/lucifer19/kaggriculture-night-harvest",
+    "owner": "lucifer19",
+    "retrieved_at": "2026-08-02T07:59:15.940588+00:00",
+    "sha256": "0f080d2e1ca347fc1669b3cc8606f03dde7ed858a283609ec1aad8a4ab3b4d1c",
+    "source_family": "radiant-89256171",
+    "source_policy_id": "lucifer19/night-harvest-v14"
+  },
+  {
+    "declared_environment": "1.32.2",
+    "episode_id": null,
+    "notebook_url": "https://www.kaggle.com/code/pilkwang/kaggriculture-scenario-aware-economic-policy",
+    "owner": "pilkwang",
+    "retrieved_at": "2026-08-02T07:59:15.940588+00:00",
+    "sha256": "90a4c491a283088c54536e7404a139eb7eb598965ec5776e0a2679a4975e23bb",
+    "source_family": "pilkwang-scenario-aware",
+    "source_policy_id": "pilkwang/scenario-aware-economic-policy"
+  },
+  {
+    "declared_environment": "1.32.2",
+    "episode_id": "89256171",
+    "notebook_url": "https://www.kaggle.com/code/prvsiyan/kaggriculture-frontier-lab-high-score-visuals",
+    "owner": "prvsiyan",
+    "retrieved_at": "2026-08-02T07:59:15.940588+00:00",
+    "sha256": "59c4b355ec31919e0fee76377242d7f427e43d6dad8ce6cc3cbb845ace28be25",
+    "source_family": "radiant-89256171",
+    "source_policy_id": "prvsiyan/frontier-v12"
+  },
+  {
+    "declared_environment": "1.32.2",
+    "episode_id": "89468208",
+    "notebook_url": "https://www.kaggle.com/code/prvsiyan/kaggle-frontier-lab-strategy-improvement",
+    "owner": "prvsiyan",
+    "retrieved_at": "2026-08-02T07:59:15.940588+00:00",
+    "sha256": "6f97dc5f650f61492c33ebea2e162b9cb4589e1389e899b654bdcc5d756d65b7",
+    "source_family": "radiant-89468208",
+    "source_policy_id": "prvsiyan/frontier-v3"
+  },
+  {
+    "declared_environment": "unknown",
+    "episode_id": null,
+    "notebook_url": "https://www.kaggle.com/code/romantamrazov/kaggriculture-hamburger",
+    "owner": "romantamrazov",
+    "retrieved_at": "2026-08-02T07:59:15.940588+00:00",
+    "sha256": "5784bb025c5d3e9612966ba5db5c0107ff06d56c29a47bc3d8e57c48edcea7af",
+    "source_family": "romantamrazov-hamburger",
+    "source_policy_id": "romantamrazov/hamburger"
+  }
+]
