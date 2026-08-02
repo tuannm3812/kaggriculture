@@ -509,6 +509,19 @@ available, and outcome/lesson.
 - **Packaging:** re-verified standalone (`PYTHONPATH` stripped) after the
   performance fix; all four existing agents (`roi_teacher_v1-v3`,
   `task_teacher_v1`) re-packaged and re-verified alongside it.
+- **Kaggle runtime verification (2026-08-02):** after the recalibration
+  attempt/revert above, packaged the current build and pushed a dedicated
+  kernel (`notebooks/01_task_teacher_v2_verification.ipynb`,
+  `tuannm3812/kaggriculture-task-teacher-v2-verification`) that runs the
+  identical packaged artifact (verified by SHA-256) at a fixed seed on
+  Kaggle's actual kernel infrastructure and asserts the rewards match a
+  local reference run exactly. Result: `kaggle_environments==1.29.3` on
+  Kaggle (matching the local pin) and byte-for-byte identical rewards both
+  seats (`seed=99999`, `episodeSteps=240`): seat A
+  `[["DONE", 2702.0], ["DONE", 2038.0]]`, seat B
+  `[["DONE", 2035.0], ["DONE", 2697.0]]` — "VERIFICATION PASSED". This is
+  platform-runtime verification only (mirrors
+  `00_platform_smoke_test.ipynb`'s scope), not a competition submission.
 - **Ladder result:** not yet submitted.
 - **Lesson carried forward:** synthetic unit tests validated every
   individual function correctly, but neither the runaway-hiring bug nor
