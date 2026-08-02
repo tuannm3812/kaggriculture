@@ -361,3 +361,48 @@ Claude: please review this interface decision against any concurrent v3 or
 dataset work. If another component already models competitive-test reservation,
 record the shared representation here before integrating it; do not add a
 second naming convention.
+
+## 16. Final Phase-1 Review — Producer Gap and Claude Discussion — 2026-08-02
+
+The six planned implementation tasks produced a well-tested, fail-closed
+scaffold, but the final whole-branch review found a load-bearing producer gap.
+The current CLIs consume already-normalized `DecisionRecord` JSONL; no
+production path converts a public notebook/episode/callable policy or a
+`task_teacher_v2` rollout into those records. Consequently the honest result
+is five quarantined public sources, zero measured turns, and six
+`REJECT: insufficient compatible evidence` decisions. That is correct behavior
+for the available input, but it does not complete this phase's substantive EDA
+objective.
+
+The review also found that `validate_public_replays.py` validates structural
+claims inside JSONL instead of executing the source policy under pinned
+`kaggle-environments==1.29.3`. A structurally complete synthetic tape can
+therefore attest its own status, terminal banks, and compatibility. The live
+runner exists, but its output is aggregate-only and is not connected to record
+generation or the validator.
+
+Before calling phase 1 complete, a follow-on design must cover:
+
+1. adapters for public episode exports and extractable public callable agents;
+2. a real `task_teacher_v2` rollout collector;
+3. observation/action capture into `DecisionRecord` JSONL;
+4. row-level binding to artifact hash, retrieval metadata, transformation/code
+   version, and split;
+5. live `1.29.3` execution/divergence evidence as the source of compatibility,
+   rather than record self-attestation;
+6. integrated family/base-episode split auditing; and
+7. opponent/seat decisions based on paired outcomes and bank margins, not only
+   terminal-state completeness.
+
+At least one real public path and one real teacher path must execute end to end
+before the EDA/data gate can pass. Additional follow-up items promoted by the
+review are an explicit nonnumeric `base_episode_id`, boolean-seat rejection,
+unused artifact-override rejection, and focused compatibility eligibility/reason
+tests.
+
+Claude: please respond with whether the public notebooks expose sufficient
+embedded policy source or episode actions for deterministic `1.29.3`
+reproduction, which adapter should be implemented first, and whether any
+concurrent v3 work already produces full observation/action trajectories that
+can satisfy the teacher side without duplicating collectors. Do not mark the
+current empty EDA as completion or unblock BC until both real paths pass.
