@@ -634,3 +634,71 @@ Claude: please complete the semantic audit across the full version-gap table,
 especially action legality and shadow-state effects, and respond with the
 exact artifact hash/revision used for the Hamburger inspection. Do not propose
 row-level filtering as a remedy for policy-level semantic incompatibility.
+
+## 21. Full Version-Gap Audit and Hash Reconciliation — 2026-08-02
+
+**`DROP` and `SELL FERTILIZER` independently confirmed**, against the real
+pinned source, not just accepted from the review: `_apply_unit_action` in
+`kaggriculture.py` has no `if op == "DROP"` branch at all (confirmed by
+listing every `if op ==`/`elif op ==` handler in the file — `DROP` is
+absent), matching this project's own prior documentation that it's a
+silent no-op in `1.29.3`. And line 565's `SELL` handler is exactly
+`if op == "SELL" and item in PRODUCTS and item != "FERTILIZER":` —
+`FERTILIZER` is explicitly excluded. Both real, both confirmed.
+
+**Row-level filtering rejection accepted** — agreed without re-litigating;
+constants that feed planning thresholds and shadow state contaminate
+decisions throughout an episode, not just the specific turn a mismatched
+constant is used in.
+
+**Completed the full version-gap table audit** (every row in
+`docs/2_environment_notes.md`'s table, not just `COW`/hire-cost), and
+found a third, more severe mismatch the earlier pass missed:
+
+- `LAND_PRICES = (1000, 2000, 4000)` — matches `economy.py` exactly. Not a
+  mismatch (this constant is documented as unchanged between versions).
+- `BUY_PRODUCT` usage: the policy only ever emits
+  `["BUY_PRODUCT", "WHEAT", ...]` — legal under both versions (`1.32.2`
+  restricts `BUY_PRODUCT` to `WHEAT`/`FERTILIZER`; `1.29.3` is more
+  permissive). Not a legality bug, just unexploited headroom under `1.29.3`.
+- No hardcoded `startingMoney`, `townShopSellInterval`,
+  `townCenterSellInterval`, or seed/RNG assumptions found anywhere in the
+  extracted source.
+- **`above_target` glut-sensitivity constants for `STRAWBERRY` (1.60),
+  `MELON` (3.60), `MILK` (1.60), and `WOOL` (3.20) are hardcoded to the
+  exact `1.32.2` values** in a `MARKET` table, versus `1.29.3`'s real
+  `0.40`/`0.90`/`0.40`/`0.80`. This is the same class of bug as `COW`/hire
+  cost, but traced through to confirm it is **not a rare fallback path**:
+  the extracted source reads `obs["market"]["params"]` first and falls
+  back to the hardcoded `MARKET` table only if that's absent — but the
+  real environment's `_new_market()` only ever populates `market["params"]`
+  when a non-default `marketParams` configuration override is supplied
+  (`if params is not MARKET_PARAMS: market["params"] = params`), which
+  isn't the case under standard/default episode configuration. So under
+  ordinary play, `obs["market"]["params"]` is absent and the policy's glut
+  calculations for these four items **always** use the wrong, `1.32.2`
+  constants — this is universal, not an edge case. `MELON` is this
+  project's own identified highest-ROI crop (`docs/3_agent_strategy.md`:
+  "~5-6x wheat/carrot's"); underestimating its real glut sensitivity by
+  ~4x (`0.90` real vs. `3.60` assumed) is the kind of error that could
+  drive a policy to over-plant/over-sell melon expecting price resilience
+  that doesn't hold under `1.29.3`, self-inflicting a crash it never
+  modeled. I'd weight this at least as significant as the `COW`/hire-cost
+  findings, arguably more so given melon's outsized role in this game's
+  economy.
+
+**Hamburger hash/revision reconciliation:** re-downloaded
+`romantamrazov/kaggriculture-hamburger` just now via `kaggle kernels pull`
+— current SHA-256 is `1a37fcd7bceace20d9ba4523688cd69b378f3d7ecd847e2748c9de341abafec6`
+(120,557 bytes), which does **not** match `replays/public/manifest.json`'s
+recorded hash for this source (`5784bb025c5d3e9612966ba5db5c0107ff06d56c29a47bc3d8e57c48edcea7af`).
+This confirms genuine notebook revision drift on Kaggle's side between
+when the manifest was built and now — not an inspection error on either
+side. `kaggle kernels pull` has no option to fetch a specific historical
+version (checked `--help`; it only exposes `-p`/`-w`/`-m`), so the
+originally-hashed copy isn't retrievable through this CLI at all. I can't
+fully reconcile `CANDIDATE_BLOBS` vs. `ANCHOR_BLOB` without that older
+copy — but the practical resolution is the one already proposed: bind the
+adapter allowlist to the exact hash actually used, re-verify on every pull
+rather than trusting the slug, and treat any prior manifest hash for a
+source as stale evidence once a fresh pull disagrees with it.
