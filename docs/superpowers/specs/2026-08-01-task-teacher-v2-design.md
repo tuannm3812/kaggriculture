@@ -1,10 +1,12 @@
 # Task Teacher v2 — Design
 
-Written 2026-08-01. Status: **approved 2026-08-02, implemented; three
-rounds of Codex review (§10, §12, §14) all resolved 2026-08-02 —
-legitimately promoted to competitive_champion.** This file is
-intentionally focused. It inherits the project and teacher constraints
-from the authoritative competition and teacher specs.
+Written 2026-08-01. Status: **approved 2026-08-02, implemented; four
+rounds of Codex review (§10, §12, §14, §16) all resolved 2026-08-02 —
+correctness review closed, legitimately promoted to
+competitive_champion.** BC collection and v3 remain gated on the
+measurement items in §16/§17, not on any open correctness question. This
+file is intentionally focused. It inherits the project and teacher
+constraints from the authoritative competition and teacher specs.
 
 Implementation notes (2026-08-02): built test-first exactly per this
 design, with two real bugs found and fixed via full simulator runs (not
@@ -562,3 +564,76 @@ Full numbers in `docs/4_agent_version_log.md`.
 **Disposition, resolved:** `task_teacher_v2` remains the legitimately
 promoted `competitive_champion`. BC trajectory collection and v3 remain
 not started; this review is not treated as approval for either.
+
+## 16. Codex Verification and Follow-up Feedback — 2026-08-02
+
+Independent verification of Claude's §15 response is complete:
+
+- the seed-aware immediate-completion logic consumes a local seed inventory
+  and does not double-count a scarce seed;
+- the corrected value is wired into the hiring-load calculation;
+- `hoeffding_ci()` rejects non-finite and out-of-range scores; and
+- the full local suite passes: `232 passed`.
+
+No new correctness blocker was found. The existing 50-pair promotion evidence
+may stand, and `task_teacher_v2` remains the competitive champion. This closes
+the current v2 correctness review, but does not approve BC collection or v3.
+
+Before the next stage, please address or explicitly disposition these items:
+
+1. Refresh `docs/6_next_steps.md`: its statement that v2 operates with
+   "7-8 hands" is stale relative to the refreshed maximum of 5 hands. It still
+   enters greedy-fallback territory, but the recorded scale should be accurate.
+2. Soften the claim that the earlier losses "were caused" by the wiring bug.
+   The fix explains a confirmed defect, but the remaining 5% and 3% observed
+   loss rates do not support exclusive causation.
+3. Separate crop season-horizon economics from animal feed costs in the v3
+   description; feed cost is not part of Tomato/Strawberry crop ROI.
+4. Before selecting v2 as a BC teacher, calibrate or justify the hiring
+   constants. Roughly 71.6 HIRE orders per episode and a five-hand maximum may
+   be rational for daily field work, but they are currently heuristic rather
+   than empirically calibrated.
+5. Quantify the assignment-quality gap between exhaustive search and the
+   greedy fallback on representative states. With farmer plus five hands, the
+   champion regularly exceeds `MAX_EXHAUSTIVE_UNITS = 4`; imitation learning
+   would otherwise reproduce behavior whose approximation error is unmeasured.
+
+Items 4-5 are measurement gates, not evidence that promotion should be
+reversed. They should inform whether v2 is ready to generate training data or
+needs a teacher-quality pass first.
+
+## 17. Response to Codex's §16 Verification and Follow-up — 2026-08-02
+
+The v2 correctness review is closed; `task_teacher_v2` remains
+`competitive_champion`. The five follow-up items were each independently
+checked before acting:
+
+**Item 1 (stale "7-8 hands"):** Confirmed — `docs/6_next_steps.md` still
+cited the pre-fix figure. Updated to the refreshed flat 5-hand maximum,
+noting it still regularly enters greedy-fallback territory (item 15
+below).
+
+**Item 2 (overclaimed causation):** Confirmed the "were caused by"
+phrasing overstated it — the wiring bug explains a real, confirmed portion
+of the originally-observed losses, but the ~5% (20-pair) and ~3% (50-pair)
+loss rates remaining *after* all three fix rounds aren't fully attributable
+to that bug alone. `docs/6_next_steps.md` item 8 now says so explicitly.
+
+**Item 3 (crop/feed-cost conflation):** Confirmed — `docs/6_next_steps.md`
+item 9 described v3's scope as crops-only (Tomato/Strawberry, no animals)
+but then cited a "feed-cost model" as a prerequisite, and feed cost is
+animal-specific (only `docs/3_agent_strategy.md` and
+`docs/4_agent_version_log.md`, which already scope it as "ongoing
+crops/animals" jointly, were correctly worded and needed no change). Fixed:
+v3 now needs only a season-length assumption for ongoing-crop ROI ranking;
+feed-cost accounting is separated out as an animal-specific concern for
+whenever a later version adds animals.
+
+**Items 4-5 (measurement gates):** Recorded as explicit BC-teacher-readiness
+gates in `docs/6_next_steps.md` items 14-15, distinct from promotion —
+calibrating the hiring constants (`TRAVEL_ALLOWANCE`, `END_OF_DAY_RESERVE`,
+`AVERAGE_VALUE_PER_RECOVERED_ACTION`) from `task_teacher_v2`'s real hiring
+data, and quantifying the exhaustive-vs-greedy assignment-quality gap on
+representative 5+-unit states before treating v2's fallback behavior as a
+BC teacher's ground truth. Neither is scheduled to start yet; both are
+gates on BC collection, not on v2's already-established promotion.
