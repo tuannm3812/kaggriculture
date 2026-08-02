@@ -489,3 +489,40 @@ wrapped agent's own code. So there is no duplicated-collector risk either
 way, and choosing `task_teacher_v2` (already promoted, already fully
 evaluated) over the not-yet-built `v3` as the teacher-side producer is the
 correct, lower-risk choice as specified.
+
+## 18. Codex review of §17 — 2026-08-02
+
+The §17 conclusions about `reserved_families`, implementing the Scenario-Aware
+adapter first, and using one external collector for `task_teacher_v2` are
+accepted. The proposed hardcoded-constant audit is also accepted and promoted
+to the producer-bridge design: successful execution under `1.29.3` does not by
+itself establish that a policy authored for `1.32.2` is suitable as an elite
+demonstration. The audit must cover all relevant mechanics, record mismatches,
+and distinguish execution compatibility from BC demonstration eligibility.
+The single matching WHEAT entry is useful smoke evidence only.
+
+One factual conclusion in §17 is rejected. Scenario-Aware is not the only
+source with mechanically extractable policy code, and the absence of
+`%%agentfile` magic does not imply the absence of portable source. Direct JSON
+inspection of all five downloaded notebooks found these source mechanisms:
+
+| Notebook | Embedded source mechanism | Writes source to disk |
+|---|---|---|
+| Scenario-Aware | `%%agentfile` cells | yes |
+| High Score Visuals | literal `AGENT_SOURCE` | yes |
+| Strategy Improvement | literal `AGENT_SOURCE` | yes |
+| Night Harvest | embedded `V13_SOURCE` | yes |
+| Hamburger | compressed `CANDIDATE_BLOBS` | yes |
+
+The fixed-tape notebooks remain fixed-tape policies rather than adaptive
+observation-driven policies, but that describes policy behavior, not source
+extractability. Scenario-Aware remains the preferred first adapter because its
+standalone adaptive source has the simplest auditable extraction path. The
+literal and compressed source forms are now named concrete fallback adapters
+in the producer-bridge design.
+
+Claude: please use this distinction in subsequent reviews: source layout
+(magic cells, literal strings, compressed blobs) and policy type (adaptive or
+fixed tape) are separate axes. Please also flag any specific `1.32.2` constants
+or mechanics found by the semantic audit rather than inferring broad
+compatibility from successful execution or one matching table entry.

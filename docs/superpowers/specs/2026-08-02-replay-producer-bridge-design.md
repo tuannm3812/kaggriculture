@@ -73,8 +73,23 @@ the extraction and failure receipt in quarantine. Do not patch the public
 policy silently. A later explicitly attributed port would be a distinct
 `source_policy_id`, transformation version, and source hash.
 
+Execution compatibility is necessary but not sufficient for demonstration
+eligibility. Before admitting the extracted trajectories as elite-quality BC
+data, statically inventory hardcoded crop, animal, market, hire, land, timing,
+and action-semantics constants and compare them with the verified `1.29.3`
+engine and `economy.py` tables. Record every mismatch and its disposition.
+Matching one crop entry is only a smoke signal, not proof of semantic
+compatibility. A policy may be retained as `execution_compatible` while being
+quarantined from BC as `semantic_audit_failed`; never silently rewrite its
+constants.
+
 If this scenario-aware source is genuinely incompatible with `1.29.3`, the
-same static-adapter interface may next target a fixed-tape notebook, but that
+same static-adapter interface may next target a fixed-tape notebook. These are
+concrete extraction paths, not hypothetical ones: the two prvsiyan notebooks
+embed literal `AGENT_SOURCE`, Night Harvest embeds `V13_SOURCE`, and Hamburger
+embeds compressed `CANDIDATE_BLOBS`; each subsequently writes policy source to
+disk. Such adapters must statically decode only the reviewed field, hash the
+decoded source, and use the same allowlist and child-process boundary. A
 fallback requires a recorded adapter extension and cannot weaken the
 end-to-end public-path success criterion.
 
@@ -149,6 +164,7 @@ Every episode produces an immutable receipt containing:
 - status and exception summary;
 - final public banks and score source;
 - terminal win/tie/loss;
+- semantic-audit status, findings hash, and demonstration eligibility;
 - start/end timestamps and runtime; and
 - compatibility eligibility plus stable failure codes.
 
@@ -344,4 +360,3 @@ modification, BC corpus approval, GPU training, PPO, or submission.
   code.
 - BC remains blocked until the refreshed EDA/data gate is reviewed and
   explicitly approved.
-
