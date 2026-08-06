@@ -24,3 +24,6 @@ notebooks/kernels/*/*.ipynb
 checkpoints/
 *.safetensors
 *.pt
+
+# Git worktrees (local isolation)
+.worktrees/

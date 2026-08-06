@@ -116,6 +116,58 @@ def test_package_registers_modules_in_dependency_order(stub_agent_dir, tmp_path)
     assert generated.index("'kaggriculture_lib.economy'") < generated.index("'kaggriculture_lib.tasking'")
 
 
+def test_package_only_bundles_modules_the_agent_transitively_imports(stub_lib_dir, tmp_path):
+    """Regression test for the 2026-08-06 production incident: `main.py`
+    unconditionally bundled every module under `src/kaggriculture_lib/`,
+    not just what the agent actually imports. That was harmless while the
+    directory only held `economy`/`tasking`, but once an unrelated module
+    with an import-time side effect (`replay_compat.py`'s hard version
+    guard) was added to the same directory, every already-packaged agent
+    silently started bundling it too -- and it crashed the live Kaggle
+    submission on import, before the agent ever took a turn, because
+    Kaggle's runtime wasn't the exact pinned version that guard demands.
+    Packaging must only bundle the transitive closure of what the agent's
+    own `main.py` references, never "everything in the directory"."""
+    (stub_lib_dir / "unrelated_with_side_effect.py").write_text(
+        '"""Stub module the agent never imports, with an import-time crash '
+        'standing in for replay_compat.py\'s real version guard."""\n\n'
+        "raise RuntimeError('must never be imported by an agent that does not need it')\n"
+    )
+
+    agent_dir = tmp_path / "stub_agent"
+    agent_dir.mkdir()
+    (agent_dir / "main.py").write_text(
+        '"""Stub agent that only needs economy, not tasking or the unrelated module."""\n'
+        "\n"
+        "from __future__ import annotations\n"
+        "\n"
+        "from kaggriculture_lib import economy\n"
+        "\n"
+        "\n"
+        "def agent(obs):\n"
+        "    return {\n"
+        '        "farmer": ["PASS"],\n'
+        '        "hands": [],\n'
+        '        "market": [],\n'
+        "    }\n"
+        "\n"
+        "\n"
+        "WHEAT_SEED_COST = economy.SEED_COST['WHEAT']\n"
+    )
+
+    out_path = tmp_path / "out" / "main.py"
+    package_agent.package(agent_dir, out_path)
+    generated = out_path.read_text()
+
+    assert "'kaggriculture_lib.economy'" in generated
+    assert "unrelated_with_side_effect" not in generated
+    assert "'kaggriculture_lib.tasking'" not in generated
+
+    namespace: dict = {}
+    exec(compile(generated, str(out_path), "exec"), namespace)  # must not raise
+    assert namespace["WHEAT_SEED_COST"] == 10
+
+
 def test_package_output_runs_and_resolves_unmodified_imports(stub_agent_dir, tmp_path):
     out_path = tmp_path / "out" / "main.py"
     package_agent.package(stub_agent_dir, out_path)
