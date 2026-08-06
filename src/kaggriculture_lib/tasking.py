@@ -167,14 +167,20 @@ def generate_tasks(
                 crop = _best_feasible_crop(day, last_day, market_prices, candidate_crops)
                 if crop is None:
                     continue
-                price = market_prices.get(crop, economy.CROPS[crop]["seed"])
+                cd = economy.CROPS[crop]
+                price = market_prices.get(crop, cd["seed"])
+                value = (
+                    _score_ongoing_crop(crop, price, day, last_day)
+                    if cd["ongoing"]
+                    else _score_crop(crop, price)
+                )
                 tasks.append(
                     Task(
                         task_id=TaskId(kind=TaskKind.PLANT, x=x, y=y, item=crop),
                         target=(x, y),
                         priority_tier=PriorityTier.ECONOMIC,
                         deadline_step=None,
-                        expected_value=_score_crop(crop, price),
+                        expected_value=value,
                         action_cost=1,
                         resource_needs=(ResourceNeed(item=crop, quantity=1, source="SEED"),),
                     )

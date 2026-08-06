@@ -332,6 +332,37 @@ def test_generate_tasks_filters_infeasible_plant_near_season_end():
     assert all(t.task_id.item == "CARROT" for t in plant_tasks)
 
 
+def test_generate_tasks_plant_task_for_ongoing_crop_uses_day_aware_value():
+    tiles = make_tiles()
+    # MELON is deliberately excluded from this candidate set: at base
+    # prices its one-time score (~109.2) beats TOMATO's ongoing score
+    # (~47.5), which would make this test assert the wrong winner. WHEAT
+    # (18.0) and CARROT (21.25) both score below TOMATO (47.5) at these
+    # prices and day=0/last_day=29 (verified directly, matching Task 3's
+    # test), so TOMATO is the correct, unambiguous winner here.
+    prices = {"WHEAT": 25, "CARROT": 35, "TOMATO": 60}
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=0,
+        last_day=29,
+        market_prices=prices,
+        candidate_crops=("WHEAT", "CARROT", "TOMATO"),
+        board_size=BOARD_SIZE,
+    )
+    plant_tasks = [t for t in tasks if t.task_id.kind == TaskKind.PLANT]
+    assert plant_tasks, "expected at least one PLANT task on an all-empty board"
+    # Every PLANT task should agree on the same best crop (TOMATO) and its
+    # expected_value should match _score_ongoing_crop exactly, not
+    # _score_crop (which would raise ValueError for an ongoing crop if
+    # called, or silently mis-score it).
+    from kaggriculture_lib.tasking import _score_ongoing_crop
+
+    assert all(t.task_id.item == "TOMATO" for t in plant_tasks)
+    expected_value = _score_ongoing_crop("TOMATO", prices["TOMATO"], current_day=0, last_day=29)
+    assert all(t.expected_value == pytest.approx(expected_value) for t in plant_tasks)
+
+
 def test_generate_tasks_no_feasible_crop_produces_no_plant_task():
     tiles = make_tiles()
     tasks = generate_tasks(
