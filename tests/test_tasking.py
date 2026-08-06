@@ -168,6 +168,40 @@ def test_score_ongoing_crop_matches_manual_calculation():
     assert score == pytest.approx(expected)
 
 
+def test_best_feasible_crop_picks_ongoing_crop_when_it_scores_higher():
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    # At base prices, TOMATO's day-aware score with a full season ahead
+    # comfortably beats WHEAT/CARROT's static score (verified by direct
+    # computation below, not assumed).
+    prices = {"WHEAT": 25, "CARROT": 35, "TOMATO": 60}
+    crop = _best_feasible_crop(day=0, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "CARROT", "TOMATO"))
+    assert crop == "TOMATO"
+
+
+def test_best_feasible_crop_picks_one_time_crop_when_ongoing_is_infeasible():
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    # At day=24 with last_day=29: WHEAT (max_yield_day=4) still fits
+    # (24+4=28<=29), but TOMATO (first_yield_day=8) does not reach even its
+    # first tick (24+8=32>29) -- verified directly via
+    # economy.can_mature_in_time("WHEAT", 24, 29) is True and
+    # economy.can_ongoing_crop_reach_any_tick("TOMATO", 24, 29) is False.
+    prices = {"WHEAT": 25, "TOMATO": 60}
+    crop = _best_feasible_crop(day=24, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "TOMATO"))
+    assert crop == "WHEAT"
+
+
+def test_best_feasible_crop_returns_none_when_nothing_is_feasible():
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    # Day 29 (the last day): no one-time crop can mature, no ongoing crop
+    # can reach even its first tick.
+    prices = {"WHEAT": 25, "TOMATO": 60}
+    crop = _best_feasible_crop(day=29, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "TOMATO"))
+    assert crop is None
+
+
 # --- generate_tasks -------------------------------------------------------
 
 

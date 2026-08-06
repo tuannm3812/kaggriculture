@@ -121,10 +121,22 @@ def _score_ongoing_crop(crop: str, price: float, current_day: int, last_day: int
 def _best_feasible_crop(
     day: int, last_day: int, market_prices: dict[str, float], candidate_crops: tuple[str, ...]
 ) -> str | None:
-    feasible = [c for c in candidate_crops if economy.can_mature_in_time(c, day, last_day)]
-    if not feasible:
+    scored: list[tuple[float, str]] = []
+    for crop in candidate_crops:
+        cd = economy.CROPS[crop]
+        price = market_prices.get(crop, cd["seed"])
+        if cd["ongoing"]:
+            if not economy.can_ongoing_crop_reach_any_tick(crop, day, last_day):
+                continue
+            score = _score_ongoing_crop(crop, price, day, last_day)
+        else:
+            if not economy.can_mature_in_time(crop, day, last_day):
+                continue
+            score = _score_crop(crop, price)
+        scored.append((score, crop))
+    if not scored:
         return None
-    return max(feasible, key=lambda c: _score_crop(c, market_prices.get(c, economy.CROPS[c]["seed"])))
+    return max(scored, key=lambda pair: pair[0])[1]
 
 
 def generate_tasks(
