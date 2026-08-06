@@ -41,11 +41,15 @@ while flagging five documentation-precision and pre-BC measurement items
 
 **Submitted to the ladder 2026-08-06** — explicitly authorized by the user,
 whose stated goal is to keep working while an agent is actively competing
-rather than wait for a "final" one. Status `PENDING` as of submission; not
-yet `scored`. Re-packaged and re-verified standalone immediately before
-submitting (full test suite clean, 296 passed). `task_teacher_v3` and the
-elite-replay EDA/BC/PPO work continue in parallel and may produce later
-resubmissions — see `docs/4_agent_version_log.md` for the full record.
+rather than wait for a "final" one. The submission then showed
+`SubmissionStatus.ERROR`; root-caused to a real packaging bug (an
+unrelated Elite Replay EDA module was being silently bundled into every
+agent's submission artifact and hard-failing on Kaggle's actual runtime
+version) — see `docs/4_agent_version_log.md`'s 2026-08-06 incident entry
+for the full diagnosis and fix (`fix/package-agent-scope-shared-modules`).
+Fixed test-first, full suite clean (297 passed), re-packaged and
+resubmitted. `task_teacher_v3` and the elite-replay EDA/BC/PPO work
+continue in parallel and may produce later resubmissions.
 
 ## Elite Replay EDA Gate (2026-08-02)
 
