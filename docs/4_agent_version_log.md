@@ -599,6 +599,14 @@ available, and outcome/lesson.
   different subsystem; "no agent imports this" is not the same guarantee
   as "no agent's packaged artifact contains this."
 
+  **Resubmitted** (2026-08-06, `kaggle competitions submissions
+  kaggriculture`): the fixed `build/task_teacher_v2/main.py` (SHA-256
+  `451ad135bd79c2e24afc566e908c3dc4e74d9ab58783b8c1367f2c84cab82daf`,
+  bundles only `economy`+`tasking`) is `SubmissionStatus.PENDING` —
+  notably past the point where the previous submission errored
+  immediately at validation, a good sign it cleared the crash. Not yet
+  `scored`.
+
 - **Lesson carried forward:** synthetic unit tests validated every
   individual function correctly, but neither the runaway-hiring bug nor
   the performance bug was visible until a *real, full-length simulator
