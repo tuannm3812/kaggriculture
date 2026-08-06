@@ -5,7 +5,7 @@ economy simulation bot: https://www.kaggle.com/competitions/kaggriculture
 
 ## Status
 
-Week 1-2 in progress (2026-08-02). Deadline: **2026-09-30 23:59 UTC**.
+Week 1 in progress (2026-08-06). Deadline: **2026-09-30 23:59 UTC**.
 Local environment verified (including a passed Kaggle platform smoke
 test), economy math tested against the real simulator, and a series of
 agents have each beaten the last in local tournament play. Current local
@@ -27,8 +27,9 @@ evaluation at 20 pairs (screen) and 50 pairs (promotion, 95% CI
 promoted. See `docs/4_agent_version_log.md` for full numbers and
 `docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md` §§10-15 for
 Codex's review and the response. Packaging (`scripts/package_agent.py`)
-is done and verified for every agent; not yet submitted to the ladder —
-see `docs/6_next_steps.md` for the current recommendation.
+is done and verified for every agent. **Submitted to the ladder
+2026-08-06** (`task_teacher_v2`, status `PENDING`) — see
+`docs/6_next_steps.md` for the current recommendation and ongoing work.
 
 Full design is split across
 [`docs/superpowers/specs/`](docs/superpowers/specs/): the authoritative

@@ -39,9 +39,13 @@ while flagging five documentation-precision and pre-BC measurement items
 (addressed below, items 8-9 and 14-15) — none reopen promotion. See
 `docs/4_agent_version_log.md` for full numbers.
 
-Still not submitted to the ladder — re-ask before submitting or continuing
-to delay, per the standing rule from earlier (design doc §9's execution-
-status audit).
+**Submitted to the ladder 2026-08-06** — explicitly authorized by the user,
+whose stated goal is to keep working while an agent is actively competing
+rather than wait for a "final" one. Status `PENDING` as of submission; not
+yet `scored`. Re-packaged and re-verified standalone immediately before
+submitting (full test suite clean, 296 passed). `task_teacher_v3` and the
+elite-replay EDA/BC/PPO work continue in parallel and may produce later
+resubmissions — see `docs/4_agent_version_log.md` for the full record.
 
 ## Elite Replay EDA Gate (2026-08-02)
 

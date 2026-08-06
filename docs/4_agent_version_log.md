@@ -522,7 +522,21 @@ available, and outcome/lesson.
   `[["DONE", 2035.0], ["DONE", 2697.0]]` — "VERIFICATION PASSED". This is
   platform-runtime verification only (mirrors
   `00_platform_smoke_test.ipynb`'s scope), not a competition submission.
-- **Ladder result:** not yet submitted.
+- **Competition submission (2026-08-06):** explicitly authorized by the
+  user — re-packaged (`scripts/package_agent.py`, fresh standalone
+  verification: both players `DONE`, finite rewards), full test suite
+  re-run clean (296 passed), then submitted via
+  `kaggle competitions submit kaggriculture -f build/task_teacher_v2/main.py`.
+  Status `PENDING` as of submission (`kaggle competitions submissions
+  kaggriculture`); not yet `scored`. Rationale: with ~8 weeks to the
+  deadline and zero submissions banked, real ladder feedback (submission-
+  slot/ranking rules, actual opponent pool — both open items in
+  `docs/1_competition_instructions.md`) is worth more than continuing to
+  wait for `task_teacher_v3` or BC/PPO progress; those continue in
+  parallel and may produce later resubmissions. This is a deliberate
+  "get on the board now" decision, not a claim that `task_teacher_v2` is
+  the final agent.
+- **Ladder result:** `PENDING` (submitted 2026-08-06, not yet scored).
 - **Lesson carried forward:** synthetic unit tests validated every
   individual function correctly, but neither the runaway-hiring bug nor
   the performance bug was visible until a *real, full-length simulator

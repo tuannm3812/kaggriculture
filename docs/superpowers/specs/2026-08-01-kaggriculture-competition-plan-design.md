@@ -202,7 +202,13 @@ not a competition submission.
   `2026-08-01-task-teacher-v2-design.md` §§10-15 for the full account (a third review round found and fixed one further narrow bug in the same helper, a seedless-PLANT overcounting defect; the promotion conclusion is unchanged).
 - BC dataset v1: blocked on teacher action/state coverage.
 - PPO: blocked on BC and checkpoint/resume verification.
-- Competition submission: blocked on explicit user authorization.
+- Competition submission: **`submitted`** (2026-08-06) — `task_teacher_v2`,
+  explicitly authorized by the user. Status `PENDING` as of submission time
+  (`kaggle competitions submissions kaggriculture`); not yet `scored`. See
+  `docs/4_agent_version_log.md` for the full record. Ongoing work
+  (`task_teacher_v3`, elite-replay EDA/BC/PPO) continues in parallel and may
+  produce later resubmissions — this was a deliberate "get real ladder
+  signal now" decision, not a final agent.
 
 ## 11. Open Items
 
