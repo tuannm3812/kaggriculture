@@ -99,13 +99,19 @@ reviewed and the EDA/data gate explicitly passes.
    blocker.
 9. **`task_teacher_v3`** (per the construction sequence: ongoing crops —
    Tomato/Strawberry — and fertilizer timing; no animals in this version).
-   Needs the ongoing-crop ROI ranking deferred in `docs/3_agent_strategy.md`
-   resolved first, or as part of this version — specifically a
-   season-length assumption for a fair ROI/day comparison against one-time
-   crops (ongoing crops run for the rest of the season with no fixed
-   lifespan). Feed-cost accounting is a separate, animal-specific concern
-   (Goose/Cow/Sheep consume wheat) that doesn't apply to Tomato/Strawberry
-   and is out of scope until a version adds animals.
+   **Built by Cursor 2026-08-06** (PR #1), reviewed, mechanics confirmed
+   sound (100-episode acceptance gate clean, live episode confirms
+   repeated harvesting) — but **not promoted**: the 20-pair screen vs.
+   `task_teacher_v2` came back decisively negative (`win_rate=0.025`, CI
+   `[0.000, 0.405]`), traced to a real scoring-formula bug in the day-aware
+   ongoing-crop ROI estimate (a design error, not an implementation one —
+   see `2026-08-02-task-teacher-v3-design.md` §8 for the full diagnosis
+   and required one-line fix). `task_teacher_v2` remains
+   `competitive_champion` and the submitted ladder agent. Next: Cursor
+   fixes the `lifespan_days` formula test-first, then a fresh Task 9
+   evaluation before any new promotion attempt. Feed-cost accounting
+   (Goose/Cow/Sheep) remains out of scope until a later version adds
+   animals.
 10. **Critical-path test coverage** — done for economy math, agent decision
     logic (`roi_teacher_*`, `task_teacher_v1`, `task_teacher_v2`), the
     tournament harness, and packaging. Extend to `task_teacher_v3`'s

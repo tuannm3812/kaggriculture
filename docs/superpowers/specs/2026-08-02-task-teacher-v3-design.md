@@ -155,3 +155,43 @@ Same protocol every version has gone through:
 3. Approve the task-generation extension (ongoing-crop HARVEST gated on
    `yield_units > 0`, one-time crops' existing day-based gate unchanged)?
 4. Approve the acceptance and evaluation gates above?
+
+## 8. Correction — §4 Lifespan Denominator Bug — 2026-08-06
+
+**This is my own design error**, not an implementation deviation — Cursor
+built `_score_ongoing_crop` exactly as §4 specified, and the bug is in
+that specification.
+
+§4's `(last reachable offset - first reachable offset + 1)` lifespan
+denominator is **not** analogous to one-time crops' `max_yield_day + 1` —
+I claimed it was, and that claim was wrong. `max_yield_day + 1` counts
+days from *planting* (offset 0) through the harvest event, inclusive.
+`(last - first + 1)` only counts the span *between* the first and last
+reachable tick, silently dropping the days from planting to the first
+tick entirely. The correct, actually-analogous denominator is
+`reachable[-1] + 1` — mirroring `max_yield_day + 1` exactly, using the
+last reachable tick's day-offset from planting.
+
+**Measured impact:** at `current_day=0` (full season ahead), Strawberry's
+buggy score is `54.29` vs. the corrected `22.35` — already a ~2.4x
+inflation, and Strawberry's corrected score (`22.35`) sits *below* Melon's
+`109.23`, not above it. The bug gets worse late-season: at `current_day=17`
+(2 of 4 ticks reachable), the buggy score is `46.67` vs. the corrected
+`10.77` — a ~4.3x inflation. This directly explains the Task 9 evaluation
+failure below: `_best_feasible_crop` was picking Strawberry over Melon in
+scenarios where Melon should have won.
+
+**Required fix**, test-first: change
+`tasking._score_ongoing_crop`'s `lifespan_days` from
+`reachable[-1] - reachable[0] + 1` to `reachable[-1] + 1`. Add a
+regression test asserting Melon beats Strawberry at `current_day=0` under
+base prices (the case that should have been caught before Task 9, and
+wasn't, because no existing test compared an ongoing crop's score against
+a *correctly*-scored one-time crop at realistic relative prices — the
+existing `_best_feasible_crop` tests only ever compared Strawberry/Tomato
+against Wheat/Carrot, both of which the buggy formula still beat). Re-run
+Task 9's full evaluation (100-episode acceptance gate, 20-pair screen,
+promotion gate if positive) after the fix — the current result
+(`win_rate=0.025`, Hoeffding CI `[0.000, 0.405]` vs. `task_teacher_v2`, 20
+pairs) does not promote and should be treated as superseded once the fix
+lands, not as v3's final evaluation.
