@@ -206,6 +206,19 @@ def can_mature_in_time(crop: str, current_day: int, last_day: int) -> bool:
     return current_day + CROPS[crop]["max_yield_day"] <= last_day
 
 
+def can_ongoing_crop_reach_any_tick(crop: str, current_day: int, last_day: int) -> bool:
+    """True iff an ongoing crop planted today reaches at least one
+    production tick on or before the season's last day.
+
+    Generalizes `can_mature_in_time` (a single-maturity-day check) to a
+    crop whose value accrues over a multi-tick schedule instead of one
+    event -- see `ongoing_crop_production_days`.
+    """
+    if not CROPS[crop]["ongoing"]:
+        raise ValueError(f"{crop} is a one-time-yield crop, not ongoing")
+    return any(current_day + offset <= last_day for offset in ongoing_crop_production_days(crop))
+
+
 def one_time_crop_static_yield_per_tile_day(crop: str, watered_in_window: bool = True) -> float:
     """Simple static estimate of average yield/tile/day over the crop's life.
 
