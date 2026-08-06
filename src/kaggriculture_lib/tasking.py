@@ -200,6 +200,18 @@ def generate_tasks(
                             action_cost=1,
                         )
                     )
+                elif cd["ongoing"]:
+                    if tile["yield_units"] > 0:
+                        tasks.append(
+                            Task(
+                                task_id=TaskId(kind=TaskKind.HARVEST, x=x, y=y),
+                                target=(x, y),
+                                priority_tier=PriorityTier.DECAYING_YIELD,
+                                deadline_step=None,
+                                expected_value=0.0,
+                                action_cost=1,
+                            )
+                        )
                 elif day - tile["planted_day"] >= cd["max_yield_day"]:
                     tasks.append(
                         Task(

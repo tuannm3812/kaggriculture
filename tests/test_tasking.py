@@ -55,6 +55,19 @@ def make_plant_tile(crop: str, planted_day: int, watered_today: bool) -> dict:
     }
 
 
+def make_ongoing_plant_tile(crop: str, planted_day: int, watered_today: bool, yield_units: int) -> dict:
+    return {
+        "kind": "PLANT",
+        "crop": crop,
+        "planted_day": planted_day,
+        "watered_today": watered_today,
+        "consecutive_unwatered": 0,
+        "yield_units": yield_units,
+        "max_lifespan_step": -1,
+        "fertilized_until_day": -1,
+    }
+
+
 def test_priority_tier_orders_emergency_before_economic():
     assert PriorityTier.EMERGENCY < PriorityTier.ECONOMIC
     assert PriorityTier.DECAYING_YIELD < PriorityTier.DAILY_CARE
@@ -299,6 +312,60 @@ def test_generate_tasks_watered_immature_plant_produces_no_task_for_that_tile():
         board_size=BOARD_SIZE,
     )
     assert not any(t.target == (2, 2) for t in tasks)
+
+
+def test_generate_tasks_ongoing_crop_with_no_yield_produces_no_harvest_task():
+    tile = make_ongoing_plant_tile("TOMATO", planted_day=0, watered_today=True, yield_units=0)
+    tiles = make_tiles({(2, 2): tile})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=8,  # TOMATO's first tick offset -- watered, but hasn't ticked yet this call
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO"),
+        board_size=BOARD_SIZE,
+    )
+    assert not any(t.target == (2, 2) and t.task_id.kind == TaskKind.HARVEST for t in tasks)
+
+
+def test_generate_tasks_ongoing_crop_with_yield_produces_harvest_task():
+    tile = make_ongoing_plant_tile("TOMATO", planted_day=0, watered_today=True, yield_units=1)
+    tiles = make_tiles({(2, 2): tile})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=8,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO"),
+        board_size=BOARD_SIZE,
+    )
+    harvest_tasks = [t for t in tasks if t.target == (2, 2) and t.task_id.kind == TaskKind.HARVEST]
+    assert len(harvest_tasks) == 1
+    assert harvest_tasks[0].priority_tier == PriorityTier.DECAYING_YIELD
+
+
+def test_generate_tasks_ongoing_crop_not_watered_produces_water_task_not_harvest():
+    # Even with yield_units > 0, an unwatered ongoing-crop tile must still
+    # get a WATER task first (universal weed-prevention rule) -- watering
+    # and harvesting are independent for ongoing crops, but WATER still
+    # takes priority when both would otherwise apply, matching one-time
+    # crops' existing "water before harvest" rule.
+    tile = make_ongoing_plant_tile("TOMATO", planted_day=0, watered_today=False, yield_units=1)
+    tiles = make_tiles({(2, 2): tile})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=8,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO"),
+        board_size=BOARD_SIZE,
+    )
+    tile_tasks = [t for t in tasks if t.target == (2, 2)]
+    assert len(tile_tasks) == 1
+    assert tile_tasks[0].task_id.kind == TaskKind.WATER
 
 
 def test_generate_tasks_weed_produces_dig_task():
