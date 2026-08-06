@@ -5,6 +5,9 @@ competition-plan-design.md ("task_teacher_v1: final design"). TDD: this
 file is written before tasking.py exists.
 """
 
+import pytest
+
+from kaggriculture_lib import economy
 from kaggriculture_lib.tasking import (
     AVERAGE_VALUE_PER_RECOVERED_ACTION,
     END_OF_DAY_RESERVE,
@@ -127,6 +130,42 @@ def test_teacher_state_reset_clears_assignments():
     state.reset()
     assert state.assignments == {}
     assert state.previous_step == -1
+
+
+# --- ongoing-crop scoring (task_teacher_v3) -------------------------------
+
+
+def test_score_ongoing_crop_counts_only_reachable_ticks():
+    # TOMATO ticks at day-offsets [8, 9, 10, 11] since planting. Planted at
+    # current_day=0 with last_day=29: all 4 offsets fit (max is 11).
+    # Planted at current_day=19: 19+8=27, 19+9=28, 19+10=29 all fit, but
+    # 19+11=30 doesn't -- only 3 of 4 ticks reachable, so the same seed
+    # cost is spread over less revenue and a shorter committed lifespan.
+    from kaggriculture_lib.tasking import _score_ongoing_crop
+
+    price = 60.0
+    score_full = _score_ongoing_crop("TOMATO", price, current_day=0, last_day=29)
+    score_partial = _score_ongoing_crop("TOMATO", price, current_day=19, last_day=29)
+    assert score_full > 0
+    assert score_partial > 0
+    full_reachable = sum(1 for o in economy.ongoing_crop_production_days("TOMATO") if o <= 29)
+    partial_reachable = sum(1 for o in economy.ongoing_crop_production_days("TOMATO") if 19 + o <= 29)
+    assert full_reachable == 4
+    assert partial_reachable == 3
+
+
+def test_score_ongoing_crop_matches_manual_calculation():
+    from kaggriculture_lib.tasking import _score_ongoing_crop
+
+    # TOMATO planted day=0, last_day=29: all offsets [8,9,10,11] reachable.
+    price = 60.0
+    score = _score_ongoing_crop("TOMATO", price, current_day=0, last_day=29)
+    reachable_offsets = economy.ongoing_crop_production_days("TOMATO")  # [8, 9, 10, 11]
+    revenue = len(reachable_offsets) * price
+    cost = economy.CROPS["TOMATO"]["seed"]
+    lifespan_days = reachable_offsets[-1] - reachable_offsets[0] + 1  # 11-8+1 = 4
+    expected = (revenue - cost) / lifespan_days
+    assert score == pytest.approx(expected)
 
 
 # --- generate_tasks -------------------------------------------------------

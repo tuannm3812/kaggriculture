@@ -99,6 +99,25 @@ def _score_crop(crop: str, price: float) -> float:
     return (revenue - cd["seed"]) / lifespan_days
 
 
+def _score_ongoing_crop(crop: str, price: float, current_day: int, last_day: int) -> float:
+    """Day-aware $/day ROI estimate for an ongoing crop planted *today*.
+
+    Generalizes `_score_crop` to a multi-tick lifecycle: only ticks that
+    actually land on or before `last_day` count toward revenue, and the
+    lifespan denominator is the actual span (first to last reachable tick,
+    inclusive) this planting decision commits the tile for -- not the
+    crop's full theoretical lifetime, which may not fit before season end.
+    Only meaningful once `economy.can_ongoing_crop_reach_any_tick` has
+    already confirmed at least one tick is reachable.
+    """
+    offsets = economy.ongoing_crop_production_days(crop)
+    reachable = [o for o in offsets if current_day + o <= last_day]
+    revenue = len(reachable) * price
+    cost = economy.CROPS[crop]["seed"]
+    lifespan_days = reachable[-1] - reachable[0] + 1
+    return (revenue - cost) / lifespan_days
+
+
 def _best_feasible_crop(
     day: int, last_day: int, market_prices: dict[str, float], candidate_crops: tuple[str, ...]
 ) -> str | None:
