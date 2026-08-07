@@ -97,21 +97,19 @@ reviewed and the EDA/data gate explicitly passes.
    hiring-risk-vs-fallback-inefficiency question, item 15 below) if it
    matters before BC teacher selection, but is no longer a promotion
    blocker.
-9. **`task_teacher_v3`** (per the construction sequence: ongoing crops —
-   Tomato/Strawberry — and fertilizer timing; no animals in this version).
-   **Built by Cursor 2026-08-06** (PR #1), reviewed, mechanics confirmed
-   sound (100-episode acceptance gate clean, live episode confirms
-   repeated harvesting) — but **not promoted**: the 20-pair screen vs.
-   `task_teacher_v2` came back decisively negative (`win_rate=0.025`, CI
-   `[0.000, 0.405]`), traced to a real scoring-formula bug in the day-aware
-   ongoing-crop ROI estimate (a design error, not an implementation one —
-   see `2026-08-02-task-teacher-v3-design.md` §8 for the full diagnosis
-   and required one-line fix). `task_teacher_v2` remains
-   `competitive_champion` and the submitted ladder agent. Next: Cursor
-   fixes the `lifespan_days` formula test-first, then a fresh Task 9
-   evaluation before any new promotion attempt. Feed-cost accounting
-   (Goose/Cow/Sheep) remains out of scope until a later version adds
-   animals.
+9. **`task_teacher_v3`** (ongoing crops — Tomato/Strawberry; no animals).
+   **Built and §8-fixed by Cursor; evaluated twice; not promoted.**
+   2026-08-06 buggy formula lost the vs-v2 screen (`win_rate=0.025`);
+   2026-08-07 corrected `lifespan_days = reachable[-1] + 1` and re-ran
+   Task 9: acceptance clean, but vs-v2 is exact identity
+   (`win_rate=0.500`, margin `+0.0` at 20 and 50 pairs — Melon still
+   outranks corrected Tomato/Strawberry whenever feasible), so the
+   promotion CI never clears above 0.50. Regression vs. `roi_teacher_v3`
+   / `starter` remains 1.000. `task_teacher_v2` remains
+   `competitive_champion` and the submitted ladder agent. See
+   `docs/4_agent_version_log.md`. Fertilizer / animals remain out of
+   scope until a later version (handoff: land/animals need a v4 design
+   doc first — `docs/8_ladder_replay_analysis.md`).
 10. **Critical-path test coverage** — done for economy math, agent decision
     logic (`roi_teacher_*`, `task_teacher_v1`, `task_teacher_v2`), the
     tournament harness, and packaging. Extend to `task_teacher_v3`'s

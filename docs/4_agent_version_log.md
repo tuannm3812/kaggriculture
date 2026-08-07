@@ -706,21 +706,58 @@ available, and outcome/lesson.
   ~$9,700 to `task_teacher_v2` as a direct result. See
   `2026-08-02-task-teacher-v3-design.md` §8 for the full account and the
   required fix.
-- **Outcome: not promoted.** `task_teacher_v2` remains
-  `competitive_champion` (already submitted to the ladder separately).
-  The mechanics (task generation, packaging, day-boundary handling,
-  hiring) are all confirmed sound — only the crop-scoring formula needs
-  the one-line fix above, followed by a fresh Task 9 evaluation before any
-  new promotion attempt.
+- **Outcome (2026-08-06 buggy formula): not promoted.** `task_teacher_v2`
+  remains `competitive_champion`. Mechanics were sound; only the crop-
+  scoring formula needed the §8 one-line fix, followed by a fresh Task 9
+  evaluation.
+- **§8 lifespan fix (2026-08-07, Cursor):** changed
+  `tasking._score_ongoing_crop`'s `lifespan_days` from
+  `reachable[-1] - reachable[0] + 1` to `reachable[-1] + 1`. Added
+  regression test
+  `test_best_feasible_crop_picks_melon_over_strawberry_at_base_prices`;
+  updated ongoing-crop unit tests whose expected rankings assumed the
+  inflated Tomato score. Full suite: 316 passed.
+- **Post-fix re-evaluation (2026-08-07)** — supersedes the 2026-08-06
+  screen above; same protocol, fresh seeds per the implementation plan:
+
+  | Metric | Result |
+  | --- | --- |
+  | Acceptance `DONE` / finite (seeds 50000–50099) | 100/100 / 100/100 |
+  | Distinct tiles worked/episode | range [23, 25] |
+  | Action-kind coverage | `PLANT`=1676, `WATER`=25242, `HARVEST`=2201, `DIG`=1827 |
+  | Ongoing-crop `PLANT` actions | **0** (Melon correctly dominates at competitive prices) |
+  | Inference latency (ms/turn) | median 1.73 |
+  | Determinism | identical rewards |
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v2` (screen, seed 40000) | 20/40 | 0.500 | +0.0 | [0.120, 0.880] |
+  | vs. `task_teacher_v2` (promotion, seed 41000) | 50/100 | 0.500 | +0.0 | [0.260, 0.740] |
+  | vs. `roi_teacher_v3` (regression, seed 42000) | 20/40 | 1.000 | +31970.9 | [0.620, 1.000] |
+  | vs. `starter` (regression, seed 42000) | 20/40 | 1.000 | +34745.8 | [0.620, 1.000] |
+
+  The vs-v2 result is exact behavioral identity under these seeds
+  (`win_rate=0.500`, `mean_money_margin=+0.0` at both 20 and 50 pairs):
+  with the corrected denominator, Melon's static score (~109) beats
+  Strawberry (~22) and Tomato (~16) whenever Melon is feasible, so v3's
+  extended `CANDIDATE_CROPS` never changes the chosen crop relative to
+  v2. Promotion requires a Hoeffding CI wholly above 0.50 — not met.
+  Regression screens vs. `roi_teacher_v3` / `starter` remain clean and
+  in line with v2's own recorded margins against the same opponents.
+- **Outcome (post-fix): still not promoted.** `task_teacher_v2` remains
+  `competitive_champion` and the submitted ladder agent. v3's mechanics
+  and corrected economics are sound, but adding ongoing crops to the
+  candidate set does not improve (or change) play against v2 under the
+  current day-aware ROI ranking at observed prices.
 - **Ladder result:** not applicable (not promoted; `task_teacher_v2`
   remains the submitted agent).
 - **Lesson carried forward:** the acceptance gate (100 episodes, all
-  green) gave zero signal that anything was wrong — mechanical
-  correctness and economic correctness are different questions, and only
-  the paired evaluation against a real opponent surfaced the problem. This
-  is the same lesson this project has learned from every prior version:
-  full competitive evaluation, not just "does it run," is what promotion
-  gates are for — and holding evaluation back as an explicit review
-  checkpoint (rather than letting the implementer self-report a promotion
-  claim) is what caught it before this reached the design doc as a
-  finished, undiagnosed regression.
+  green) gave zero signal that anything was wrong under the buggy formula —
+  mechanical correctness and economic correctness are different questions,
+  and only the paired evaluation against a real opponent surfaced the
+  problem. After the fix, the same gate's "ongoing-crop PLANT count"
+  signal flipped from 698 → 0 for the right economic reason (Melon wins),
+  while the vs-v2 screen flipped from decisive loss to exact tie — both
+  are useful signals. Holding evaluation back as an explicit review
+  checkpoint is what caught the bug before it shipped as an undiagnosed
+  "promotion."
