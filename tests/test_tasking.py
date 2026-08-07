@@ -171,25 +171,49 @@ def test_score_ongoing_crop_matches_manual_calculation():
     from kaggriculture_lib.tasking import _score_ongoing_crop
 
     # TOMATO planted day=0, last_day=29: all offsets [8,9,10,11] reachable.
+    # Lifespan is days from planting through the last reachable tick
+    # (reachable[-1] + 1), mirroring one-time crops' max_yield_day + 1 —
+    # see design doc §8.
     price = 60.0
     score = _score_ongoing_crop("TOMATO", price, current_day=0, last_day=29)
     reachable_offsets = economy.ongoing_crop_production_days("TOMATO")  # [8, 9, 10, 11]
     revenue = len(reachable_offsets) * price
     cost = economy.CROPS["TOMATO"]["seed"]
-    lifespan_days = reachable_offsets[-1] - reachable_offsets[0] + 1  # 11-8+1 = 4
+    lifespan_days = reachable_offsets[-1] + 1  # 11 + 1 = 12
     expected = (revenue - cost) / lifespan_days
     assert score == pytest.approx(expected)
+    assert score == pytest.approx(15.833333333333334)
 
 
 def test_best_feasible_crop_picks_ongoing_crop_when_it_scores_higher():
     from kaggriculture_lib.tasking import _best_feasible_crop
 
-    # At base prices, TOMATO's day-aware score with a full season ahead
-    # comfortably beats WHEAT/CARROT's static score (verified by direct
-    # computation below, not assumed).
-    prices = {"WHEAT": 25, "CARROT": 35, "TOMATO": 60}
-    crop = _best_feasible_crop(day=0, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "CARROT", "TOMATO"))
-    assert crop == "TOMATO"
+    # At base prices with a full season ahead, STRAWBERRY's corrected
+    # day-aware score (~22.35) beats WHEAT (18.0) and CARROT (21.25).
+    # TOMATO's corrected score (~15.83) does not — so STRAWBERRY is the
+    # ongoing crop that still wins this comparison after the §8 fix.
+    prices = {"WHEAT": 25, "CARROT": 35, "STRAWBERRY": 120}
+    crop = _best_feasible_crop(
+        day=0, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "CARROT", "STRAWBERRY")
+    )
+    assert crop == "STRAWBERRY"
+
+
+def test_best_feasible_crop_picks_melon_over_strawberry_at_base_prices():
+    """Regression for design doc §8: Melon must beat Strawberry at day=0
+    under base prices. The buggy lifespan denominator inflated Strawberry
+    enough to steal plantings from Melon in real episodes; the corrected
+    formula keeps Melon (~109.23) above Strawberry (~22.35)."""
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    prices = {"WHEAT": 25, "CARROT": 35, "MELON": 250, "TOMATO": 60, "STRAWBERRY": 120}
+    crop = _best_feasible_crop(
+        day=0,
+        last_day=29,
+        market_prices=prices,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO", "STRAWBERRY"),
+    )
+    assert crop == "MELON"
 
 
 def test_best_feasible_crop_picks_one_time_crop_when_ongoing_is_infeasible():
@@ -401,32 +425,31 @@ def test_generate_tasks_filters_infeasible_plant_near_season_end():
 
 def test_generate_tasks_plant_task_for_ongoing_crop_uses_day_aware_value():
     tiles = make_tiles()
-    # MELON is deliberately excluded from this candidate set: at base
-    # prices its one-time score (~109.2) beats TOMATO's ongoing score
-    # (~47.5), which would make this test assert the wrong winner. WHEAT
-    # (18.0) and CARROT (21.25) both score below TOMATO (47.5) at these
-    # prices and day=0/last_day=29 (verified directly, matching Task 3's
-    # test), so TOMATO is the correct, unambiguous winner here.
-    prices = {"WHEAT": 25, "CARROT": 35, "TOMATO": 60}
+    # MELON is deliberately excluded: at base prices its one-time score
+    # (~109.2) beats every ongoing crop. STRAWBERRY's corrected day-aware
+    # score (~22.35) beats WHEAT (18.0) and CARROT (21.25); TOMATO's
+    # corrected score (~15.83) does not, so STRAWBERRY is the unambiguous
+    # ongoing winner in this candidate set (design doc §8).
+    prices = {"WHEAT": 25, "CARROT": 35, "STRAWBERRY": 120}
     tasks = generate_tasks(
         tiles=tiles,
         unlocked_quadrants=["NW"],
         day=0,
         last_day=29,
         market_prices=prices,
-        candidate_crops=("WHEAT", "CARROT", "TOMATO"),
+        candidate_crops=("WHEAT", "CARROT", "STRAWBERRY"),
         board_size=BOARD_SIZE,
     )
     plant_tasks = [t for t in tasks if t.task_id.kind == TaskKind.PLANT]
     assert plant_tasks, "expected at least one PLANT task on an all-empty board"
-    # Every PLANT task should agree on the same best crop (TOMATO) and its
-    # expected_value should match _score_ongoing_crop exactly, not
+    # Every PLANT task should agree on the same best crop (STRAWBERRY) and
+    # its expected_value should match _score_ongoing_crop exactly, not
     # _score_crop (which would raise ValueError for an ongoing crop if
     # called, or silently mis-score it).
     from kaggriculture_lib.tasking import _score_ongoing_crop
 
-    assert all(t.task_id.item == "TOMATO" for t in plant_tasks)
-    expected_value = _score_ongoing_crop("TOMATO", prices["TOMATO"], current_day=0, last_day=29)
+    assert all(t.task_id.item == "STRAWBERRY" for t in plant_tasks)
+    expected_value = _score_ongoing_crop("STRAWBERRY", prices["STRAWBERRY"], current_day=0, last_day=29)
     assert all(t.expected_value == pytest.approx(expected_value) for t in plant_tasks)
 
 
