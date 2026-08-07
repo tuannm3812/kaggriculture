@@ -719,3 +719,122 @@ available, and outcome/lesson.
     unaffected by any of this — it changed no constants, only added
     read-only measurement tooling (`_exhaustive_assign`), and stands as
     previously recorded.
+
+## task_teacher_v3 (`agents/task_teacher_v3/main.py`)
+
+- **Date:** 2026-08-06
+- **Extends `task_teacher_v2` with:** ongoing crops (Tomato, Strawberry),
+  per the approved design in
+  `docs/superpowers/specs/2026-08-02-task-teacher-v3-design.md`. Same
+  hiring and multi-unit assignment as v2 (unchanged); no animals,
+  fertilizer, or `PICKUP`/`PLACE`. `agents/task_teacher_v3/main.py` differs
+  from `agents/task_teacher_v2/main.py` by exactly the docstring and
+  `CANDIDATE_CROPS` (verified via direct diff) — all real logic lives in
+  the shared `economy.py`/`tasking.py`, gated on
+  `economy.CROPS[crop]["ongoing"]` so `task_teacher_v2`'s own behavior is
+  provably unaffected (its `CANDIDATE_CROPS` never includes an ongoing
+  crop, so the new dispatch branches never fire for it).
+- **Built by Cursor** (first task handed to it under the new
+  Cursor-implements/Claude-reviews workflow), test-first, per
+  `docs/superpowers/plans/2026-08-02-task-teacher-v3-implementation.md`.
+  Reviewed independently: every diff matches the approved plan verbatim
+  (no shortcuts, no weakened assertions), `task_teacher_v2`'s own files
+  are byte-identical to `main`, and a live 720-step episode confirmed
+  ongoing crops are genuinely planted and repeatedly harvested (62
+  `HARVEST` actions across ~25 tiles in one episode). Cursor correctly
+  stopped before the acceptance/evaluation gate, as instructed, rather
+  than self-reporting a promotion claim.
+- **Acceptance-gate measurement** (100 full 720-step episodes vs.
+  `starter`, seeds 50000–50099):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` both players | 100/100 |
+  | Invalid/non-finite episodes | 0 |
+  | Distinct tiles worked/episode | range [23, 25] |
+  | Action-kind coverage | `PLANT`=1703, `WATER`=26130, `HARVEST`=3011, `DIG`=1372 |
+  | Ongoing-crop `PLANT` actions | 698 |
+  | `HARVEST`/ongoing-crop-plant ratio | 4.31 (repeated harvesting confirmed, not one-and-done) |
+  | Inference latency (ms/turn) | median 1.74 |
+  | Determinism (same seed, 2 runs) | identical rewards |
+
+  Clean pass — the mechanics work exactly as designed.
+- **Paired evaluation vs. `task_teacher_v2`** (20-pair screen, seed 60000):
+  `win_rate=0.025`, `mean_money_margin=-9216.5`, Hoeffding 95% CI
+  `[0.000, 0.405]` — **decisively below 0.50**. Per the authoritative
+  protocol, a screen this unambiguous stops here; no escalation to 50
+  pairs, no regression screens run against a result already known to be
+  wrong.
+- **Root cause, confirmed by direct investigation, not assumed:** a real
+  scoring bug in `tasking._score_ongoing_crop`'s `lifespan_days`
+  denominator — `reachable[-1] - reachable[0] + 1` (the span *between* the
+  first and last reachable production tick) instead of the correct
+  `reachable[-1] + 1` (days from *planting* through the last reachable
+  tick, mirroring `_score_crop`'s `max_yield_day + 1` convention exactly).
+  This is a design error in `2026-08-02-task-teacher-v3-design.md` §4, not
+  an implementation deviation: Cursor built `_score_ongoing_crop` exactly
+  as specified, and the specification was wrong. Measured impact: at
+  `current_day=0`,
+  Strawberry's buggy score is `54.29` vs. the corrected `22.35` (a ~2.4x
+  inflation, and the corrected score sits *below* Melon's `109.23`, not
+  above it) — late-season the inflation gets worse (~4.3x at one checked
+  boundary case, 2 of 4 ticks reachable). A representative game showed v3
+  planting Strawberry 34 times vs. Melon only 22 times, and losing by
+  ~$9,700 to `task_teacher_v2` as a direct result. See
+  `2026-08-02-task-teacher-v3-design.md` §8 for the full account and the
+  required fix.
+- **Outcome (2026-08-06 buggy formula): not promoted.** `task_teacher_v2`
+  remains `competitive_champion`. Mechanics were sound; only the crop-
+  scoring formula needed the §8 one-line fix, followed by a fresh Task 9
+  evaluation.
+- **§8 lifespan fix (2026-08-07, Cursor):** changed
+  `tasking._score_ongoing_crop`'s `lifespan_days` from
+  `reachable[-1] - reachable[0] + 1` to `reachable[-1] + 1`. Added
+  regression test
+  `test_best_feasible_crop_picks_melon_over_strawberry_at_base_prices`;
+  updated ongoing-crop unit tests whose expected rankings assumed the
+  inflated Tomato score. Full suite: 316 passed.
+- **Post-fix re-evaluation (2026-08-07)** — supersedes the 2026-08-06
+  screen above; same protocol, fresh seeds per the implementation plan:
+
+  | Metric | Result |
+  | --- | --- |
+  | Acceptance `DONE` / finite (seeds 50000–50099) | 100/100 / 100/100 |
+  | Distinct tiles worked/episode | range [23, 25] |
+  | Action-kind coverage | `PLANT`=1676, `WATER`=25242, `HARVEST`=2201, `DIG`=1827 |
+  | Ongoing-crop `PLANT` actions | **0** (Melon correctly dominates at competitive prices) |
+  | Inference latency (ms/turn) | median 1.73 |
+  | Determinism | identical rewards |
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v2` (screen, seed 40000) | 20/40 | 0.500 | +0.0 | [0.120, 0.880] |
+  | vs. `task_teacher_v2` (promotion, seed 41000) | 50/100 | 0.500 | +0.0 | [0.260, 0.740] |
+  | vs. `roi_teacher_v3` (regression, seed 42000) | 20/40 | 1.000 | +31970.9 | [0.620, 1.000] |
+  | vs. `starter` (regression, seed 42000) | 20/40 | 1.000 | +34745.8 | [0.620, 1.000] |
+
+  The vs-v2 result is exact behavioral identity under these seeds
+  (`win_rate=0.500`, `mean_money_margin=+0.0` at both 20 and 50 pairs):
+  with the corrected denominator, Melon's static score (~109) beats
+  Strawberry (~22) and Tomato (~16) whenever Melon is feasible, so v3's
+  extended `CANDIDATE_CROPS` never changes the chosen crop relative to
+  v2. Promotion requires a Hoeffding CI wholly above 0.50 — not met.
+  Regression screens vs. `roi_teacher_v3` / `starter` remain clean and
+  in line with v2's own recorded margins against the same opponents.
+- **Outcome (post-fix): still not promoted.** `task_teacher_v2` remains
+  `competitive_champion` and the submitted ladder agent. v3's mechanics
+  and corrected economics are sound, but adding ongoing crops to the
+  candidate set does not improve (or change) play against v2 under the
+  current day-aware ROI ranking at observed prices.
+- **Ladder result:** not applicable (not promoted; `task_teacher_v2`
+  remains the submitted agent).
+- **Lesson carried forward:** the acceptance gate (100 episodes, all
+  green) gave zero signal that anything was wrong under the buggy formula —
+  mechanical correctness and economic correctness are different questions,
+  and only the paired evaluation against a real opponent surfaced the
+  problem. After the fix, the same gate's "ongoing-crop PLANT count"
+  signal flipped from 698 → 0 for the right economic reason (Melon wins),
+  while the vs-v2 screen flipped from decisive loss to exact tie — both
+  are useful signals. Holding evaluation back as an explicit review
+  checkpoint is what caught the bug before it shipped as an undiagnosed
+  "promotion."

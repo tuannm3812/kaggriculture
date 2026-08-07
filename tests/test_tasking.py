@@ -5,6 +5,9 @@ competition-plan-design.md ("task_teacher_v1: final design"). TDD: this
 file is written before tasking.py exists.
 """
 
+import pytest
+
+from kaggriculture_lib import economy
 from kaggriculture_lib.tasking import (
     AVERAGE_VALUE_PER_RECOVERED_ACTION,
     END_OF_DAY_RESERVE,
@@ -47,6 +50,19 @@ def make_plant_tile(crop: str, planted_day: int, watered_today: bool) -> dict:
         "watered_today": watered_today,
         "consecutive_unwatered": 0,
         "yield_units": 1,
+        "max_lifespan_step": -1,
+        "fertilized_until_day": -1,
+    }
+
+
+def make_ongoing_plant_tile(crop: str, planted_day: int, watered_today: bool, yield_units: int) -> dict:
+    return {
+        "kind": "PLANT",
+        "crop": crop,
+        "planted_day": planted_day,
+        "watered_today": watered_today,
+        "consecutive_unwatered": 0,
+        "yield_units": yield_units,
         "max_lifespan_step": -1,
         "fertilized_until_day": -1,
     }
@@ -127,6 +143,100 @@ def test_teacher_state_reset_clears_assignments():
     state.reset()
     assert state.assignments == {}
     assert state.previous_step == -1
+
+
+# --- ongoing-crop scoring (task_teacher_v3) -------------------------------
+
+
+def test_score_ongoing_crop_counts_only_reachable_ticks():
+    # TOMATO ticks at day-offsets [8, 9, 10, 11] since planting. Planted at
+    # current_day=0 with last_day=29: all 4 offsets fit (max is 11).
+    # Planted at current_day=19: 19+8=27, 19+9=28, 19+10=29 all fit, but
+    # 19+11=30 doesn't -- only 3 of 4 ticks reachable, so the same seed
+    # cost is spread over less revenue and a shorter committed lifespan.
+    from kaggriculture_lib.tasking import _score_ongoing_crop
+
+    price = 60.0
+    score_full = _score_ongoing_crop("TOMATO", price, current_day=0, last_day=29)
+    score_partial = _score_ongoing_crop("TOMATO", price, current_day=19, last_day=29)
+    assert score_full > 0
+    assert score_partial > 0
+    full_reachable = sum(1 for o in economy.ongoing_crop_production_days("TOMATO") if o <= 29)
+    partial_reachable = sum(1 for o in economy.ongoing_crop_production_days("TOMATO") if 19 + o <= 29)
+    assert full_reachable == 4
+    assert partial_reachable == 3
+
+
+def test_score_ongoing_crop_matches_manual_calculation():
+    from kaggriculture_lib.tasking import _score_ongoing_crop
+
+    # TOMATO planted day=0, last_day=29: all offsets [8,9,10,11] reachable.
+    # Lifespan is days from planting through the last reachable tick
+    # (reachable[-1] + 1), mirroring one-time crops' max_yield_day + 1 —
+    # see design doc §8.
+    price = 60.0
+    score = _score_ongoing_crop("TOMATO", price, current_day=0, last_day=29)
+    reachable_offsets = economy.ongoing_crop_production_days("TOMATO")  # [8, 9, 10, 11]
+    revenue = len(reachable_offsets) * price
+    cost = economy.CROPS["TOMATO"]["seed"]
+    lifespan_days = reachable_offsets[-1] + 1  # 11 + 1 = 12
+    expected = (revenue - cost) / lifespan_days
+    assert score == pytest.approx(expected)
+    assert score == pytest.approx(15.833333333333334)
+
+
+def test_best_feasible_crop_picks_ongoing_crop_when_it_scores_higher():
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    # At base prices with a full season ahead, STRAWBERRY's corrected
+    # day-aware score (~22.35) beats WHEAT (18.0) and CARROT (21.25).
+    # TOMATO's corrected score (~15.83) does not — so STRAWBERRY is the
+    # ongoing crop that still wins this comparison after the §8 fix.
+    prices = {"WHEAT": 25, "CARROT": 35, "STRAWBERRY": 120}
+    crop = _best_feasible_crop(
+        day=0, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "CARROT", "STRAWBERRY")
+    )
+    assert crop == "STRAWBERRY"
+
+
+def test_best_feasible_crop_picks_melon_over_strawberry_at_base_prices():
+    """Regression for design doc §8: Melon must beat Strawberry at day=0
+    under base prices. The buggy lifespan denominator inflated Strawberry
+    enough to steal plantings from Melon in real episodes; the corrected
+    formula keeps Melon (~109.23) above Strawberry (~22.35)."""
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    prices = {"WHEAT": 25, "CARROT": 35, "MELON": 250, "TOMATO": 60, "STRAWBERRY": 120}
+    crop = _best_feasible_crop(
+        day=0,
+        last_day=29,
+        market_prices=prices,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO", "STRAWBERRY"),
+    )
+    assert crop == "MELON"
+
+
+def test_best_feasible_crop_picks_one_time_crop_when_ongoing_is_infeasible():
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    # At day=24 with last_day=29: WHEAT (max_yield_day=4) still fits
+    # (24+4=28<=29), but TOMATO (first_yield_day=8) does not reach even its
+    # first tick (24+8=32>29) -- verified directly via
+    # economy.can_mature_in_time("WHEAT", 24, 29) is True and
+    # economy.can_ongoing_crop_reach_any_tick("TOMATO", 24, 29) is False.
+    prices = {"WHEAT": 25, "TOMATO": 60}
+    crop = _best_feasible_crop(day=24, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "TOMATO"))
+    assert crop == "WHEAT"
+
+
+def test_best_feasible_crop_returns_none_when_nothing_is_feasible():
+    from kaggriculture_lib.tasking import _best_feasible_crop
+
+    # Day 29 (the last day): no one-time crop can mature, no ongoing crop
+    # can reach even its first tick.
+    prices = {"WHEAT": 25, "TOMATO": 60}
+    crop = _best_feasible_crop(day=29, last_day=29, market_prices=prices, candidate_crops=("WHEAT", "TOMATO"))
+    assert crop is None
 
 
 # --- generate_tasks -------------------------------------------------------
@@ -228,6 +338,60 @@ def test_generate_tasks_watered_immature_plant_produces_no_task_for_that_tile():
     assert not any(t.target == (2, 2) for t in tasks)
 
 
+def test_generate_tasks_ongoing_crop_with_no_yield_produces_no_harvest_task():
+    tile = make_ongoing_plant_tile("TOMATO", planted_day=0, watered_today=True, yield_units=0)
+    tiles = make_tiles({(2, 2): tile})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=8,  # TOMATO's first tick offset -- watered, but hasn't ticked yet this call
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO"),
+        board_size=BOARD_SIZE,
+    )
+    assert not any(t.target == (2, 2) and t.task_id.kind == TaskKind.HARVEST for t in tasks)
+
+
+def test_generate_tasks_ongoing_crop_with_yield_produces_harvest_task():
+    tile = make_ongoing_plant_tile("TOMATO", planted_day=0, watered_today=True, yield_units=1)
+    tiles = make_tiles({(2, 2): tile})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=8,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO"),
+        board_size=BOARD_SIZE,
+    )
+    harvest_tasks = [t for t in tasks if t.target == (2, 2) and t.task_id.kind == TaskKind.HARVEST]
+    assert len(harvest_tasks) == 1
+    assert harvest_tasks[0].priority_tier == PriorityTier.DECAYING_YIELD
+
+
+def test_generate_tasks_ongoing_crop_not_watered_produces_water_task_not_harvest():
+    # Even with yield_units > 0, an unwatered ongoing-crop tile must still
+    # get a WATER task first (universal weed-prevention rule) -- watering
+    # and harvesting are independent for ongoing crops, but WATER still
+    # takes priority when both would otherwise apply, matching one-time
+    # crops' existing "water before harvest" rule.
+    tile = make_ongoing_plant_tile("TOMATO", planted_day=0, watered_today=False, yield_units=1)
+    tiles = make_tiles({(2, 2): tile})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=8,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=("WHEAT", "CARROT", "MELON", "TOMATO"),
+        board_size=BOARD_SIZE,
+    )
+    tile_tasks = [t for t in tasks if t.target == (2, 2)]
+    assert len(tile_tasks) == 1
+    assert tile_tasks[0].task_id.kind == TaskKind.WATER
+
+
 def test_generate_tasks_weed_produces_dig_task():
     tiles = make_tiles({(2, 2): {"kind": "WEED"}})
     tasks = generate_tasks(
@@ -257,6 +421,36 @@ def test_generate_tasks_filters_infeasible_plant_near_season_end():
     )
     plant_tasks = [t for t in tasks if t.task_id.kind == TaskKind.PLANT]
     assert all(t.task_id.item == "CARROT" for t in plant_tasks)
+
+
+def test_generate_tasks_plant_task_for_ongoing_crop_uses_day_aware_value():
+    tiles = make_tiles()
+    # MELON is deliberately excluded: at base prices its one-time score
+    # (~109.2) beats every ongoing crop. STRAWBERRY's corrected day-aware
+    # score (~22.35) beats WHEAT (18.0) and CARROT (21.25); TOMATO's
+    # corrected score (~15.83) does not, so STRAWBERRY is the unambiguous
+    # ongoing winner in this candidate set (design doc §8).
+    prices = {"WHEAT": 25, "CARROT": 35, "STRAWBERRY": 120}
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=0,
+        last_day=29,
+        market_prices=prices,
+        candidate_crops=("WHEAT", "CARROT", "STRAWBERRY"),
+        board_size=BOARD_SIZE,
+    )
+    plant_tasks = [t for t in tasks if t.task_id.kind == TaskKind.PLANT]
+    assert plant_tasks, "expected at least one PLANT task on an all-empty board"
+    # Every PLANT task should agree on the same best crop (STRAWBERRY) and
+    # its expected_value should match _score_ongoing_crop exactly, not
+    # _score_crop (which would raise ValueError for an ongoing crop if
+    # called, or silently mis-score it).
+    from kaggriculture_lib.tasking import _score_ongoing_crop
+
+    assert all(t.task_id.item == "STRAWBERRY" for t in plant_tasks)
+    expected_value = _score_ongoing_crop("STRAWBERRY", prices["STRAWBERRY"], current_day=0, last_day=29)
+    assert all(t.expected_value == pytest.approx(expected_value) for t in plant_tasks)
 
 
 def test_generate_tasks_no_feasible_crop_produces_no_plant_task():

@@ -232,6 +232,14 @@ def test_packaged_task_teacher_v1_runs_standalone_without_pythonpath():
     _assert_runs_standalone(out_path, episode_steps=96)
 
 
+def test_packaged_task_teacher_v3_runs_standalone_without_pythonpath():
+    """Same check for task_teacher_v3, which adds ongoing-crop dispatch to
+    the same shared modules task_teacher_v1/v2 already package correctly."""
+    out_path = REPO_ROOT / "build" / "task_teacher_v3" / "main.py"
+    package_agent.package(REPO_ROOT / "agents" / "task_teacher_v3", out_path)
+    _assert_runs_standalone(out_path, episode_steps=96)
+
+
 def _assert_runs_standalone(out_path: Path, episode_steps: int) -> None:
     script = f"""
 from kaggle_environments import make

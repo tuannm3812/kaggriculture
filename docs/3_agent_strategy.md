@@ -29,7 +29,7 @@ from v1): beats v1 head-to-head at 1.000 win rate, +2222.8 mean money
 margin, and roughly triples the margin against every built-in — see
 `docs/4_agent_version_log.md`.
 
-### Ongoing crops / animals (production schedule, not yet ROI-ranked)
+### Ongoing crops / animals (production schedule)
 
 | Crop/Animal | Cost | Product | Production days (age since planted/placed) | Unit price @ base |
 | --- | ---: | --- | --- | ---: |
@@ -39,13 +39,15 @@ margin, and roughly triples the margin against every built-in — see
 | Cow | 400 | Milk | [8, 10, 12, 14, 16, 18] | 160 |
 | Sheep | 500 | Wool | [6, 9, 12, 15, 18, 21] | 200 |
 
-Not yet ROI-ranked against the one-time crops above — ongoing crops/animals
-run for the rest of the season once started (no fixed lifespan the way
-one-time crops have), so a fair ROI/day comparison needs a season-length
-assumption and feed-cost accounting (wheat consumption for animals), not
-just a per-tick unit count. Per `docs/6_next_steps.md`'s 2026-08-01
-reprioritization (Codex code review), this is now explicitly behind the
-multi-tile teacher-coverage work in priority, not the next thing to build.
+**Tomato/Strawberry are now day-aware ROI-ranked** via
+`tasking._score_ongoing_crop` (lifespan = last reachable tick offset + 1,
+mirroring one-time `max_yield_day + 1` — see
+`2026-08-02-task-teacher-v3-design.md` §8). At base prices with a full
+season ahead: Melon ~109 ≫ Strawberry ~22 ≈ Carrot 21 > Wheat 18 >
+Tomato ~16 — so the corrected ranking rarely (if ever) selects an
+ongoing crop when Melon is still feasible. Animals are still not
+ROI-ranked (need feed-cost accounting) and remain out of scope until a
+`task_teacher_v4` design covers land/animals.
 
 ## v1/v2/v3 Scope (`agents/roi_teacher_v1`, `_v2`, `_v3`)
 
@@ -124,6 +126,16 @@ further narrow defect in the same end-of-day fix's helper (a seedless
 and refreshed telemetry showed no material change, so the 50-pair
 evidence above stands. This is a legitimate, rigorously-established
 promotion, not a margin-based guess.
+
+## `task_teacher_v3` Scope (`agents/task_teacher_v3`) — built, not promoted
+
+Extends v2's candidate set with Tomato/Strawberry and the shared
+ongoing-crop dispatch in `economy.py`/`tasking.py` (feasibility,
+day-aware scoring, `yield_units`-gated HARVEST). After the §8 lifespan
+fix, re-evaluation vs. `task_teacher_v2` is exact identity under the
+promotion seeds — Melon still wins the ranking whenever feasible — so
+v3 does **not** displace v2 as Current Champion. Full numbers in
+`docs/4_agent_version_log.md`.
 
 ## Strategy Approach (unchanged from the design doc)
 

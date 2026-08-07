@@ -116,15 +116,19 @@ reviewed and the EDA/data gate explicitly passes.
    hiring-risk-vs-fallback-inefficiency question, item 15 below) if it
    matters before BC teacher selection, but is no longer a promotion
    blocker.
-9. **`task_teacher_v3`** (per the construction sequence: ongoing crops —
-   Tomato/Strawberry — and fertilizer timing; no animals in this version).
-   Needs the ongoing-crop ROI ranking deferred in `docs/3_agent_strategy.md`
-   resolved first, or as part of this version — specifically a
-   season-length assumption for a fair ROI/day comparison against one-time
-   crops (ongoing crops run for the rest of the season with no fixed
-   lifespan). Feed-cost accounting is a separate, animal-specific concern
-   (Goose/Cow/Sheep consume wheat) that doesn't apply to Tomato/Strawberry
-   and is out of scope until a version adds animals.
+9. **`task_teacher_v3`** (ongoing crops — Tomato/Strawberry; no animals).
+   **Built and §8-fixed by Cursor; evaluated twice; not promoted.**
+   2026-08-06 buggy formula lost the vs-v2 screen (`win_rate=0.025`);
+   2026-08-07 corrected `lifespan_days = reachable[-1] + 1` and re-ran
+   Task 9: acceptance clean, but vs-v2 is exact identity
+   (`win_rate=0.500`, margin `+0.0` at 20 and 50 pairs — Melon still
+   outranks corrected Tomato/Strawberry whenever feasible), so the
+   promotion CI never clears above 0.50. Regression vs. `roi_teacher_v3`
+   / `starter` remains 1.000. `task_teacher_v2` remains
+   `competitive_champion` and the submitted ladder agent. See
+   `docs/4_agent_version_log.md`. Fertilizer / animals remain out of
+   scope until a later version (handoff: land/animals need a v4 design
+   doc first — `docs/8_ladder_replay_analysis.md`).
 10. **Critical-path test coverage** — done for economy math, agent decision
     logic (`roi_teacher_*`, `task_teacher_v1`, `task_teacher_v2`), the
     tournament harness, and packaging. Extend to `task_teacher_v3`'s

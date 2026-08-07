@@ -99,13 +99,43 @@ def _score_crop(crop: str, price: float) -> float:
     return (revenue - cd["seed"]) / lifespan_days
 
 
+def _score_ongoing_crop(crop: str, price: float, current_day: int, last_day: int) -> float:
+    """Day-aware $/day ROI estimate for an ongoing crop planted *today*.
+
+    Generalizes `_score_crop` to a multi-tick lifecycle: only ticks that
+    actually land on or before `last_day` count toward revenue, and the
+    lifespan denominator is days from planting through the last reachable
+    tick (`reachable[-1] + 1`), mirroring one-time crops' `max_yield_day + 1`.
+    Only meaningful once `economy.can_ongoing_crop_reach_any_tick` has
+    already confirmed at least one tick is reachable.
+    """
+    offsets = economy.ongoing_crop_production_days(crop)
+    reachable = [o for o in offsets if current_day + o <= last_day]
+    revenue = len(reachable) * price
+    cost = economy.CROPS[crop]["seed"]
+    lifespan_days = reachable[-1] + 1
+    return (revenue - cost) / lifespan_days
+
+
 def _best_feasible_crop(
     day: int, last_day: int, market_prices: dict[str, float], candidate_crops: tuple[str, ...]
 ) -> str | None:
-    feasible = [c for c in candidate_crops if economy.can_mature_in_time(c, day, last_day)]
-    if not feasible:
+    scored: list[tuple[float, str]] = []
+    for crop in candidate_crops:
+        cd = economy.CROPS[crop]
+        price = market_prices.get(crop, cd["seed"])
+        if cd["ongoing"]:
+            if not economy.can_ongoing_crop_reach_any_tick(crop, day, last_day):
+                continue
+            score = _score_ongoing_crop(crop, price, day, last_day)
+        else:
+            if not economy.can_mature_in_time(crop, day, last_day):
+                continue
+            score = _score_crop(crop, price)
+        scored.append((score, crop))
+    if not scored:
         return None
-    return max(feasible, key=lambda c: _score_crop(c, market_prices.get(c, economy.CROPS[c]["seed"])))
+    return max(scored, key=lambda pair: pair[0])[1]
 
 
 def generate_tasks(
@@ -136,14 +166,20 @@ def generate_tasks(
                 crop = _best_feasible_crop(day, last_day, market_prices, candidate_crops)
                 if crop is None:
                     continue
-                price = market_prices.get(crop, economy.CROPS[crop]["seed"])
+                cd = economy.CROPS[crop]
+                price = market_prices.get(crop, cd["seed"])
+                value = (
+                    _score_ongoing_crop(crop, price, day, last_day)
+                    if cd["ongoing"]
+                    else _score_crop(crop, price)
+                )
                 tasks.append(
                     Task(
                         task_id=TaskId(kind=TaskKind.PLANT, x=x, y=y, item=crop),
                         target=(x, y),
                         priority_tier=PriorityTier.ECONOMIC,
                         deadline_step=None,
-                        expected_value=_score_crop(crop, price),
+                        expected_value=value,
                         action_cost=1,
                         resource_needs=(ResourceNeed(item=crop, quantity=1, source="SEED"),),
                     )
@@ -163,6 +199,18 @@ def generate_tasks(
                             action_cost=1,
                         )
                     )
+                elif cd["ongoing"]:
+                    if tile["yield_units"] > 0:
+                        tasks.append(
+                            Task(
+                                task_id=TaskId(kind=TaskKind.HARVEST, x=x, y=y),
+                                target=(x, y),
+                                priority_tier=PriorityTier.DECAYING_YIELD,
+                                deadline_step=None,
+                                expected_value=0.0,
+                                action_cost=1,
+                            )
+                        )
                 elif day - tile["planted_day"] >= cd["max_yield_day"]:
                     tasks.append(
                         Task(

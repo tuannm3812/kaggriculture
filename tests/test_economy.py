@@ -139,3 +139,25 @@ def test_can_mature_in_time_boundary_per_crop(crop):
     last_plantable_day = last_day_index - max_yield_day
     assert economy.can_mature_in_time(crop, last_plantable_day, last_day_index)
     assert not economy.can_mature_in_time(crop, last_plantable_day + 1, last_day_index)
+
+
+@pytest.mark.parametrize("crop", ["TOMATO", "STRAWBERRY"])
+def test_can_ongoing_crop_reach_any_tick_boundary_per_crop(crop):
+    first_yield_day = economy.CROPS[crop]["first_yield_day"]
+    last_day_index = 29
+    last_plantable_day = last_day_index - first_yield_day
+    assert economy.can_ongoing_crop_reach_any_tick(crop, last_plantable_day, last_day_index)
+    assert not economy.can_ongoing_crop_reach_any_tick(crop, last_plantable_day + 1, last_day_index)
+
+
+def test_can_ongoing_crop_reach_any_tick_true_when_only_the_first_tick_fits():
+    # TOMATO ticks at day-offsets [8, 9, 10, 11] since planting. At
+    # current_day=21 with last_day=29: only the first offset (21+8=29)
+    # lands in time; the rest (21+9=30, 21+10=31, 21+11=32) don't. One
+    # reachable tick is still enough to count as feasible.
+    assert economy.can_ongoing_crop_reach_any_tick("TOMATO", current_day=21, last_day=29)
+
+
+def test_can_ongoing_crop_reach_any_tick_rejects_one_time_crop():
+    with pytest.raises(ValueError):
+        economy.can_ongoing_crop_reach_any_tick("WHEAT", 0, 29)

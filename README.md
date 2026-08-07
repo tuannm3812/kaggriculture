@@ -28,8 +28,11 @@ promoted. See `docs/4_agent_version_log.md` for full numbers and
 `docs/superpowers/specs/2026-08-01-task-teacher-v2-design.md` §§10-15 for
 Codex's review and the response. Packaging (`scripts/package_agent.py`)
 is done and verified for every agent. **Submitted to the ladder
-2026-08-06** (`task_teacher_v2`, status `PENDING`) — see
-`docs/6_next_steps.md` for the current recommendation and ongoing work.
+2026-08-06** (`task_teacher_v2`, status `PENDING`). `task_teacher_v3`
+(ongoing crops) was built and re-evaluated after a scoring-formula fix;
+it does **not** promote — post-fix play ties v2 exactly under the
+promotion seeds (Melon still outranks Tomato/Strawberry). See
+`docs/4_agent_version_log.md` and `docs/6_next_steps.md`.
 
 Full design is split across
 [`docs/superpowers/specs/`](docs/superpowers/specs/): the authoritative
