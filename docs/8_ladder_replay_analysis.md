@@ -40,47 +40,74 @@ the 12-episode mark checked earlier the same day — declining as sample
 size grows, consistent with a real skill gap rather than early-sample
 noise.
 
-Three full replay JSONs (`env.toJSON()` format, ~13-18 MB each) were
-downloaded and parsed programmatically (money trajectory by day, max hands
-fielded, land-quadrant unlock timing, animal `PLACE` actions, `HIRE`/
-`BUY_LAND`/`BUY_ANIMAL`/`FERTILIZE` order counts, final tile snapshots) for
-three representative episodes: the clearest win, the closest loss, and the
-most lopsided loss.
+All 19 real-episode replay JSONs (`env.toJSON()` format, ~13-18 MB each)
+were downloaded and parsed programmatically (final money, max hands
+fielded, land-quadrant unlocks, `BUY_LAND`/`BUY_ANIMAL` order presence,
+`HIRE` order counts, for both sides of every game). Three of the
+nineteen — the clearest win, the closest loss, and the most lopsided loss
+— were additionally parsed in full day-by-day detail (money trajectory,
+animal `PLACE` actions, `FERTILIZE` counts, final tile snapshots).
 
 ## Headline Finding
 
 **Win/loss splits almost entirely on whether the opponent expanded land
-and added animals — not on tactical execution quality within
+and/or added animals — not on tactical execution quality within
 `task_teacher_v2`'s existing scope** (single quadrant, Wheat/Carrot/Melon,
-hired-hand task routing).
+hired-hand task routing):
 
-| Episode | Result | Final money (us / opp) | Opp max hands | Opp quadrants bought | Opp animals | Opp `HIRE` orders |
-| --- | --- | ---: | ---: | ---: | --- | ---: |
-| vs. Antonio Stanciu | **WIN** | 41,316 / 15,707 | 5 | 1 (none bought) | none | 125 |
-| vs. Nathan Thor | LOSS | 45,538 / 64,654 | 10 | 3 | COW, GOOSE, fertilizer | 290 |
-| vs. Dziriyin wa9il | LOSS | 13,699 / 85,245 | 12 | 4 (all of it, by day 11) | SHEEP, COW | 302 |
+| Opponent profile | Games | Record | Win rate |
+| --- | ---: | --- | ---: |
+| Opponent bought land and/or used animals | 16 | 5W-11L | 31% |
+| Opponent did neither (still single-quadrant, no animals) | 3 | 3W-0L | **100%** |
 
-`task_teacher_v2` issued **zero** `BUY_LAND` and **zero** `BUY_ANIMAL`
-orders across all three episodes — it structurally cannot do either; that
-logic was never built (per the v1/v2/v3 design docs' explicit scoping).
-Its own hand count topped out at 4-5 in every game, regardless of
-opponent.
+16 of the 19 real opponents faced so far (84%) have already built land
+and/or animal expansion — this is not an edge case in the ladder's
+opponent pool, it is the norm. `task_teacher_v2` issued **zero**
+`BUY_LAND` and **zero** `BUY_ANIMAL` orders across all 19 episodes — it
+structurally cannot do either; that logic was never built (per the
+v1/v2/v3 design docs' explicit scoping). Its own hand count topped out at
+2-5 in most games regardless of opponent.
 
-In the most lopsided loss (vs. Dziriyin wa9il), the opponent's money
-trajectory shows the exact moment the gap opens: both sides were within
-~$300 of each other through day 9 (typical early-game seed-buying
-drawdown), but the opponent had unlocked all 4 land quadrants by day 11
-and their money jumped from $5,227 (day 12) to $85,245 (day 30) as land
-and animal income compounded, while ours grew from $380 to $13,699 over
-the same span — roughly 6x slower.
+Full per-episode table:
 
-The win case is instructive by contrast: that opponent *also* never
-bought land or used animals, and only fielded 5 max hands — in that
-landless-vs-landless matchup, `task_teacher_v2`'s existing hiring/
-multi-unit task-routing logic won decisively (105 vs. 125 `HIRE` orders,
-but ~2.6x the final money). This is not evidence that the core task/route
-logic is weak — it's evidence that the logic is winning within its scope
-and losing on scope.
+| Episode | Opponent | Result | Money (us / opp) | Opp land? | Opp animals? | Opp max hands | Opp max quadrants |
+| --- | --- | --- | ---: | :---: | :---: | ---: | ---: |
+| 90553564 | Koba | LOSS | 35,111 / 46,596 | yes | yes | 13 | 3 |
+| 90549011 | huangjunjia | **WIN** | 24,416 / 13,531 | no | no | 4 | 1 |
+| 90518189 | Giordano Dolenz | LOSS | 28,247 / 45,478 | yes | yes | 14 | 3 |
+| 90514445 | Agrippa Beaulieu | LOSS | 26,896 / 60,910 | yes | yes | 13 | 4 |
+| 90484352 | TheSven | LOSS | 29,185 / 83,921 | yes | yes | 10 | 3 |
+| 90467113 | Michał Łapiński | LOSS | 20,253 / 68,016 | yes | yes | 10 | 2 |
+| 90455456 | Pratik Priyanshu | **WIN** | 42,029 / 33,649 | yes | yes | 11 | 2 |
+| 90448684 | Nathan Thor | LOSS | 45,538 / 64,654 | yes | yes | 10 | 3 |
+| 90447916 | David kinyanjui | **WIN** | 34,498 / 2,369 | yes | yes | 5 | 4 |
+| 90447014 | BALLEN1337 | **WIN** | 25,700 / 17,216 | yes | yes | 9 | 4 |
+| 90446358 | Tim Wong | LOSS | 35,983 / 63,742 | yes | yes | 12 | 3 |
+| 90445580 | Daumas Benjamin | **WIN** | 20,628 / 17,058 | no | yes | 5 | 1 |
+| 90444806 | Antonio Stanciu | **WIN** | 41,316 / 15,707 | no | no | 5 | 1 |
+| 90444006 | Saugat Kannojia | LOSS | 28,903 / 38,097 | yes | yes | 10 | 2 |
+| 90443219 | Tian_Wang1210 | LOSS | 15,061 / 23,542 | yes | no | 8 | 4 |
+| 90443211 | qwertyDmitry | **WIN** | 34,233 / 18,138 | no | no | 2 | 1 |
+| 90442431 | Greek olive oil | LOSS | 14,928 / 34,359 | no | yes | 9 | 1 |
+| 90441655 | Dziriyin wa9il | LOSS | 13,699 / 85,245 | yes | yes | 12 | 4 |
+| 90440902 | cheesama | **WIN** | 28,293 / 25,146 | yes | no | 10 | 3 |
+
+The split isn't absolute — 5 of the 16 "expanded" opponents were still
+beaten (one, David kinyanjui, appears to have bought land/animals but
+executed so poorly they finished with only $2,369; the other four —
+Pratik Priyanshu, BALLEN1337, Daumas Benjamin, cheesama — were closer
+contests our task/route execution still won). But the *pass rate* is
+stark: perfect within scope, roughly 1-in-3 outside it. This is not
+evidence the core task/route logic is weak — it's evidence the logic
+wins within its scope and mostly loses on scope.
+
+In the most lopsided loss (vs. Dziriyin wa9il, full day-by-day trace),
+the opponent's money trajectory shows the exact moment the gap opens:
+both sides were within ~$300 of each other through day 9 (typical
+early-game seed-buying drawdown), but the opponent had unlocked all 4
+land quadrants by day 11 and their money jumped from $5,227 (day 12) to
+$85,245 (day 30) as land and animal income compounded, while ours grew
+from $380 to $13,699 over the same span — roughly 6x slower.
 
 ## Why This Matters
 
@@ -93,9 +120,9 @@ animals either. Those evaluations correctly show `task_teacher_v2`
 dominating that field (CI `[0.730, 1.000]` vs. `task_teacher_v1`) — but
 they cannot and do not measure anything about land or animal strategy,
 because nothing in that local field exercises it. The real ladder's
-opponent pool is not scope-constrained the same way, and roughly half of
-it (at minimum 2 of the 3 sampled opponents) has already built land
-and/or animal expansion. `docs/3_agent_strategy.md` flagged "ongoing
+opponent pool is not scope-constrained the same way — 84% of real
+opponents faced so far (16 of 19) have already built land and/or animal
+expansion. `docs/3_agent_strategy.md` flagged "ongoing
 crops / animals ROI ranking" as an open, unranked question back on
 2026-08-01, and `docs/6_next_steps.md` item 9 explicitly deferred both
 land purchases and animals out of `task_teacher_v3`'s scope. This replay
@@ -126,10 +153,11 @@ as scope for whichever version comes after it, rather than treated as a
 
 ## Caveats
 
-- **Sample size:** 3 replays deep-analyzed out of 19 real episodes so
-  far. The pattern was consistent across all 3 (and directionally
-  supported by the declining `publicScore` as more episodes accumulate),
-  but this is not an exhaustive audit of the full opponent field.
+- **Sample size:** all 19 real episodes played so far were summarized
+  (land/animal presence, hands, quadrants, win/loss); 3 were additionally
+  deep-analyzed day-by-day. 19 games is still a small sample of the full
+  ladder field and will keep growing — the 100%-vs-31% split is stark but
+  not yet a large-n statistical guarantee.
 - **Opponent pool is not fixed:** Kaggle's skill-based matchmaking shifts
   who we're paired against as our own rating moves, and other teams are
   actively resubmitting too. This finding should be periodically
