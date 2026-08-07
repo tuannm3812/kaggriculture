@@ -602,10 +602,17 @@ available, and outcome/lesson.
   **Resubmitted** (2026-08-06, `kaggle competitions submissions
   kaggriculture`): the fixed `build/task_teacher_v2/main.py` (SHA-256
   `451ad135bd79c2e24afc566e908c3dc4e74d9ab58783b8c1367f2c84cab82daf`,
-  bundles only `economy`+`tasking`) is `SubmissionStatus.PENDING` —
-  notably past the point where the previous submission errored
-  immediately at validation, a good sign it cleared the crash. Not yet
-  `scored`.
+  bundles only `economy`+`tasking`) cleared validation and reached
+  `SubmissionStatus.COMPLETE`. As of 2026-08-07: 8W-11L over 19 real
+  ladder episodes, `publicScore` 488.9 (down from 537.6 at the 12-episode
+  mark, declining as sample size grows). Full replay-level analysis of
+  three representative episodes in
+  [`docs/8_ladder_replay_analysis.md`](8_ladder_replay_analysis.md):
+  losses correlate almost entirely with opponents who bought land and
+  used animals (neither of which `task_teacher_v2` can do), while the one
+  deep-analyzed win was against a similarly land/animal-less opponent —
+  see that doc for the full evidence and recommendation to prioritize
+  land + animals as the next version's scope.
 
 - **Lesson carried forward:** synthetic unit tests validated every
   individual function correctly, but neither the runaway-hiring bug nor
