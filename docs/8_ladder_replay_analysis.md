@@ -170,3 +170,35 @@ as scope for whichever version comes after it, rather than treated as a
   hand-count are entangled (more land enables more useful hands), so the
   finding should be read as "land+animals is the standout differentiator
   we can act on now," not as a precise causal decomposition.
+
+## Refresh — 2026-08-10 (56 public episodes)
+
+Same submission `55298958`. Live `publicScore` **504.2**. Full public
+episode count grew from 19 → **56** (plus 1 validation). All 56 replays
+re-downloaded via `kagglesdk` and re-parsed
+(`.superpowers/sdd/ladder/fetch_and_analyze.py`).
+
+| Cohort | Record | Win rate | vs expanded (land and/or animals) |
+| --- | --- | ---: | ---: |
+| First 19 (Aug 7 baseline) | 8W-11L | 42.1% | 31.2% |
+| Next 37 | 20W-17L | 54.1% | 50.0% |
+| **All 56** | **28W-28L** | **50.0%** | **43.5%** |
+
+Finer profile split (all 56; our side still 0×`BUY_LAND`, 0×`BUY_ANIMAL`,
+max 1 quadrant):
+
+| Opponent profile | Games | Record | Win rate | Mean $ margin |
+| --- | ---: | --- | ---: | ---: |
+| Neither land nor animals | 10 | 8W-2L | **80.0%** | +9,581 |
+| Land only | 8 | 5W-3L | **62.5%** | +8,609 |
+| Land + animals | 31 | 13W-18L | 41.9% | −11,115 |
+| Animals only | 7 | 2W-5L | **28.6%** | −7,211 |
+
+**Updated nuance:** with 3× sample, land alone is no longer the whole
+story — land-only opponents are still beatable. **Animals** (with or
+without land) drive the deep negative margins. Clean counterexample:
+MoongladeAI, animals-only on 1 quadrant, 10 hands, margin **−$49,866**.
+Opponent peak hands also tracks losses (0–4 hands: 83% WR; 13+: 0W-3L).
+
+Implication for `task_teacher_v4`: design land **and** the animal loop
+together; do not ship land as a solitary feature.

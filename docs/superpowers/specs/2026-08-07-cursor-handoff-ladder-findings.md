@@ -68,11 +68,14 @@ it is where the real competitive gap is.
 
 ## 4. Action Items
 
-- [ ] Report status on the `task_teacher_v3` fix (in progress / blocked /
-      done).
-- [ ] Once the fix is in and the full suite is green, flag it back for a
-      fresh Task 9 evaluation before any promotion claim (per the
-      existing PR #1 review comment).
-- [ ] Hold off on any land/animal implementation work until a
-      `task_teacher_v4` design doc and implementation plan are handed
-      off, the same way v3's were.
+- [x] Report status on the `task_teacher_v3` fix — **done** (2026-08-07):
+      `lifespan_days = reachable[-1] + 1`, Melon-over-Strawberry regression,
+      suite green (316).
+- [x] Fresh Task 9 after the fix — **done** (2026-08-07): acceptance clean;
+      vs-v2 identity `win_rate=0.500` / margin `+0.0` at 20 and 50 pairs;
+      **not promoted**. See `docs/4_agent_version_log.md`.
+- [ ] Hold off on any land/animal **implementation** until a
+      `task_teacher_v4` design doc and implementation plan are written
+      (brainstorm → spec → plan). Ladder refresh 2026-08-10 (56 episodes)
+      strengthens the case that animals (not land alone) are the sharper
+      edge — see `docs/8_ladder_replay_analysis.md` §Refresh.
