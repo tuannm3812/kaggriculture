@@ -228,6 +228,13 @@ def can_ongoing_crop_reach_any_tick(crop: str, current_day: int, last_day: int) 
     return any(current_day + offset <= last_day for offset in ongoing_crop_production_days(crop))
 
 
+def wheat_reserved_for_feed(geese_count: int, days_horizon: int) -> int:
+    """Wheat units to keep (not sell) so geese can be fed for `days_horizon` days."""
+    if geese_count <= 0 or days_horizon <= 0:
+        return 0
+    return geese_count * days_horizon
+
+
 def one_time_crop_static_yield_per_tile_day(crop: str, watered_in_window: bool = True) -> float:
     """Simple static estimate of average yield/tile/day over the crop's life.
 

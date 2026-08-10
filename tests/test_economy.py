@@ -171,3 +171,17 @@ def test_can_ongoing_crop_reach_any_tick_true_when_only_the_first_tick_fits():
 def test_can_ongoing_crop_reach_any_tick_rejects_one_time_crop():
     with pytest.raises(ValueError):
         economy.can_ongoing_crop_reach_any_tick("WHEAT", 0, 29)
+
+
+def test_wheat_reserved_for_feed_is_geese_times_days():
+    # One wheat per goose per day (FEED consumes 1 WHEAT from inventory).
+    assert economy.wheat_reserved_for_feed(geese_count=2, days_horizon=5) == 10
+
+
+def test_wheat_reserved_for_feed_zero_when_no_geese():
+    assert economy.wheat_reserved_for_feed(geese_count=0, days_horizon=30) == 0
+
+
+def test_wheat_reserved_for_feed_clamps_non_positive_horizon():
+    assert economy.wheat_reserved_for_feed(geese_count=2, days_horizon=0) == 0
+    assert economy.wheat_reserved_for_feed(geese_count=2, days_horizon=-3) == 0
