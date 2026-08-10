@@ -1,6 +1,7 @@
 # Task Teacher v4 — Design
 
-Written 2026-08-10. Status: **pending approval**.
+Written 2026-08-10. Status: **approved** (brainstorm + written-spec sign-off).
+Implementation plan: `docs/superpowers/plans/2026-08-10-task-teacher-v4-implementation.md`.
 
 Inherits project constraints from the authoritative competition and teacher
 specs. Extends the `task_teacher_v2` line (current `competitive_champion` /
