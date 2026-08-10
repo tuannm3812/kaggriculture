@@ -538,6 +538,59 @@ def test_generate_tasks_no_feasible_crop_produces_no_plant_task():
     assert not any(t.task_id.kind == TaskKind.PLANT for t in tasks)
 
 
+def test_generate_tasks_want_coop_emits_build_coop_on_empty_tile():
+    tiles = make_tiles()
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        want_coop=True,
+    )
+    builds = [t for t in tasks if t.task_id.kind == TaskKind.BUILD_COOP]
+    assert len(builds) == 1
+    bx, by = builds[0].target
+    assert tiles[by][bx] is None
+
+
+def test_generate_tasks_pickup_goose_when_shed_has_goose_and_empty_coop():
+    tiles = make_tiles({(3, 3): {"kind": "COOP"}})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        shed={"GOOSE": 1},
+        goose_in_any_inventory=False,
+    )
+    pickups = [t for t in tasks if t.task_id.kind == TaskKind.PICKUP and t.task_id.item == "GOOSE"]
+    assert len(pickups) == 1
+    assert pickups[0].target in economy.shed_access_tiles(BOARD_SIZE)
+
+
+def test_generate_tasks_place_goose_when_inventory_has_goose_and_empty_coop():
+    tiles = make_tiles({(3, 3): {"kind": "COOP"}})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        goose_in_any_inventory=True,
+    )
+    places = [t for t in tasks if t.task_id.kind == TaskKind.PLACE and t.target == (3, 3)]
+    assert len(places) == 1
+    assert places[0].task_id.item == "GOOSE"
+
+
 # --- rank_tasks ------------------------------------------------------------
 
 

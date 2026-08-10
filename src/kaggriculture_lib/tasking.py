@@ -143,6 +143,40 @@ def _best_feasible_crop(
     return max(scored, key=lambda pair: pair[0])[1]
 
 
+def _board_has_coop(tiles: list[list], unlocked: set[str], board_size: int) -> bool:
+    """Whether any COOP structure (empty or occupied) already exists on an
+    unlocked tile, so `want_coop` never queues a redundant BUILD_COOP."""
+    for y in range(board_size):
+        for x in range(board_size):
+            if _quadrant_of(x, y, board_size) not in unlocked:
+                continue
+            tile = tiles[y][x]
+            if isinstance(tile, dict) and tile.get("kind") == "COOP":
+                return True
+    return False
+
+
+def _first_empty_unlocked_build_target(
+    tiles: list[list], unlocked: set[str], board_size: int
+) -> tuple[int, int] | None:
+    """Pick where a BUILD_COOP should land: prefer the first empty, unlocked
+    shed-access tile (keeps the coop close to where PICKUP/PLACE happen),
+    else fall back to the first empty unlocked tile in scan order."""
+    access_tiles = [
+        (ax, ay)
+        for ax, ay in economy.shed_access_tiles(board_size)
+        if _quadrant_of(ax, ay, board_size) in unlocked and tiles[ay][ax] is None
+    ]
+    if access_tiles:
+        return access_tiles[0]
+
+    for y in range(board_size):
+        for x in range(board_size):
+            if _quadrant_of(x, y, board_size) in unlocked and tiles[y][x] is None:
+                return (x, y)
+    return None
+
+
 def generate_tasks(
     tiles: list[list],
     unlocked_quadrants: list[str],
@@ -152,6 +186,9 @@ def generate_tasks(
     candidate_crops: tuple[str, ...],
     board_size: int = 10,
     shed: dict | None = None,
+    want_coop: bool = False,
+    goose_in_any_inventory: bool = False,
+    wheat_needed_for_feed: bool = False,
 ) -> list[Task]:
     """Regenerate the full task list fresh from current farm state.
 
@@ -162,6 +199,14 @@ def generate_tasks(
     tasks: list[Task] = []
     unlocked = set(unlocked_quadrants)
 
+    has_empty_coop = False
+    coop_planned = False
+    build_target = (
+        None
+        if not want_coop or _board_has_coop(tiles, unlocked, board_size)
+        else _first_empty_unlocked_build_target(tiles, unlocked, board_size)
+    )
+
     for y in range(board_size):
         for x in range(board_size):
             if _quadrant_of(x, y, board_size) not in unlocked:
@@ -169,6 +214,19 @@ def generate_tasks(
             tile = tiles[y][x]
 
             if tile is None:
+                if want_coop and not coop_planned and (x, y) == build_target:
+                    coop_planned = True
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.BUILD_COOP, x=x, y=y),
+                            target=(x, y),
+                            priority_tier=PriorityTier.ECONOMIC,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                        )
+                    )
+                    continue
                 crop = _best_feasible_crop(day, last_day, market_prices, candidate_crops)
                 if crop is None:
                     continue
@@ -190,6 +248,21 @@ def generate_tasks(
                         resource_needs=(ResourceNeed(item=crop, quantity=1, source="SEED"),),
                     )
                 )
+
+            elif isinstance(tile, dict) and tile.get("kind") == "COOP" and "animal" not in tile:
+                has_empty_coop = True
+                if goose_in_any_inventory:
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.PLACE, x=x, y=y, item="GOOSE"),
+                            target=(x, y),
+                            priority_tier=PriorityTier.ECONOMIC,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                            resource_needs=(ResourceNeed(item="GOOSE", quantity=1, source="INVENTORY"),),
+                        )
+                    )
 
             elif isinstance(tile, dict) and tile.get("kind") == "PLANT":
                 cd = economy.CROPS[tile["crop"]]
@@ -281,6 +354,37 @@ def generate_tasks(
                             action_cost=1,
                         )
                     )
+
+    if shed:
+        access_tiles = [
+            (ax, ay) for ax, ay in economy.shed_access_tiles(board_size) if _quadrant_of(ax, ay, board_size) in unlocked
+        ]
+        if access_tiles:
+            pickup_target = access_tiles[0]
+            if shed.get("GOOSE", 0) > 0 and not goose_in_any_inventory and has_empty_coop:
+                tasks.append(
+                    Task(
+                        task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="GOOSE"),
+                        target=pickup_target,
+                        priority_tier=PriorityTier.ECONOMIC,
+                        deadline_step=None,
+                        expected_value=0.0,
+                        action_cost=1,
+                        resource_needs=(ResourceNeed(item="GOOSE", quantity=1, source="SHED"),),
+                    )
+                )
+            if wheat_needed_for_feed and shed.get("WHEAT", 0) > 0:
+                tasks.append(
+                    Task(
+                        task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="WHEAT"),
+                        target=pickup_target,
+                        priority_tier=PriorityTier.ECONOMIC,
+                        deadline_step=None,
+                        expected_value=0.0,
+                        action_cost=1,
+                        resource_needs=(ResourceNeed(item="WHEAT", quantity=1, source="SHED"),),
+                    )
+                )
 
     return tasks
 
