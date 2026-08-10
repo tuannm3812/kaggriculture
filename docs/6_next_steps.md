@@ -41,11 +41,30 @@ while flagging five documentation-precision and pre-BC measurement items
 
 **Submitted to the ladder 2026-08-06** — explicitly authorized by the user,
 whose stated goal is to keep working while an agent is actively competing
-rather than wait for a "final" one. Status `PENDING` as of submission; not
-yet `scored`. Re-packaged and re-verified standalone immediately before
-submitting (full test suite clean, 296 passed). `task_teacher_v3` and the
-elite-replay EDA/BC/PPO work continue in parallel and may produce later
-resubmissions — see `docs/4_agent_version_log.md` for the full record.
+rather than wait for a "final" one. The submission then showed
+`SubmissionStatus.ERROR`; root-caused to a real packaging bug (an
+unrelated Elite Replay EDA module was being silently bundled into every
+agent's submission artifact and hard-failing on Kaggle's actual runtime
+version) — see `docs/4_agent_version_log.md`'s 2026-08-06 incident entry
+for the full diagnosis and fix (`fix/package-agent-scope-shared-modules`).
+Fixed test-first, full suite clean (297 passed), re-packaged and
+resubmitted. `task_teacher_v3` and the elite-replay EDA/BC/PPO work
+continue in parallel and may produce later resubmissions.
+
+**Ladder replay analysis (2026-08-06/07)** — see
+[`docs/8_ladder_replay_analysis.md`](8_ladder_replay_analysis.md) for full
+detail. Record as of writing: 8W-11L (19 real episodes), `publicScore`
+488.9 and declining. Three deep-analyzed replays show win/loss splitting
+almost entirely on whether the opponent bought land and used animals —
+`task_teacher_v2` has never issued a `BUY_LAND` or `BUY_ANIMAL` order and
+caps out at 4-5 hired hands regardless of opponent, while ladder opponents
+who expand to the full board and add animals pull decisively ahead
+starting around day 10-13. Against similarly land/animal-less opponents,
+`task_teacher_v2` still wins convincingly, so this is a scope gap, not a
+tactical-execution regression. **Recommendation: prioritize land
+purchase + animal husbandry (deferred out of both v2 and v3) as the next
+version's scope**, ahead of further single-quadrant refinement — see the
+analysis doc for the full reasoning and caveats.
 
 ## Elite Replay EDA Gate (2026-08-02)
 

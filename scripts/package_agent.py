@@ -82,9 +82,32 @@ def _referenced_shared_modules(source: str, known_names: set[str]) -> set[str]:
     return referenced & known_names
 
 
-def _discover_shared_modules(lib_dir: Path) -> list[str]:
+def _transitive_closure(start: set[str], deps: dict[str, set[str]]) -> set[str]:
+    """`start` plus every module reachable by following `deps` edges."""
+    closure: set[str] = set()
+    frontier = set(start)
+    while frontier:
+        name = frontier.pop()
+        if name in closure:
+            continue
+        closure.add(name)
+        frontier |= deps[name] - closure
+    return closure
+
+
+def _discover_shared_modules(lib_dir: Path, agent_src: str | None = None) -> list[str]:
     """Shared module names under `lib_dir`, topologically sorted so a
-    module that imports another comes after it (Kahn's algorithm)."""
+    module that imports another comes after it (Kahn's algorithm).
+
+    Circular-dependency detection always runs over every module in
+    `lib_dir`, regardless of what the agent needs -- a circular shared
+    module is a bug in the library itself. But the returned list is
+    restricted to the transitive closure of what `agent_src` actually
+    references via `from kaggriculture_lib import ...`: bundling every
+    module in the directory unconditionally let an unrelated module with
+    an import-time side effect (e.g. a version guard) get silently pulled
+    into agents that never imported it. If `agent_src` is omitted, every
+    module is returned (used by tests that don't care about an agent)."""
     names = sorted(p.stem for p in lib_dir.glob("*.py") if p.stem != "__init__")
     deps = {name: _referenced_shared_modules((lib_dir / f"{name}.py").read_text(), set(names)) for name in names}
 
@@ -96,13 +119,18 @@ def _discover_shared_modules(lib_dir: Path) -> list[str]:
             raise SystemExit(f"Circular dependency among shared modules: {sorted(remaining)}")
         ordered.extend(ready)
         remaining -= set(ready)
-    return ordered
+
+    if agent_src is None:
+        return ordered
+
+    start = _referenced_shared_modules(agent_src, set(names))
+    closure = _transitive_closure(start, deps)
+    return [name for name in ordered if name in closure]
 
 
 def package(agent_dir: Path, out_path: Path) -> None:
-    module_order = _discover_shared_modules(LIB_DIR)
-
     agent_src = (agent_dir / "main.py").read_text()
+    module_order = _discover_shared_modules(LIB_DIR, agent_src=agent_src)
     future_imports = "".join(FUTURE_IMPORT_RE.findall(agent_src))
     agent_src = FUTURE_IMPORT_RE.sub("", agent_src)
     if future_imports:

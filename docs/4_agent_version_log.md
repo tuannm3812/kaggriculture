@@ -536,7 +536,84 @@ available, and outcome/lesson.
   parallel and may produce later resubmissions. This is a deliberate
   "get on the board now" decision, not a claim that `task_teacher_v2` is
   the final agent.
-- **Ladder result:** `PENDING` (submitted 2026-08-06, not yet scored).
+- **Ladder result:** `PENDING` at submission (2026-08-06), later found to
+  be `SubmissionStatus.ERROR` (see incident below). Resubmitted after the
+  fix; see the incident entry for current status.
+
+- **Production incident (2026-08-06): submission errored on Kaggle,
+  root-caused and fixed.** The `kaggle competitions submissions
+  kaggriculture` status changed to `SubmissionStatus.ERROR`. The Kaggle
+  submissions UI's summary row gave no detail; the user opened the
+  submission's own page and pasted its replay/stderr log, which showed
+  the real traceback:
+
+  ```
+  File "/kaggle_simulations/agent/main.py", line 34, in <module>
+      replay_compat = _register_shared_module('kaggriculture_lib.replay_compat', ...)
+  File "kaggriculture_lib/replay_compat.py", line 15, in <module>
+  RuntimeError: compatibility evaluation requires kaggle-environments==1.29.3; found 1.32.4
+  ```
+
+  Root cause: `scripts/package_agent.py`'s `_discover_shared_modules`
+  bundled **every** `.py` file under `src/kaggriculture_lib/`
+  unconditionally — `package()` never filtered by what the agent's own
+  `main.py` actually imports. That was invisible while the directory
+  only held `economy.py`/`tasking.py` (the only two `task_teacher_v2`
+  needs), but the separate, later Elite Replay EDA work added
+  `replay_provenance.py`, `replay_schema.py`, `replay_compat.py`,
+  `replay_metrics.py`, `replay_splits.py` to the same directory.
+  `replay_compat.py` hard-fails at import time
+  (`if kaggle_environments.__version__ != "1.29.3": raise RuntimeError`)
+  — a reasonable guard in its own context (protecting replay evaluation
+  from running under an incompatible runtime), but bundling it into an
+  agent that never calls it is enough to crash that agent on import,
+  before it ever takes a turn, the instant the runtime isn't an exact
+  version match. This also surfaced a second fact: Kaggle's actual
+  submission-validation runtime is `kaggle_environments==1.32.4` — newer
+  than the `1.29.3` the 2026-08-02 notebook-kernel verification
+  (`notebooks/01_task_teacher_v2_verification.ipynb`) had confirmed;
+  that verification apparently ran on a different Kaggle infra image
+  than live submission validation does.
+
+  Fixed test-first (branch `fix/package-agent-scope-shared-modules`):
+  added `test_package_only_bundles_modules_the_agent_transitively_imports`
+  (a stub module with an import-time `RuntimeError`, asserted absent from
+  the packaged output unless referenced) — confirmed it failed for the
+  right reason (`assert "unrelated_with_side_effect" not in generated`
+  found it present), then restricted `_discover_shared_modules`'s
+  returned list to the transitive closure of what `agent_src` references
+  via `from kaggriculture_lib import ...`, computed within the existing
+  topological order. Circular-dependency detection still runs over the
+  *entire* directory regardless of agent (a circular shared-module
+  dependency is a library bug on its own), only the final returned list
+  is filtered. Full suite: 297 passed (296 + the new regression test).
+  Re-packaged and re-verified all four existing agents standalone;
+  `build/task_teacher_v2/main.py` now bundles only `economy`+`tasking`.
+
+  **Lesson:** local packaging tests all ran under this repo's pinned
+  `.venv` (`kaggle_environments==1.29.3` exactly), so `replay_compat.py`'s
+  guard never fired locally — the bug was only reachable on Kaggle's
+  actual runtime, which turned out to differ from what the last
+  runtime-parity check had measured. A version-pinned safety guard in one
+  module can silently weaponize an unrelated packaging bug in a totally
+  different subsystem; "no agent imports this" is not the same guarantee
+  as "no agent's packaged artifact contains this."
+
+  **Resubmitted** (2026-08-06, `kaggle competitions submissions
+  kaggriculture`): the fixed `build/task_teacher_v2/main.py` (SHA-256
+  `451ad135bd79c2e24afc566e908c3dc4e74d9ab58783b8c1367f2c84cab82daf`,
+  bundles only `economy`+`tasking`) cleared validation and reached
+  `SubmissionStatus.COMPLETE`. As of 2026-08-07: 8W-11L over 19 real
+  ladder episodes, `publicScore` 488.9 (down from 537.6 at the 12-episode
+  mark, declining as sample size grows). Full replay-level analysis of
+  three representative episodes in
+  [`docs/8_ladder_replay_analysis.md`](8_ladder_replay_analysis.md):
+  losses correlate almost entirely with opponents who bought land and
+  used animals (neither of which `task_teacher_v2` can do), while the one
+  deep-analyzed win was against a similarly land/animal-less opponent —
+  see that doc for the full evidence and recommendation to prioritize
+  land + animals as the next version's scope.
+
 - **Lesson carried forward:** synthetic unit tests validated every
   individual function correctly, but neither the runaway-hiring bug nor
   the performance bug was visible until a *real, full-length simulator
