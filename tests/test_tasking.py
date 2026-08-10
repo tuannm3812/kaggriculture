@@ -69,6 +69,20 @@ def make_ongoing_plant_tile(crop: str, planted_day: int, watered_today: bool, yi
     }
 
 
+def make_goose_tile(placed_day, fed_today, cared_today, yield_units, consecutive_unfed=0):
+    return {
+        "kind": "COOP",
+        "animal": "GOOSE",
+        "placed_day": placed_day,
+        "yield_units": yield_units,
+        "consecutive_unfed": consecutive_unfed,
+        "fed_today": fed_today,
+        "cared_today": cared_today,
+        "fertilizer_available": False,
+        "pending_care_bonus": 0,
+    }
+
+
 def test_priority_tier_orders_emergency_before_economic():
     assert PriorityTier.EMERGENCY < PriorityTier.ECONOMIC
     assert PriorityTier.DECAYING_YIELD < PriorityTier.DAILY_CARE
@@ -412,6 +426,56 @@ def test_generate_tasks_weed_produces_dig_task():
     )
     dig_tasks = [t for t in tasks if t.task_id.kind == TaskKind.DIG and t.target == (2, 2)]
     assert len(dig_tasks) == 1
+
+
+def test_generate_tasks_unfed_goose_produces_feed_not_care():
+    tiles = make_tiles({(2, 2): make_goose_tile(0, fed_today=False, cared_today=False, yield_units=0, consecutive_unfed=1)})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=5,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+    )
+    tile_tasks = [t for t in tasks if t.target == (2, 2)]
+    assert len(tile_tasks) == 1
+    assert tile_tasks[0].task_id.kind == TaskKind.FEED
+    assert tile_tasks[0].priority_tier == PriorityTier.EMERGENCY
+
+
+def test_generate_tasks_fed_uncared_goose_produces_care():
+    tiles = make_tiles({(2, 2): make_goose_tile(0, fed_today=True, cared_today=False, yield_units=0)})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=5,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+    )
+    tile_tasks = [t for t in tasks if t.target == (2, 2)]
+    assert len(tile_tasks) == 1
+    assert tile_tasks[0].task_id.kind == TaskKind.CARE
+    assert tile_tasks[0].priority_tier == PriorityTier.DAILY_CARE
+
+
+def test_generate_tasks_goose_with_yield_produces_harvest():
+    tiles = make_tiles({(2, 2): make_goose_tile(0, fed_today=True, cared_today=True, yield_units=2)})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=5,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+    )
+    harvest = [t for t in tasks if t.target == (2, 2) and t.task_id.kind == TaskKind.HARVEST]
+    assert len(harvest) == 1
+    assert harvest[0].priority_tier == PriorityTier.DECAYING_YIELD
 
 
 def test_generate_tasks_filters_infeasible_plant_near_season_end():

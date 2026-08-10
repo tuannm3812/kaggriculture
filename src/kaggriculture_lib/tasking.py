@@ -151,6 +151,7 @@ def generate_tasks(
     market_prices: dict[str, float],
     candidate_crops: tuple[str, ...],
     board_size: int = 10,
+    shed: dict | None = None,
 ) -> list[Task]:
     """Regenerate the full task list fresh from current farm state.
 
@@ -239,6 +240,47 @@ def generate_tasks(
                         action_cost=1,
                     )
                 )
+
+            elif isinstance(tile, dict) and "animal" in tile:
+                if not tile["fed_today"]:
+                    tier = (
+                        PriorityTier.EMERGENCY
+                        if tile.get("consecutive_unfed", 0) >= 1
+                        else PriorityTier.DAILY_CARE
+                    )
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.FEED, x=x, y=y),
+                            target=(x, y),
+                            priority_tier=tier,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                            resource_needs=(ResourceNeed(item="WHEAT", quantity=1, source="INVENTORY"),),
+                        )
+                    )
+                elif tile.get("yield_units", 0) > 0:
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.HARVEST, x=x, y=y),
+                            target=(x, y),
+                            priority_tier=PriorityTier.DECAYING_YIELD,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                        )
+                    )
+                elif not tile["cared_today"]:
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.CARE, x=x, y=y),
+                            target=(x, y),
+                            priority_tier=PriorityTier.DAILY_CARE,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                        )
+                    )
 
     return tasks
 
