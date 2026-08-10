@@ -882,3 +882,38 @@ available, and outcome/lesson.
   count shed + inventory geese toward `MAX_GEESE` (and stop buying when
   in-flight animals already fill the cap), then re-run the full protocol
   on fresh seeds.
+
+### Post-fix re-evaluation (2026-08-10, buy-cap fix)
+
+- **Fix:** `_owned_goose_count` = placed + shed + inventory; `BUY_ANIMAL` /
+  `want_coop` use that cap. Regression tests cover shed-full / placed+shed /
+  inventory-fill. Commit `1ce02bb`.
+- **Acceptance** (100×720 vs `starter`, seeds **74000–74099**):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` / finite | 100/100 / 100/100 |
+  | Mean agent / starter reward | **27379** / 2514 |
+  | `BUY_LAND` | **0** |
+  | `BUY_ANIMAL:GOOSE` | 1171 (~11.7/ep; geese turnover, not uncapped spam) |
+  | Goose loop | `BUILD_COOP`=100, `PLACE`=1079, `FEED`=25876, `CARE`=10 |
+  | Determinism | identical |
+
+- **Paired evaluation** (fresh seeds; no 50-pair — screen CI wholly below 0.50):
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v2` (screen, seed 75000) | 20/40 | **0.000** | -10196.5 | **[0.000, 0.380]** |
+  | vs. `roi_teacher_v3` (regression, seed 77000) | 20/40 | 1.000 | +20977.3 | [0.620, 1.000] |
+  | vs. `starter` (regression, seed 77000) | 20/40 | 1.000 | +23906.1 | [0.620, 1.000] |
+
+- **Outcome: still not promoted.** Beats starter/roi_v3 cleanly after the
+  buy-cap fix, but loses every pair to `task_teacher_v2`. Champion remains
+  `task_teacher_v2`.
+- **Remaining gap (land):** live probe (seed 74000) shows
+  `should_buy_land` blocked every turn by `plant_tile_count <
+  NW_SATURATION_PLANTS` (18) — Melon-heavy play never holds 18 concurrent
+  PLANT tiles on NW. Goose economics alone are not enough to beat v2 under
+  these seeds; land never unlocks. Next iteration should retune the
+  saturation predicate (or measure peak concurrent plants under v2/v4) before
+  another promotion attempt.
