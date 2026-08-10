@@ -260,6 +260,52 @@ def test_does_not_buy_goose_when_already_at_max_geese():
     assert not any(order[0] == "BUY_ANIMAL" for order in action["market"])
 
 
+def test_does_not_buy_goose_when_shed_already_holds_max_geese():
+    """BUY_ANIMAL deposits into the shed, so shed stock must count toward
+    MAX_GEESE — otherwise the agent re-buys every turn (Task 9 failure mode)."""
+    module = load_agent_module("task_teacher_v4")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    tiles[1][1] = {"kind": "COOP"}
+    obs = make_obs(
+        farmer=(4, 4),
+        tiles=tiles,
+        money=10_000.0,
+        shed={"GOOSE": module.MAX_GEESE},
+    )
+    action = module.agent(obs, V4_CONFIG)
+    assert not any(order[0] == "BUY_ANIMAL" for order in action["market"])
+
+
+def test_does_not_buy_goose_when_placed_plus_shed_reach_max():
+    module = load_agent_module("task_teacher_v4")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    tiles[4][4] = make_goose_tile(fed_today=True)
+    tiles[1][1] = {"kind": "COOP"}
+    obs = make_obs(
+        farmer=(4, 4),
+        tiles=tiles,
+        money=10_000.0,
+        shed={"GOOSE": module.MAX_GEESE - 1},
+    )
+    action = module.agent(obs, V4_CONFIG)
+    assert not any(order[0] == "BUY_ANIMAL" for order in action["market"])
+
+
+def test_does_not_buy_goose_when_inventory_fills_remaining_cap():
+    module = load_agent_module("task_teacher_v4")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    tiles[4][4] = make_goose_tile(fed_today=True)
+    tiles[1][1] = {"kind": "COOP"}
+    obs = make_obs(
+        farmer=(4, 4),
+        tiles=tiles,
+        money=10_000.0,
+        farmer_inventory={"GOOSE": module.MAX_GEESE - 1},
+    )
+    action = module.agent(obs, V4_CONFIG)
+    assert not any(order[0] == "BUY_ANIMAL" for order in action["market"])
+
+
 def test_sells_eggs_from_shed():
     module = load_agent_module("task_teacher_v4")
     obs = make_obs(farmer=(4, 4), shed={"EGG": 7})

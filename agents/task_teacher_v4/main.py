@@ -143,6 +143,19 @@ def _farm_animal_and_structure_counts(tiles: list[list]) -> tuple[int, int, int,
     return geese_count, unfed_geese_count, has_empty_coop, plant_tile_count
 
 
+def _owned_goose_count(placed_geese: int, shed: dict, inventories: list[dict]) -> int:
+    """Placed + shed + inventory geese.
+
+    Env `BUY_ANIMAL` deposits into `private["shed"]`, not onto a tile, so a
+    buy-cap that only counts placed animals re-fires every turn (Task 9).
+    """
+    return (
+        placed_geese
+        + int(shed.get("GOOSE", 0))
+        + sum(int(inv.get("GOOSE", 0)) for inv in inventories)
+    )
+
+
 def agent(obs, config=None):
     _reset_if_new_episode(_state, obs["step"])
     reset_hand_assignments_on_day_change(_state, obs["day"])
@@ -160,15 +173,14 @@ def agent(obs, config=None):
 
     last_day = economy.last_day_index(config)
 
-    geese_count, unfed_geese_count, has_empty_coop, plant_tile_count = _farm_animal_and_structure_counts(
+    placed_geese, unfed_geese_count, has_empty_coop, plant_tile_count = _farm_animal_and_structure_counts(
         me["tiles"]
     )
-    # Don't queue a redundant BUILD_COOP once an empty coop is already
-    # standing (waiting to be PLACE'd into) -- `generate_tasks` also
-    # guards against a second coop appearing anywhere on the board, but
-    # this keeps the intent explicit at the call site.
-    want_coop = geese_count < MAX_GEESE and not has_empty_coop
+    owned_geese = _owned_goose_count(placed_geese, shed, inventories)
     goose_in_any_inventory = any(inv.get("GOOSE", 0) > 0 for inv in inventories)
+    # Build a coop when under the owned cap *or* when in-flight geese (shed /
+    # inventory) still need a PLACE target — and only if no empty coop is up.
+    want_coop = (owned_geese < MAX_GEESE or shed.get("GOOSE", 0) > 0 or goose_in_any_inventory) and not has_empty_coop
     wheat_in_inventories = sum(inv.get("WHEAT", 0) for inv in inventories)
     # Minimal correct signal: only queue a WHEAT PICKUP when there's an
     # unfed goose today and the wheat already carried isn't enough to feed
@@ -196,10 +208,9 @@ def agent(obs, config=None):
     _state.assignments = {unit: tid for unit, tid in assignment.items() if tid is not None}
 
     # Sell every held crop and EGG, except wheat kept back to feed geese --
-    # `wheat_reserved_for_feed` over the remaining season (at least one day
-    # of horizon so a same-day sell-everything glitch can't zero it out).
+    # reserve from *placed* geese only (shed stock doesn't eat yet).
     market_orders: list[list] = []
-    wheat_reserve = economy.wheat_reserved_for_feed(geese_count, max(1, last_day - day))
+    wheat_reserve = economy.wheat_reserved_for_feed(placed_geese, max(1, last_day - day))
     for crop in CANDIDATE_CROPS:
         available = shed.get(crop, 0)
         sellable = max(0, available - wheat_reserve) if crop == "WHEAT" else available
@@ -255,7 +266,7 @@ def agent(obs, config=None):
         market_orders.append(["BUY_LAND"])
         available_money -= economy.land_cost(len(me["unlocked_quadrants"]) - 1)
 
-    if geese_count < MAX_GEESE and (has_empty_coop or want_coop) and available_money >= GOOSE_COST:
+    if owned_geese < MAX_GEESE and (has_empty_coop or want_coop) and available_money >= GOOSE_COST:
         market_orders.append(["BUY_ANIMAL", "GOOSE", 1])
         available_money -= GOOSE_COST
 
