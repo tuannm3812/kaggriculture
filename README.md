@@ -31,8 +31,8 @@ is done and verified for every agent. **Submitted to the ladder
 2026-08-06** (`task_teacher_v2`, status `PENDING`). `task_teacher_v3`
 (ongoing crops) and `task_teacher_v4` (land + Goose) were both built and
 evaluated; **neither promotes** — v3 ties v2 after a scoring fix; v4
-(buy-cap fixed) still loses 0–20 to v2 (`BUY_LAND` never fires:
-`NW_SATURATION_PLANTS=18` unreachable under Melon play). Champion and ladder agent remain
+(buy-cap + sat=12 land retune) still loses 0–20 to v2 despite live
+`BUY_LAND`. Champion and ladder agent remain
 **`task_teacher_v2`**. See `docs/4_agent_version_log.md` and
 `docs/6_next_steps.md`.
 

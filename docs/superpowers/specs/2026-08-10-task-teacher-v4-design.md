@@ -1,8 +1,7 @@
 # Task Teacher v4 — Design
 
-Written 2026-08-10. Status: **implemented; evaluated (post buy-cap fix); not promoted**
-(2026-08-10 Task 9b — still loses to v2; `BUY_LAND` blocked by saturation
-threshold — see `docs/4_agent_version_log.md`).
+Written 2026-08-10. Status: **implemented; land gate retuned (sat=12); still not promoted**
+(Task 9c vs v2 still 0.000 — see `docs/4_agent_version_log.md`).
 Implementation plan: `docs/superpowers/plans/2026-08-10-task-teacher-v4-implementation.md`.
 
 Inherits project constraints from the authoritative competition and teacher

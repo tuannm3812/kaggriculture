@@ -6,17 +6,15 @@ Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
 **Stay on `task_teacher_v2` for the ladder.** Do **not** submit `task_teacher_v4`.
 
-Post buy-cap fix re-eval (fresh seeds): acceptance crushes `starter`
-(~27k vs ~2.5k mean), regressions vs `roi_teacher_v3`/`starter` are 1.000,
-but the 20-pair screen vs `task_teacher_v2` is still `win_rate=0.000`,
-Hoeffding CI `[0.000, 0.380]` — **not promoted**. `BUY_LAND` remains 0 in
-live play because `NW_SATURATION_PLANTS=18` never clears under Melon-heavy
-concurrent plant counts. See `docs/4_agent_version_log.md`.
+After buy-cap fix + `NW_SATURATION_PLANTS` 18→12: acceptance shows
+`BUY_LAND=100/100` episodes and ~28k mean vs starter, but the 20-pair
+screen vs `task_teacher_v2` is still `win_rate=0.000`, Hoeffding CI
+`[0.000, 0.380]` — **not promoted**. Land works; Goose+NE still lose to
+v2's NW Melon/hire play. See `docs/4_agent_version_log.md`.
 
-**Next engineering priority:** retune `should_buy_land` saturation (measure
-peak concurrent PLANT tiles; lower/replace the hard 18 threshold), then
-re-run Task 9. Buy-cap fix is in; land gate is the remaining blocker for
-the ladder-motivated scope.
+**Next engineering priority:** diagnose opportunity cost of the Goose loop
+(FEED labor, egg ROI vs Melon tiles, near-absent CARE) — not further land
+threshold chasing.
 
 ## Prior Recommendation (2026-08-02)
 

@@ -917,3 +917,24 @@ available, and outcome/lesson.
   these seeds; land never unlocks. Next iteration should retune the
   saturation predicate (or measure peak concurrent plants under v2/v4) before
   another promotion attempt.
+
+### Post-saturation retune (2026-08-10, NW_SATURATION_PLANTS 18→12)
+
+- **Evidence:** Melon-heavy peaks of 16–20 concurrent plants arrive around
+  day 19+, after `LAND_MIN_DAYS_REMAINING=12` already fails. Probe: floor
+  12 + unchanged hire_v==0 fires land in 10/10 seeds.
+- **Acceptance** (seeds **78000–78099**): 100/100 DONE; mean reward
+  **28108** vs starter **2515**; **`BUY_LAND=100`** (1/ep); Goose loop intact.
+- **Paired evaluation:**
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v2` (screen, seed 79000) | 20/40 | **0.000** | -9300.4 | **[0.000, 0.380]** |
+  | vs. `roi_teacher_v3` (regression, seed 80000) | 20/40 | 1.000 | +21495.9 | [0.620, 1.000] |
+  | vs. `starter` (regression, seed 80000) | 20/40 | 1.000 | +24528.8 | [0.620, 1.000] |
+
+- **Outcome: still not promoted.** Land purchase now works in live play,
+  but v4 remains strictly worse than v2 under the Hoeffding screen. Do not
+  submit. Next: diagnose *why* NE+Goose loses to NW-only Melon/hire (egg
+  ROI vs Melon opportunity cost; FEED labor; CARE near-absent) before
+  further gate tuning.
