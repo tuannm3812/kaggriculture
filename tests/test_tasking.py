@@ -74,6 +74,12 @@ def test_priority_tier_orders_emergency_before_economic():
     assert PriorityTier.OPTIONAL > PriorityTier.ECONOMIC
 
 
+def test_task_kind_includes_v4_animal_and_pickup_kinds():
+    for name in ("BUILD_COOP", "PLACE", "FEED", "CARE", "PICKUP"):
+        assert hasattr(TaskKind, name)
+        assert TaskKind[name].value == name
+
+
 def test_task_id_is_hashable_and_orderable():
     a = TaskId(kind=TaskKind.PLANT, x=1, y=2, item="WHEAT")
     b = TaskId(kind=TaskKind.PLANT, x=1, y=2, item="WHEAT")

@@ -22,6 +22,11 @@ class TaskKind(str, Enum):
     WATER = "WATER"
     HARVEST = "HARVEST"
     DIG = "DIG"
+    BUILD_COOP = "BUILD_COOP"
+    PLACE = "PLACE"
+    FEED = "FEED"
+    CARE = "CARE"
+    PICKUP = "PICKUP"
 
 
 class PriorityTier(IntEnum):
