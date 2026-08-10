@@ -994,6 +994,40 @@ def test_should_buy_land_true_when_nw_saturated_and_affordable():
     )
 
 
+def test_should_buy_land_true_at_retuned_saturation_floor():
+    """Post-Task-9 measurement: Melon play rarely holds 18 concurrent plants
+    while days_left still clears LAND_MIN_DAYS_REMAINING. Floor lowered to
+    12 (NW ~half-busy); hire_v==0 and other gates unchanged."""
+    from kaggriculture_lib.tasking import NW_SATURATION_PLANTS
+
+    assert NW_SATURATION_PLANTS == 12
+    assert should_buy_land(
+        unlocked_quadrants=["NW"],
+        money=2000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=5,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=12,
+    )
+
+
+def test_should_buy_land_false_just_below_saturation_floor():
+    assert not should_buy_land(
+        unlocked_quadrants=["NW"],
+        money=5000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=5,
+        day=5,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=11,
+    )
+
+
 def test_should_buy_land_false_when_ne_already_owned():
     assert not should_buy_land(
         unlocked_quadrants=["NW", "NE"],

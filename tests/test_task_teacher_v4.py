@@ -125,7 +125,7 @@ def test_emits_buy_land_when_gate_would_pass():
     """Construct an obs that satisfies every should_buy_land clause: NW
     only, comfortably affordable, 3 hands (>= MIN_HANDS_BEFORE_LAND), 25
     saturated (already-growing, already-watered, not-yet-harvestable)
-    plant tiles (>= NW_SATURATION_PLANTS=18, and hire has zero value since
+    plant tiles (>= NW_SATURATION_PLANTS=12, and hire has zero value since
     3 hands' worth of capacity already covers the tiny remaining load),
     and 14 days left in the season (>= LAND_MIN_DAYS_REMAINING=12)."""
     module = load_agent_module("task_teacher_v4")

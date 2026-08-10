@@ -602,7 +602,11 @@ AVERAGE_VALUE_PER_RECOVERED_ACTION = 15.0
 LAND_MIN_DAYS_REMAINING = 12
 LAND_BUDGET_RESERVE = 400
 MIN_HANDS_BEFORE_LAND = 3
-NW_SATURATION_PLANTS = 18
+# Measured 2026-08-10: Melon-heavy v4 peaks at ~16–20 concurrent plants, but
+# usually only after day ~19 when LAND_MIN_DAYS_REMAINING already fails. Floor
+# 12 fires while the season window is still open (10/10 probe seeds) without
+# dropping the hire_v==0 / hand-floor gates.
+NW_SATURATION_PLANTS = 12
 
 
 def estimate_hire_value(projected_load: int, remaining_turns_today: int, existing_hands: int = 0) -> float:
