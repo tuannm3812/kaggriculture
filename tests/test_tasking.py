@@ -27,6 +27,7 @@ from kaggriculture_lib.tasking import (
     rank_tasks,
     reset_hand_assignments_on_day_change,
     route_toward,
+    should_buy_land,
     should_hire,
 )
 
@@ -816,6 +817,78 @@ def test_should_hire_accounts_for_capacity_already_provided_by_existing_hands():
     # already enough to cover it, must no longer be worth another hire.
     assert not should_hire(
         projected_load=80, remaining_turns_today=24, hires_today=3, money=1_000_000, existing_hands=3
+    )
+
+
+def test_should_buy_land_true_when_nw_saturated_and_affordable():
+    assert should_buy_land(
+        unlocked_quadrants=["NW"],
+        money=2000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=5,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=20,
+    )
+
+
+def test_should_buy_land_false_when_ne_already_owned():
+    assert not should_buy_land(
+        unlocked_quadrants=["NW", "NE"],
+        money=5000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=5,
+        day=5,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=25,
+    )
+
+
+def test_should_buy_land_false_when_hire_still_valuable():
+    # Huge load + few hands → estimate_hire_value > 0 → land deferred.
+    assert not should_buy_land(
+        unlocked_quadrants=["NW"],
+        money=5000.0,
+        projected_load=200,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=5,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=20,
+    )
+
+
+def test_should_buy_land_false_when_too_late_in_season():
+    assert not should_buy_land(
+        unlocked_quadrants=["NW"],
+        money=5000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=20,
+        last_day=29,  # only 9 days left < 12
+        reserved_for_hire=0.0,
+        plant_tile_count=20,
+    )
+
+
+def test_should_buy_land_false_when_cash_after_hire_reserve_too_low():
+    # land 1000 + reserve 400 = 1400 needed; money-reserved = 1300.
+    assert not should_buy_land(
+        unlocked_quadrants=["NW"],
+        money=1500.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=5,
+        last_day=29,
+        reserved_for_hire=200.0,
+        plant_tile_count=20,
     )
 
 

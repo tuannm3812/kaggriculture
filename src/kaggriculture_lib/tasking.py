@@ -453,6 +453,11 @@ def project_daily_load(
 # hiring behavior is accounted for.
 AVERAGE_VALUE_PER_RECOVERED_ACTION = 15.0
 
+LAND_MIN_DAYS_REMAINING = 12
+LAND_BUDGET_RESERVE = 400
+MIN_HANDS_BEFORE_LAND = 3
+NW_SATURATION_PLANTS = 18
+
 
 def estimate_hire_value(projected_load: int, remaining_turns_today: int, existing_hands: int = 0) -> float:
     """Estimated dollar value of hiring one *more* hand today.
@@ -499,6 +504,36 @@ def should_hire(
         return False
     value = estimate_hire_value(projected_load, remaining_turns_today, existing_hands)
     return value > cost + safety_margin
+
+
+def should_buy_land(
+    unlocked_quadrants: list[str],
+    money: float,
+    projected_load: int,
+    remaining_turns_today: int,
+    existing_hands: int,
+    day: int,
+    last_day: int,
+    reserved_for_hire: float,
+    plant_tile_count: int,
+) -> bool:
+    """Whether to emit BUY_LAND for NE this turn (v4 hard-cap: one extra quadrant)."""
+    if len(unlocked_quadrants) != 1:
+        return False
+    if plant_tile_count < NW_SATURATION_PLANTS:
+        return False
+    if existing_hands < MIN_HANDS_BEFORE_LAND:
+        return False
+    if last_day - day < LAND_MIN_DAYS_REMAINING:
+        return False
+    cost = economy.land_cost(0)
+    if cost is None:
+        return False
+    if money - reserved_for_hire < cost + LAND_BUDGET_RESERVE:
+        return False
+    if estimate_hire_value(projected_load, remaining_turns_today, existing_hands) > 0:
+        return False
+    return True
 
 
 def route_toward(
