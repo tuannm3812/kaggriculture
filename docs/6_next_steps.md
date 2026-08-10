@@ -2,7 +2,25 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
-## Current Recommendation (2026-08-02)
+## Current Recommendation (2026-08-10)
+
+**Stay on `task_teacher_v2` for the ladder.** `task_teacher_v4` (land + Goose)
+was built and evaluated on 2026-08-10 and **did not promote**: 20-pair screen
+vs v2 was `win_rate=0.000`, Hoeffding CI `[0.000, 0.380]` wholly below 0.50.
+Acceptance was mechanically clean (100/100 DONE) but showed `BUY_LAND=0` and
+`BUY_ANIMAL:GOOSE` spam (~37/episode) because `geese_count` ignored shed/
+inventory animals after `BUY_ANIMAL` deposits to the shed. See
+`docs/4_agent_version_log.md`.
+
+**Next engineering priority:** fix the in-flight goose count (shed + inventory
+toward `MAX_GEESE`), add a regression test that asserts ≤`MAX_GEESE` buy
+attempts once shed/inventory are full, then re-run Task 9 on fresh seeds.
+Do not submit v4 until that re-eval clears the Hoeffding gate.
+
+Ladder replay analysis (56 episodes, 2026-08-10) still motivates land+animals
+once the buy-cap bug is fixed — see `docs/8_ladder_replay_analysis.md`.
+
+## Prior Recommendation (2026-08-02)
 
 `task_teacher_v2` is the new local champion — adds daily hiring and
 bounded exhaustive multi-unit assignment on top of `task_teacher_v1`. This

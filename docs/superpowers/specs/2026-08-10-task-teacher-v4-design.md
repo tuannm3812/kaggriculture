@@ -1,6 +1,7 @@
 # Task Teacher v4 — Design
 
-Written 2026-08-10. Status: **approved** (brainstorm + written-spec sign-off).
+Written 2026-08-10. Status: **implemented; evaluated; not promoted**
+(2026-08-10 Task 9 — see `docs/4_agent_version_log.md`).
 Implementation plan: `docs/superpowers/plans/2026-08-10-task-teacher-v4-implementation.md`.
 
 Inherits project constraints from the authoritative competition and teacher
@@ -232,8 +233,10 @@ Resolve with env-backed tests, not guesswork, before coding agents:
    is imminent (bonus only pays on fed production days).
 4. Interaction of NE unlock with `unlocked_quadrants` task generation
    (already iterates unlocked quads — verify 50-tile coverage).
+   **Resolved 2026-08-10:** `test_generate_tasks_emits_plant_on_ne_when_ne_unlocked`
+   (25 NW + 25 NE) and `test_acts_on_ne_tile_when_ne_unlocked`.
 5. Branch base: merge/close v3 PR first vs branch v4 from `main` after
-   packaging fix.
+   packaging fix. **Resolved:** `feat/task-teacher-v4` from merged v3 tip.
 
 ## 8. Approval Checklist
 

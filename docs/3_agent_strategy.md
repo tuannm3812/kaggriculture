@@ -137,6 +137,16 @@ promotion seeds — Melon still wins the ranking whenever feasible — so
 v3 does **not** displace v2 as Current Champion. Full numbers in
 `docs/4_agent_version_log.md`.
 
+## `task_teacher_v4` Scope (`agents/task_teacher_v4`) — built, not promoted
+
+Extends v2 with ROI-gated NE land and a Goose loop (coop → buy/pickup/place
+→ feed/care → eggs). 2026-08-10 Task 9: acceptance mechanically clean but
+`BUY_LAND=0` and unbounded `BUY_ANIMAL` because placed-only `geese_count`
+ignores shed/inventory after env deposit-to-shed. Screen vs v2:
+`win_rate=0.000`, CI `[0.000, 0.380]` — not promoted. Fix shed/inventory
+cap counting before any re-eval. Full numbers in
+`docs/4_agent_version_log.md`.
+
 ## Strategy Approach (unchanged from the design doc)
 
 Per `docs/superpowers/specs/2026-08-01-kaggriculture-competition-plan-design.md`'s

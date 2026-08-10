@@ -838,3 +838,47 @@ available, and outcome/lesson.
   are useful signals. Holding evaluation back as an explicit review
   checkpoint is what caught the bug before it shipped as an undiagnosed
   "promotion."
+
+## task_teacher_v4 (`agents/task_teacher_v4/main.py`)
+
+- **Date:** 2026-08-10
+- **Extends `task_teacher_v2` with:** ROI-gated NE `BUY_LAND` and a Goose
+  loop (`BUILD_COOP` / `BUY_ANIMAL` / `PICKUP` / `PLACE` / `FEED` / `CARE` /
+  harvest+sell `EGG`), per
+  `docs/superpowers/specs/2026-08-10-task-teacher-v4-design.md`. Shared
+  lib adds `shed_access_tiles`, `wheat_reserved_for_feed`, `should_buy_land`,
+  and new `TaskKind`s. Existing agent mains untouched.
+- **Built** test-first on `feat/task-teacher-v4` (Tasks 1–8); NE coverage
+  tests added before Task 9 for design §7.4. Full suite green before eval.
+- **Acceptance-gate measurement** (100×720 vs `starter`, seeds 70000–70099):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` / finite | 100/100 / 100/100 |
+  | Determinism (seed 70000 ×2) | identical |
+  | Mean agent / starter reward | 114.63 / 2514.02 |
+  | Unit coverage | `BUILD_COOP`=100, `PICKUP:GOOSE`=399, `PLACE`=399, `FEED`=15565, `PLANT`=1393, `WATER`=9726, `HARVEST`=974 |
+  | Market coverage | `BUY_LAND`=**0**, `BUY_ANIMAL:GOOSE`=3757, `HIRE`=2258, `SELL`=201 |
+  | Latency ms/turn (median) | 1.32 |
+
+  Mechanics fire for coop/pickup/place/feed, but land never buys and animal
+  purchases are orders of magnitude above `MAX_GEESE=2`.
+- **Paired evaluation** (no 50-pair escalation — screen CI wholly below 0.50):
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v2` (screen, seed 71000) | 20/40 | **0.000** | -38807.6 | **[0.000, 0.380]** |
+  | vs. `roi_teacher_v3` (regression, seed 73000) | 20/40 | 0.000 | -5223.3 | [0.000, 0.380] |
+  | vs. `starter` (regression, seed 73000) | 20/40 | 0.000 | -2400.6 | [0.000, 0.380] |
+
+- **Root cause (confirmed, not assumed):** `geese_count` only counts animals
+  already on farm tiles. Env `BUY_ANIMAL` deposits the Goose into
+  `private["shed"]`, so after the first buy the agent still sees
+  `geese_count=0` and re-emits `BUY_ANIMAL` every turn while cash remains —
+  burning the budget that `should_buy_land` and seed ROI need. Secondary
+  symptom: `BUY_LAND=0` across 100 acceptance episodes.
+- **Outcome: not promoted.** `task_teacher_v2` remains `competitive_champion`
+  and the submitted ladder agent. Fix path for a later v4.1 / Task 9 re-run:
+  count shed + inventory geese toward `MAX_GEESE` (and stop buying when
+  in-flight animals already fill the cap), then re-run the full protocol
+  on fresh seeds.
