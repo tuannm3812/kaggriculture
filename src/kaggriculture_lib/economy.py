@@ -123,6 +123,15 @@ def land_cost(n_unlocked_extra: int) -> int | None:
     return LAND_PRICES[n_unlocked_extra]
 
 
+def shed_access_tiles(board_size: int) -> list[tuple[int, int]]:
+    """Four inner-corner tiles around the shed, NWSE order.
+
+    Mirrors kaggle-environments==1.29.3's kaggriculture.py `_shed_access_tiles`.
+    """
+    half = board_size // 2
+    return [(half - 1, half - 1), (half, half - 1), (half - 1, half), (half, half)]
+
+
 def one_time_crop_watering_bonus_window(crop: str) -> tuple[int, int]:
     """Inclusive (start, end) age-in-days window where watering adds yield.
 

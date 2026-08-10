@@ -81,6 +81,16 @@ def test_land_cost_matches_real_module(n_extra):
     assert economy.land_cost(n_extra) == expected
 
 
+def test_shed_access_tiles_matches_env_for_board_size_10():
+    # Mirrors kaggriculture.py `_shed_access_tiles` for boardSize=10:
+    # half=5 → [(4,4), (5,4), (4,5), (5,5)] in NWSE order.
+    assert economy.shed_access_tiles(10) == [(4, 4), (5, 4), (4, 5), (5, 5)]
+
+
+def test_shed_access_tiles_scales_with_board_size():
+    assert economy.shed_access_tiles(8) == [(3, 3), (4, 3), (3, 4), (4, 4)]
+
+
 @pytest.mark.parametrize("crop", ["WHEAT", "CARROT", "MELON"])
 def test_one_time_watering_window_matches_max_yield_day_formula(crop):
     cd = real.CROPS[crop]
