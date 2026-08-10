@@ -166,6 +166,27 @@ def test_does_not_emit_buy_land_when_ne_already_owned():
     assert ["BUY_LAND"] not in action["market"]
 
 
+def test_acts_on_ne_tile_when_ne_unlocked():
+    """Agent must act on NE once unlocked (design §7.4 / branch-review gap)."""
+    module = load_agent_module("task_teacher_v4")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    # Saturate NW with already-watered plants so they emit no WATER/HARVEST.
+    for y in range(5):
+        for x in range(5):
+            tiles[y][x] = make_plant_tile("WHEAT", planted_day=0, watered_today=True, consecutive_unwatered=0)
+    tiles[2][6] = make_plant_tile("WHEAT", planted_day=0, watered_today=False, consecutive_unwatered=1)
+    obs = make_obs(
+        day=1,
+        hour=0,
+        money=500,
+        farmer=(6, 2),
+        tiles=tiles,
+        unlocked_quadrants=["NW", "NE"],
+    )
+    action = module.agent(obs, V4_CONFIG)
+    assert action["farmer"] == ["WATER"]
+
+
 def test_feeds_unfed_goose_when_wheat_in_inventory():
     module = load_agent_module("task_teacher_v4")
     tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]

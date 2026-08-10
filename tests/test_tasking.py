@@ -280,6 +280,49 @@ def test_generate_tasks_empty_unlocked_tile_produces_plant_task():
     assert all(t.priority_tier == PriorityTier.ECONOMIC for t in plant_tasks)
 
 
+def test_generate_tasks_emits_plant_on_ne_when_ne_unlocked():
+    """Design §7.4: once NE is owned, task generation must cover NE tiles."""
+    from kaggriculture_lib.tasking import _quadrant_of
+
+    tiles = make_tiles()
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW", "NE"],
+        day=0,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+    )
+    plant_targets = {t.target for t in tasks if t.task_id.kind == TaskKind.PLANT}
+    by_quad = {
+        q: {(x, y) for (x, y) in plant_targets if _quadrant_of(x, y, BOARD_SIZE) == q}
+        for q in ("NW", "NE", "SW", "SE")
+    }
+    assert len(by_quad["NW"]) == 25
+    assert len(by_quad["NE"]) == 25
+    assert not by_quad["SW"] and not by_quad["SE"]
+
+
+def test_generate_tasks_waters_unwatered_plant_on_ne():
+    from kaggriculture_lib.tasking import _quadrant_of
+
+    # (6, 2) is NE for board_size=10.
+    assert _quadrant_of(6, 2, BOARD_SIZE) == "NE"
+    tiles = make_tiles({(6, 2): make_plant_tile("WHEAT", planted_day=0, watered_today=False)})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW", "NE"],
+        day=1,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+    )
+    water = [t for t in tasks if t.target == (6, 2) and t.task_id.kind == TaskKind.WATER]
+    assert len(water) == 1
+
+
 def test_generate_tasks_locked_tile_produces_no_task():
     tiles = make_tiles({(6, 6): "LOCKED"})
     tasks = generate_tasks(
