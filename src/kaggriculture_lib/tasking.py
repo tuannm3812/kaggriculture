@@ -666,8 +666,9 @@ def should_buy_land(
     last_day: int,
     reserved_for_hire: float,
     plant_tile_count: int,
+    budget_reserve: float = LAND_BUDGET_RESERVE,
 ) -> bool:
-    """Whether to emit BUY_LAND for NE this turn (v4 hard-cap: one extra quadrant)."""
+    """Whether to emit BUY_LAND for NE this turn (hard-cap: one extra quadrant)."""
     if len(unlocked_quadrants) != 1:
         return False
     if plant_tile_count < NW_SATURATION_PLANTS:
@@ -679,7 +680,7 @@ def should_buy_land(
     cost = economy.land_cost(0)
     if cost is None:
         return False
-    if money - reserved_for_hire < cost + LAND_BUDGET_RESERVE:
+    if money - reserved_for_hire < cost + budget_reserve:
         return False
     if estimate_hire_value(projected_load, remaining_turns_today, existing_hands) > 0:
         return False

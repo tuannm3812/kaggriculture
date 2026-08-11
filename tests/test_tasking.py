@@ -1086,6 +1086,39 @@ def test_should_buy_land_false_when_cash_after_hire_reserve_too_low():
     )
 
 
+def test_should_buy_land_accepts_explicit_budget_reserve_kwarg():
+    # Same fixture as the default-true case (money=2000, reserve hire=0):
+    # default 400 passes (need 1400); explicit 2000 fails (need 3000).
+    kwargs = dict(
+        unlocked_quadrants=["NW"],
+        money=2000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=5,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=20,
+    )
+    assert should_buy_land(**kwargs)  # default 400
+    assert not should_buy_land(**kwargs, budget_reserve=2000)
+
+
+def test_should_buy_land_true_when_cash_clears_high_budget_reserve():
+    assert should_buy_land(
+        unlocked_quadrants=["NW"],
+        money=3500.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=5,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=20,
+        budget_reserve=2000,
+    )
+
+
 def test_hiring_runaway_terminates_within_a_bounded_number_of_hires():
     """Regression test for the exact bug: with a large constant load and
     unlimited money, repeatedly asking "should I hire one more?" (correctly
