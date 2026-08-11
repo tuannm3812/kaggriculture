@@ -202,3 +202,89 @@ Opponent peak hands also tracks losses (0–4 hands: 83% WR; 13+: 0W-3L).
 
 Implication for `task_teacher_v4`: design land **and** the animal loop
 together; do not ship land as a solitary feature.
+
+## Refresh — 2026-08-11 (`task_teacher_v5`, submission `55425318`)
+
+Land-only champion submitted via notebook (`submission.tar.gz`). Analyzed
+with `scripts/analyze_ladder_submission.py` (same `kagglesdk` path as
+above). Artifacts: `replays/ladder/task_teacher_v5/` +
+`replays/analysis/ladder_v5_episode_summary.csv`.
+
+**Live score at analysis:** `publicScore` **444.2** (was 423.9 at submit;
+v2 still tracked at ~490). **17 public + 1 validation.** Record
+**8W-9L (47.1%)**. Mean final money **$21,720 us / $19,982 opp** (we are
+slightly ahead on mean dollars despite the losing record — asymmetric
+margins).
+
+### Land path is live
+
+| Our behavior (17 public) | Result |
+| --- | --- |
+| `BUY_LAND` episodes | **17/17** (exactly 1 order/ep) |
+| Final unlocked quadrants | **2.00** mean (NE only, as designed) |
+| `BUY_ANIMAL` | **0/17** |
+
+### Opponent-profile split
+
+| Opponent profile | Games | Record | Win rate | Mean $ margin |
+| --- | ---: | --- | ---: | ---: |
+| Land and/or animals | 13 | 6W-7L | 46% | +1,587 |
+| Land + animals | 6 | 2W-4L | **33%** | −6,741 |
+| Land only | 6 | 3W-3L | 50% | +5,753 |
+| Animals only | 1 | 1W-0L | 100% | +26,560 |
+| Neither | 4 | 2W-2L | 50% | +2,226 |
+
+vs v2's Aug-10 56-ep refresh: v2 was **50% overall**, **41.9%** vs
+land+animals, **80%** vs neither. v5's early sample is roughly in line on
+expanded opponents and **worse vs neither** — see cash-starvation note.
+
+### Headline finding for v5
+
+1. **NE land works on the ladder** — every episode unlocks exactly one
+   extra quadrant. That closes the v2 "never buys land" structural gap.
+2. **Full expansion + animals still dominate late.** Deep losses (Fanis
+   Alexakis −$37.9k, YJ Wee 2807 −$14.6k, khanna.rohit5 −$14.5k) show
+   opponents unlocking 3–4 quadrants and placing cows/sheep/geese; we stay
+   at 2Q / 0 animals and get overtaken after day ~20 even when mid-game
+   ahead (Fanis: we $20k vs $1.2k on day 15, then $19.6k vs $57.4k final).
+3. **Early `BUY_LAND` can lose to strong NW-only crop bots.** Losses to
+   TinkerBotics and Alex Kapend (neither land nor animals): we unlock NE
+   on **day 1**, bank drops to ~$10–60 through day 13, while they stay
+   NW-only, saturate ~22–25 plants, and cash a large harvest spike around
+   day 12 (`$11k` / `$18k`). Our first meaningful sell lands ~day 14. Land
+   opportunity cost is real when the opponent's Melon timing is clean.
+
+### Per-episode table (17 public)
+
+| Episode | Opponent | Result | Money (us / opp) | Our BL | Opp land? | Opp animals? | Opp max hands | Opp Q |
+| --- | --- | --- | ---: | ---: | :---: | :---: | ---: | ---: |
+| 91907290 | kuroneko | LOSS | 20,856 / 24,694 | 1 | yes | no | 8 | 2 |
+| 91906359 | AgriBot | **WIN** | 27,017 / 18,297 | 1 | yes | yes | 10 | 3 |
+| 91905416 | Charan Manthena | **WIN** | 18,953 / 3,426 | 1 | yes | no | 10 | 4 |
+| 91904486 | Horizonx30 | **WIN** | 28,397 / 9,862 | 1 | yes | yes | 6 | 2 |
+| 91903522 | TinkerBotics | LOSS | 9,157 / 25,181 | 1 | no | no | 2 | 1 |
+| 91902554 | Ryan Triplett | LOSS | 22,394 / 23,143 | 1 | yes | yes | 15 | 4 |
+| 91901556 | Amalio Gomez | **WIN** | 27,520 / 4,611 | 1 | yes | no | 2 | 2 |
+| 91900645 | Kaggri Farmers | LOSS | 18,204 / 20,074 | 1 | yes | no | 9 | 3 |
+| 91899701 | Francesco Benincasa | **WIN** | 23,352 / 6,019 | 1 | yes | no | 2 | 2 |
+| 91898760 | JordanM10 | **WIN** | 24,778 / 14,603 | 1 | no | no | 10 | 1 |
+| 91897820 | mayank | **WIN** | 27,859 / 1,299 | 1 | no | yes | 10 | 1 |
+| 91896853 | khanna.rohit5 | LOSS | 27,631 / 42,118 | 1 | yes | yes | 12 | 4 |
+| 91895978 | Hilarus | **WIN** | 28,981 / 3,000 | 1 | no | no | 0 | 1 |
+| 91894934 | Blu cky | LOSS | 6,920 / 22,465 | 1 | yes | no | 6 | 2 |
+| 91893999 | Alex Kapend | LOSS | 11,629 / 22,856 | 1 | no | no | 3 | 1 |
+| 91893042 | Fanis Alexakis | LOSS | 19,563 / 57,413 | 1 | yes | yes | 8 | 4 |
+| 91892084 | YJ Wee 2807 | LOSS | 26,023 / 40,636 | 1 | yes | yes | 10 | 3 |
+
+### Recommendation
+
+Keep v5 on the ladder (land is validated). Next engineering bets, in
+order:
+
+1. **Delay / re-gate NE buy** so day-1 land does not starve Melon cashflow
+   against strong NW-only opponents (cash floor / later saturation / hire
+   priority already partially present — timing is still too early).
+2. Only after (1) re-eval locally vs v5, consider a **tightly capped**
+   animal path — v4's Goose labor tax remains the cautionary tale; ladder
+   cows/sheep compound harder than geese alone.
+3. Re-run this script as n grows; 17 games is still early.

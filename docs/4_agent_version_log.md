@@ -974,9 +974,14 @@ available, and outcome/lesson.
   `submission.tar.gz` (packaged SHA-256
   `108bd781bf5a46517995a2902fce2bba29aca5ba86c3a959e0869a7ad8913271`);
   competition submit ref **55425318**, `fileName=submission.tar.gz`,
-  status **`COMPLETE`**, early `publicScore` **423.9** (v2 prior COMPLETE
-  was 487.0 — rating will move as episodes accumulate; only latest 2
-  submissions are tracked). Smoke on Kaggle matched local verify
+  status **`COMPLETE`**. Score path: **423.9 → 444.2** at first replay
+  check (v2 still tracked ~490). Smoke on Kaggle matched local verify
   rewards for seed `424242` / 96 steps (`1570` vs starter `1940`). Helper:
   `scripts/submit_agent_notebook.sh` +
   `scripts/build_agent_submission_notebook.py`.
+- **Ladder replay check (2026-08-11, 17 public):** **8W-9L (47%)**.
+  `BUY_LAND` **17/17** (always NE → 2Q), `BUY_ANIMAL` 0. vs land+animals
+  **2W-4L (33%)**; vs land-only 3W-3L; two losses to NW-only crop bots from
+  **day-1 land cash starvation**. Deep losses still to 3–4Q + cow/sheep
+  compounds. Full table:
+  `docs/8_ladder_replay_analysis.md` (2026-08-11 refresh).

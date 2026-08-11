@@ -4,17 +4,19 @@ Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
 ## Current Recommendation (2026-08-11)
 
-**Ladder agent: `task_teacher_v5`** (notebook submit ref `55425318`,
-`submission.tar.gz` from
-`tuannm3812/kaggriculture-task-teacher-v5-submission` v1). Local champion
-cleared the 50-pair Hoeffding gate vs v2 (`WR=0.780`, CI `[0.540, 1.000]`).
-v2 remains the prior COMPLETE submission (`487.0`); only the latest **2**
-are tracked — both v5 and v2 should stay live until v5 proves out.
+**Ladder agent: `task_teacher_v5`** (ref `55425318`, `publicScore` ~444).
+First ladder replay check: **8W-9L / 17 public**, `BUY_LAND` live on every
+game. See `docs/8_ladder_replay_analysis.md` (2026-08-11 section).
 
-**Next engineering priority:** wait for v5 `COMPLETE` + early ladder
-episodes; refresh `docs/8_ladder_replay_analysis.md` vs animal/land users.
-Do **not** submit v4. Re-submit path:
-`scripts/submit_agent_notebook.sh agents/task_teacher_v5 -m "..."`.
+**Next engineering priority (ordered):**
+1. **Retune NE buy timing** — day-1 land cash-starves Melon cashflow and
+   loses to strong NW-only bots; keep land, delay the gate.
+2. Re-eval any timing fix locally vs current v5 (Hoeffding) before submit.
+3. Only then a carefully capped animal path (v4 Goose tax still applies).
+4. Re-run `scripts/analyze_ladder_submission.py --submission-id 55425318
+   --label task_teacher_v5` as n grows.
+
+Do **not** submit v4. v2 remains the second tracked submission.
 
 ## Prior Recommendation (2026-08-02)
 
