@@ -974,7 +974,9 @@ available, and outcome/lesson.
   `submission.tar.gz` (packaged SHA-256
   `108bd781bf5a46517995a2902fce2bba29aca5ba86c3a959e0869a7ad8913271`);
   competition submit ref **55425318**, `fileName=submission.tar.gz`,
-  status `PENDING` at submit time. Smoke on Kaggle matched local verify
+  status **`COMPLETE`**, early `publicScore` **423.9** (v2 prior COMPLETE
+  was 487.0 — rating will move as episodes accumulate; only latest 2
+  submissions are tracked). Smoke on Kaggle matched local verify
   rewards for seed `424242` / 96 steps (`1570` vs starter `1940`). Helper:
   `scripts/submit_agent_notebook.sh` +
   `scripts/build_agent_submission_notebook.py`.
