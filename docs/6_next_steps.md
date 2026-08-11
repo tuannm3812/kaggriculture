@@ -2,19 +2,20 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
-## Current Recommendation (2026-08-10)
+## Current Recommendation (2026-08-11)
 
-**Stay on `task_teacher_v2` for the ladder.** Do **not** submit `task_teacher_v4`.
+**New local champion: `task_teacher_v5`** (v2 + NE `BUY_LAND`, no Goose).
+50-pair promotion vs `task_teacher_v2`: `win_rate=0.780`, Hoeffding CI
+`[0.540, 1.000]` wholly above 0.50. Regressions vs `roi_teacher_v3` /
+`starter` are 1.000. See `docs/4_agent_version_log.md`.
 
-After buy-cap fix + `NW_SATURATION_PLANTS` 18→12: acceptance shows
-`BUY_LAND=100/100` episodes and ~28k mean vs starter, but the 20-pair
-screen vs `task_teacher_v2` is still `win_rate=0.000`, Hoeffding CI
-`[0.000, 0.380]` — **not promoted**. Land works; Goose+NE still lose to
-v2's NW Melon/hire play. See `docs/4_agent_version_log.md`.
+**Ladder:** package and submit `task_teacher_v5` when ready (promotion
+protocol cleared). Do **not** submit `task_teacher_v4` (land+Goose lost
+to v2). Keep v2 on the board until the new submission is live if desired.
 
-**Next engineering priority:** diagnose opportunity cost of the Goose loop
-(FEED labor, egg ROI vs Melon tiles, near-absent CARE) — not further land
-threshold chasing.
+**Next engineering priority:** post-submit ladder replay check vs animal
+users; only then consider a carefully gated animal path (v4's Goose labor
+tax is the cautionary tale).
 
 ## Prior Recommendation (2026-08-02)
 

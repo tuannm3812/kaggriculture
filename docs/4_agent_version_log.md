@@ -938,3 +938,33 @@ available, and outcome/lesson.
   submit. Next: diagnose *why* NE+Goose loses to NW-only Melon/hire (egg
   ROI vs Melon opportunity cost; FEED labor; CARE near-absent) before
   further gate tuning.
+
+## task_teacher_v5 (`agents/task_teacher_v5/main.py`)
+
+- **Date:** 2026-08-11
+- **Extends `task_teacher_v2` with:** ROI-gated NE `BUY_LAND` only.
+  `MAX_GEESE = 0` — no Goose path. Motivated by the v4 ablation where
+  land-only beat v2 (~0.75 WR / 10 pairs) while full land+Goose lost.
+  `task_teacher_v4` left immutable (not promoted).
+- **Acceptance** (100×720 vs `starter`, seeds 82000–82099):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` / finite | 100/100 / 100/100 |
+  | Mean agent / starter | **40900** / 2513 |
+  | `BUY_LAND` | **100** |
+  | `BUY_ANIMAL` | **0** |
+  | Determinism | identical |
+
+- **Paired evaluation:**
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v2` (screen, seed 83000) | 20/40 | 0.825 | +3465.3 | [0.445, 1.000] (straddle → escalate) |
+  | vs. `task_teacher_v2` (promotion, seed 84000) | 50/100 | **0.780** | +3036.2 | **[0.540, 1.000]** |
+  | vs. `roi_teacher_v3` (regression, seed 85000) | 20/40 | 1.000 | +35982.9 | [0.620, 1.000] |
+  | vs. `starter` (regression, seed 85000) | 20/40 | 1.000 | +39044.6 | [0.620, 1.000] |
+
+- **Outcome: promoted.** CI wholly above 0.50 at the 50-pair gate.
+  `task_teacher_v5` is the new `competitive_champion`. Ladder submit is
+  authorized by the promotion protocol (user may still choose timing).

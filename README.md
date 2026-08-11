@@ -9,7 +9,7 @@ Week 1 in progress (2026-08-06). Deadline: **2026-09-30 23:59 UTC**.
 Local environment verified (including a passed Kaggle platform smoke
 test), economy math tested against the real simulator, and a series of
 agents have each beaten the last in local tournament play. Current local
-champion: **`task_teacher_v2`** — adds daily hiring and bounded exhaustive
+champion: **`task_teacher_v5`** (v2 + NE land; no Goose) — adds daily hiring and bounded exhaustive
 multi-unit assignment on top of `task_teacher_v1`'s multi-tile task
 scheduler. Three rounds of Codex review (2026-08-02) each caught a real,
 confirmed bug before promotion was legitimate: (1) a hiring-value fix that
@@ -30,10 +30,9 @@ Codex's review and the response. Packaging (`scripts/package_agent.py`)
 is done and verified for every agent. **Submitted to the ladder
 2026-08-06** (`task_teacher_v2`, status `PENDING`). `task_teacher_v3`
 (ongoing crops) and `task_teacher_v4` (land + Goose) were both built and
-evaluated; **neither promotes** — v3 ties v2 after a scoring fix; v4
-(buy-cap + sat=12 land retune) still loses 0–20 to v2 despite live
-`BUY_LAND`. Champion and ladder agent remain
-**`task_teacher_v2`**. See `docs/4_agent_version_log.md` and
+evaluated; v3/v4 do **not** promote. **`task_teacher_v5`** (land-only)
+**promoted** 2026-08-11 vs v2 (50-pair CI `[0.540, 1.000]`). Package/
+submit v5 for the ladder; see `docs/6_next_steps.md`. See `docs/4_agent_version_log.md` and
 `docs/6_next_steps.md`.
 
 Full design is split across

@@ -1,6 +1,6 @@
 # Task Teacher v5 — Design (land-only)
 
-Written 2026-08-11. Status: **approved**.
+Written 2026-08-11. Status: **implemented; promoted** (2026-08-11 Task 9).
 
 Motivated by the 2026-08-10 Goose ablation: vs `task_teacher_v2` (10 pairs,
 seeds 81000–81009), full v4 scored `0.050` WR; **v4 with Goose stripped and
