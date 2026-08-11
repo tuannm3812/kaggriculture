@@ -1,6 +1,6 @@
 # Task Teacher v6 — Design (delayed NE land via cash floor)
 
-Written 2026-08-11. Status: **pending user review of this file**.
+Written 2026-08-11. Status: **approved** (spec reviewed 2026-08-11).
 
 Motivated by the 2026-08-11 ladder replay check on submitted
 `task_teacher_v5` (`docs/8_ladder_replay_analysis.md`): `BUY_LAND` fired in
