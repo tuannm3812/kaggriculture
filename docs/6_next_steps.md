@@ -4,18 +4,17 @@ Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
 ## Current Recommendation (2026-08-11)
 
-**New local champion: `task_teacher_v5`** (v2 + NE `BUY_LAND`, no Goose).
-50-pair promotion vs `task_teacher_v2`: `win_rate=0.780`, Hoeffding CI
-`[0.540, 1.000]` wholly above 0.50. Regressions vs `roi_teacher_v3` /
-`starter` are 1.000. See `docs/4_agent_version_log.md`.
+**Ladder agent: `task_teacher_v5`** (notebook submit ref `55425318`,
+`submission.tar.gz` from
+`tuannm3812/kaggriculture-task-teacher-v5-submission` v1). Local champion
+cleared the 50-pair Hoeffding gate vs v2 (`WR=0.780`, CI `[0.540, 1.000]`).
+v2 remains the prior COMPLETE submission (`487.0`); only the latest **2**
+are tracked — both v5 and v2 should stay live until v5 proves out.
 
-**Ladder:** package and submit `task_teacher_v5` when ready (promotion
-protocol cleared). Do **not** submit `task_teacher_v4` (land+Goose lost
-to v2). Keep v2 on the board until the new submission is live if desired.
-
-**Next engineering priority:** post-submit ladder replay check vs animal
-users; only then consider a carefully gated animal path (v4's Goose labor
-tax is the cautionary tale).
+**Next engineering priority:** wait for v5 `COMPLETE` + early ladder
+episodes; refresh `docs/8_ladder_replay_analysis.md` vs animal/land users.
+Do **not** submit v4. Re-submit path:
+`scripts/submit_agent_notebook.sh agents/task_teacher_v5 -m "..."`.
 
 ## Prior Recommendation (2026-08-02)
 

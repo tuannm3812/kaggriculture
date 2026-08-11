@@ -968,3 +968,13 @@ available, and outcome/lesson.
 - **Outcome: promoted.** CI wholly above 0.50 at the 50-pair gate.
   `task_teacher_v5` is the new `competitive_champion`. Ladder submit is
   authorized by the promotion protocol (user may still choose timing).
+- **Ladder result (2026-08-11):** submitted via **notebook** path (not raw
+  `main.py` CLI). Kernel
+  `tuannm3812/kaggriculture-task-teacher-v5-submission` v1 wrote
+  `submission.tar.gz` (packaged SHA-256
+  `108bd781bf5a46517995a2902fce2bba29aca5ba86c3a959e0869a7ad8913271`);
+  competition submit ref **55425318**, `fileName=submission.tar.gz`,
+  status `PENDING` at submit time. Smoke on Kaggle matched local verify
+  rewards for seed `424242` / 96 steps (`1570` vs starter `1940`). Helper:
+  `scripts/submit_agent_notebook.sh` +
+  `scripts/build_agent_submission_notebook.py`.

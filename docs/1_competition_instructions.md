@@ -26,16 +26,28 @@ Both are also present locally once `kaggle-environments` is installed, at
 ## Submission
 
 A `main.py` (or `main.py` + helpers bundled in a `.tar.gz`) exposing an
-`agent(obs)` function.
+`agent(obs)` function. Prefer packaging via `scripts/package_agent.py`, which
+emits a self-contained `build/<agent>/main.py`.
 
 ```bash
-kaggle competitions submit kaggriculture -f main.py -m "<message>"
-# or, multi-file:
-tar -czf submission.tar.gz main.py helper.py
+# Single-file (what prior ladder submits used):
+kaggle competitions submit kaggriculture -f build/task_teacher_v5/main.py -m "<message>"
+
+# Multi-file tar.gz (main.py at archive root):
+tar -czf submission.tar.gz -C build/task_teacher_v5 main.py
 kaggle competitions submit kaggriculture -f submission.tar.gz -m "<message>"
+
+# Notebook path (AGENTS.md): kernel writes /kaggle/working/submission.tar.gz,
+# then submit that kernel output. One-shot helper:
+scripts/submit_agent_notebook.sh agents/task_teacher_v5 -m "<message>"
+# equivalent manual form:
+#   kaggle competitions submit kaggriculture \
+#     -k tuannm3812/kaggriculture-task-teacher-v5-submission \
+#     -f submission.tar.gz -v <VERSION> -m "<message>"
 ```
 
-Kaggle runs episodes against other submitted agents.
+Kaggle runs episodes against other submitted agents. Only the latest **2**
+submissions are tracked for matchmaking / final eval (5 submits/day cap).
 
 **Open item — not stated in Kaggriculture's own docs:** submission-slot /
 ladder-tracking rules (e.g. whether only the latest N submissions are
