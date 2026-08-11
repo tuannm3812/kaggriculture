@@ -152,15 +152,12 @@ See `docs/4_agent_version_log.md`.
 
 ## `task_teacher_v6` Scope (`agents/task_teacher_v6`) — built, not promoted
 
-v5 + a higher land `budget_reserve` (`LAND_BUDGET_RESERVE_V6=2000` vs. the
-shared-library default 400) so `BUY_LAND` waits for cost+$2000 post-hire
-instead of firing day 0/1, per `docs/superpowers/specs/2026-08-11-task-teacher-v6-design.md`
-(motivated by the v5 ladder replay's day-1 cash-starvation losses).
-2026-08-11: acceptance clean (100/100, `BUY_LAND=100`, median first-buy
-day 15 vs. v5's day 0/1), regression-clean vs. v2/`starter`, but 50-pair
-vs. `task_teacher_v5` is an exact `win_rate=0.500` tie, Hoeffding CI
-`[0.260, 0.740]` — straddles 0.50, so **not promoted**; `task_teacher_v5`
-remains `competitive_champion`. See `docs/4_agent_version_log.md`.
+v5 + `LAND_BUDGET_RESERVE_V6=2000` (additive `budget_reserve` on
+`should_buy_land`). Aimed at ladder day-1 cash starvation; **locally
+inert** — same buy day and identical actions vs v5 under the harness
+(saturation+hands bind first). Exact `0.500` Hoeffding tie vs v5 =
+policy identity. Not promoted; v5 remains champion. See
+`docs/4_agent_version_log.md`.
 
 ## Strategy Approach (unchanged from the design doc)
 

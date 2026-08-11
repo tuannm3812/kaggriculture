@@ -32,13 +32,11 @@ is done and verified for every agent. **Submitted to the ladder
 (ongoing crops) and `task_teacher_v4` (land + Goose) were both built and
 evaluated; v3/v4 do **not** promote. **`task_teacher_v5`** (land-only)
 **promoted** 2026-08-11 vs v2 (50-pair CI `[0.540, 1.000]`). **`task_teacher_v6`**
-(v5 + delayed NE land, `LAND_BUDGET_RESERVE_V6=2000`) was built and
-evaluated 2026-08-11 to fix v5's ladder-replay day-1 cash-starvation
-losses — acceptance/regressions are clean, but the 50-pair Hoeffding CI
-vs. v5 is `[0.260, 0.740]` (exact `win_rate=0.500` tie), so it does
-**not** promote; `task_teacher_v5` remains the local champion. Package/
-submit v5 for the ladder; see `docs/6_next_steps.md`. See `docs/4_agent_version_log.md` and
-`docs/6_next_steps.md`.
+(v5 + `LAND_BUDGET_RESERVE_V6=2000`) was built and evaluated 2026-08-11;
+**not promoted** (exact `0.500` tie vs v5). Post-review: locally
+behaviorally identical to v5 — the higher reserve never binds. Champion
+and ladder agent remain **`task_teacher_v5`**. See
+`docs/4_agent_version_log.md` and `docs/6_next_steps.md`.
 
 Full design is split across
 [`docs/superpowers/specs/`](docs/superpowers/specs/): the authoritative

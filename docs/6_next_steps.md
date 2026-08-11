@@ -2,34 +2,28 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
-## Current Recommendation (2026-08-11, updated post-v6)
+## Current Recommendation (2026-08-12, post-v6 review correction)
 
 **Ladder agent: `task_teacher_v5`** (ref `55425318`, `publicScore` ~444;
-still `competitive_champion`, unchanged by v6).
-First ladder replay check: **8W-9L / 17 public**, `BUY_LAND` live on every
-game. See `docs/8_ladder_replay_analysis.md` (2026-08-11 section).
+still `competitive_champion`). Ladder replay: **8W-9L / 17 public**. See
+`docs/8_ladder_replay_analysis.md`.
 
-**`task_teacher_v6` (delayed NE land, `LAND_BUDGET_RESERVE_V6=2000`) built
-and evaluated — not promoted.** Acceptance clean (100/100, `BUY_LAND=100`,
-median first-buy day 15 vs. v5's day 0/1 — the delay works as designed),
-regression-clean vs. `task_teacher_v2`/`starter`, but the 50-pair Hoeffding
-CI vs. `task_teacher_v5` is `[0.260, 0.740]` — an exact `win_rate=0.500`
-tie at both 20 and 50 pairs, not a near-miss that more seeds would likely
-resolve. Per the honesty rule, left un-promoted rather than force-promoted.
-Full numbers: `docs/4_agent_version_log.md`.
+**`task_teacher_v6` built and evaluated — not promoted.** Acceptance /
+regressions clean, but local Hoeffding vs v5 is an exact `0.500` /
+`+0.0` tie (CI `[0.260, 0.740]`). Whole-branch review + spot-check: under
+the local harness v6 is **behaviorally identical** to v5 — `budget_reserve=2000`
+never binds (saturation+hands open only when cash already clears $3000).
+Do not treat the docs/8 ladder “day 0/1” figure as a local v5 baseline.
 
 **Next engineering priority (ordered):**
-1. **Diagnose the v5-vs-v6 self-play tie before iterating further on the
-   reserve constant.** The delayed buy is a real, measured behavior change
-   (median day 15 vs. day 0/1) but doesn't move final-money win rate
-   against v5 itself — self-play vs. v5 may not be discriminating enough
-   to reward fixing the ladder-specific failure (losing to specific
-   NW-only bots on day-1 cash starvation). Consider adding a local
-   opponent that mimics the ladder loss pattern (NW-only, no land) to the
-   eval mix, or re-checking the v6 reserve against a wider sweep
-   (1500/2000/2500+) before another promotion attempt.
-2. Only then a carefully capped animal path (v4 Goose tax still applies).
-3. Re-run `scripts/analyze_ladder_submission.py --submission-id 55425318
+1. **Reconcile ladder day-1 NE unlock vs local day-~15 buy** — check
+   `scripts/analyze_ladder_submission.py` day attribution and whether
+   ladder env/config differs from local defaults. This motivated v6 and
+   is still unverified.
+2. Only after (1) is settled, redesign a land-timing lever that actually
+   binds locally (reserve sweeps below ~$4500 are futile on current gates).
+3. Carefully capped animal path (v4 Goose tax still applies).
+4. Re-run `scripts/analyze_ladder_submission.py --submission-id 55425318
    --label task_teacher_v5` as n grows.
 
 Do **not** submit v4 or v6. v2 remains the second tracked submission.

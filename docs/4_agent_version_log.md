@@ -991,12 +991,10 @@ available, and outcome/lesson.
 - **Date:** 2026-08-11
 - **Extends `task_teacher_v5` with:** a higher `budget_reserve` passed to
   `should_buy_land` (`LAND_BUDGET_RESERVE_V6 = 2000` vs. the shared-library
-  default of 400), so `BUY_LAND` waits until the bank can clear
-  cost+$2000 post-hire instead of firing on day 0/1 and starving Melon
-  cashflow (per the ladder replay in `docs/8_ladder_replay_analysis.md`
-  and `docs/superpowers/specs/2026-08-11-task-teacher-v6-design.md`).
-  Otherwise identical to v5: `MAX_GEESE = 0`, NE-only land, no animals.
-  `task_teacher_v5` and earlier left immutable (copy-forward only).
+  default of 400). Motivated by the ladder replay claim that v5 buys NE on
+  **day 0/1** and cash-starves Melon (`docs/8_ladder_replay_analysis.md`).
+  Otherwise copy-forward of v5: `MAX_GEESE = 0`, NE-only land, no animals.
+  `task_teacher_v5` and earlier left immutable.
 - **Acceptance** (100×720 vs `starter`, seeds 86000–86099):
 
   | Metric | Result |
@@ -1006,11 +1004,7 @@ available, and outcome/lesson.
   | `BUY_LAND` | **100** |
   | `BUY_ANIMAL` | **0** |
   | Determinism | identical |
-  | First `BUY_LAND` day (median / histogram) | **day 15** (72×day15, 28×day16) |
-
-  The reserve bump clearly delayed the buy vs. v5's day-0/1 pattern, as
-  designed — land now fires mid-game once cash has cleared the $2000
-  post-hire floor, not immediately.
+  | First `BUY_LAND` day (post-action obs histogram) | day 15×72, day 16×28 |
 
 - **Paired evaluation:**
 
@@ -1021,27 +1015,20 @@ available, and outcome/lesson.
   | vs. `task_teacher_v2` (regression, seed 89000) | 20/40 | 0.850 | +3230.8 | [0.470, 1.000] |
   | vs. `starter` (regression, seed 89000) | 20/40 | 1.000 | +38191.0 | [0.620, 1.000] |
 
-  `win_rate=0.500` / `mean_money_margin=+0.0` held at **both** 20 and
-  50 pairs vs. v5 — an exact tie, not sampling noise resolving toward one
-  side, matching the same identity pattern already seen for `roi_teacher_v3`
-  vs. v2 and `task_teacher_v3` vs. v2 above. Both agents share every gate
-  except the land-reserve threshold; against each other (rather than vs.
-  `starter`), a later-but-still-successful land buy converges to the same
-  final money as an earlier one under these seeds, so the delay that fixed
-  v5's ladder-replay losses doesn't register as a local head-to-head edge.
-- **Outcome: not promoted.** CI straddles 0.50 at both the 20- and 50-pair
-  gates (`[0.260, 0.740]` at 50 pairs) — per the honesty rule (no
-  force-promote), `task_teacher_v5` remains `competitive_champion` and the
-  submitted ladder agent. `task_teacher_v6` is left as a built, tested,
-  documented alternative (regression-clean vs. v2/`starter`) but is not
-  swapped in locally. `LAND_BUDGET_RESERVE_V6=2000` needed no retune —
-  acceptance already showed `BUY_LAND>0` (100/100), so the 1500 fallback
-  in the design doc was not exercised.
-- **Interpretation for the ladder replay problem:** the v6 delay is a real,
-  measured behavior change (median first-buy day 15 vs. v5's day 0/1) but
-  doesn't show up as a local win-rate edge over v5 with the current
-  reward signal (final money only). The design doc's motivating failure
-  mode (day-1 land cash-starving Melon vs. specific NW-only ladder bots)
-  may need a ladder-style opponent in the local eval mix, not just v5
-  self-play, to actually move the Hoeffding needle — see
-  `docs/6_next_steps.md`.
+- **Outcome: not promoted.** CI straddles 0.50; honesty rule — no
+  force-promote. `task_teacher_v5` remains `competitive_champion` / ladder
+  agent. `LAND_BUDGET_RESERVE_V6=2000` needed no 1500 fallback
+  (`BUY_LAND>0` on acceptance).
+- **Post-eval correction (whole-branch review):** under the **local**
+  harness, v6 is **behaviorally identical** to v5. Spot-check seeds
+  86000–86002: byte-identical seat-0 action streams, identical rewards,
+  same first-buy observation day. When NW saturation (12) + min hands (3)
+  first open (~day 14–15), the bank is already well above both the v5
+  ($1400) and v6 ($3000) cash bars, so `budget_reserve=2000` never binds.
+  The exact `win_rate=0.500` / `margin=+0.0` at 20 **and** 50 pairs is
+  **policy identity**, not “later buy converges to the same money.” The
+  ladder day-0/1 baseline in docs/8 was incorrectly contrasted with v6’s
+  local day-15 histogram — that is not a local v5-vs-v6 delay measurement.
+  Next work should reconcile ladder day-1 NE unlock vs local day-~15 buy
+  (attribution bug vs env mismatch) before any further reserve sweep —
+  see `docs/6_next_steps.md`.
