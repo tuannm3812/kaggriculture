@@ -4,9 +4,10 @@ Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
 ## Current Recommendation (2026-08-12, post-v6 review correction)
 
-**Ladder agent: `task_teacher_v5`** (ref `55425318`, `publicScore` ~444;
-still `competitive_champion`). Ladder replay: **8W-9L / 17 public**. See
-`docs/8_ladder_replay_analysis.md`.
+**Ladder agent: `task_teacher_v5`** (ref `55425318`, `publicScore` **448.8**;
+still `competitive_champion`). Ladder replay refresh: **14W–15L / 29
+public** (48.3%); land+animals opponents **6W–10L (38%)**. See
+`docs/8_ladder_replay_analysis.md` (2026-08-12 section).
 
 **`task_teacher_v6` built and evaluated — not promoted.** Acceptance /
 regressions clean, but local Hoeffding vs v5 is an exact `0.500` /

@@ -276,15 +276,60 @@ expanded opponents and **worse vs neither** — see cash-starvation note.
 | 91893042 | Fanis Alexakis | LOSS | 19,563 / 57,413 | 1 | yes | yes | 8 | 4 |
 | 91892084 | YJ Wee 2807 | LOSS | 26,023 / 40,636 | 1 | yes | yes | 10 | 3 |
 
-### Recommendation
+### Recommendation (superseded by 2026-08-12 refresh + v6 findings)
 
-Keep v5 on the ladder (land is validated). Next engineering bets, in
-order:
+Keep v5 on the ladder (land is validated). `task_teacher_v6`'s cash-floor
+delay was **locally inert** vs v5 — see version log. Next: reconcile
+ladder day-1 NE unlock vs local day-~15 buy, then a carefully capped
+animal path. Re-run this script as n grows.
 
-1. **Delay / re-gate NE buy** so day-1 land does not starve Melon cashflow
-   against strong NW-only opponents (cash floor / later saturation / hire
-   priority already partially present — timing is still too early).
-2. Only after (1) re-eval locally vs v5, consider a **tightly capped**
-   animal path — v4's Goose labor tax remains the cautionary tale; ladder
-   cows/sheep compound harder than geese alone.
-3. Re-run this script as n grows; 17 games is still early.
+## Refresh — 2026-08-12 (`task_teacher_v5`, 29 public)
+
+Same submission `55425318`. Live `publicScore` **448.8** (v2 ~477).
+Artifacts refreshed via `scripts/analyze_ladder_submission.py` →
+`replays/analysis/ladder_task_teacher_v5_episode_summary.csv`.
+
+**Record: 14W–15L (48.3%)**. Mean money **$21,971 us / $24,359 opp**.
+Cohorts: first 17 = 8W–9L (47.1%); next 12 = 6W–6L (50.0%).
+
+### Our behavior (29 public)
+
+| Metric | Result |
+| --- | --- |
+| `BUY_LAND` | **29/29** (exactly 1/ep) |
+| Unlocked quadrants | **2.00** mean (NE only) |
+| `BUY_ANIMAL` | **0/29** |
+
+### Opponent-profile split (29)
+
+| Opponent profile | Games | Record | Win rate | Mean $ margin |
+| --- | ---: | --- | ---: | ---: |
+| Land and/or animals | 24 | 11W–13L | 46% | −4,339 |
+| Land + animals | 16 | 6W–10L | **38%** | **−11,219** |
+| Land only | 7 | 4W–3L | 57% | +6,974 |
+| Animals only | 1 | 1W–0L | 100% | +26,560 |
+| Neither | 5 | 3W–2L | 60% | +6,979 |
+
+**Updated headline:** land-only is roughly break-even / slightly positive.
+**Land+animals remains the loss mode** (38% WR, −$11k mean margin). New
+deep losses: Kers Aoyagi −$115k (3Q, 13 animals, 14 hands), Hamed
+Seyed-allaei −$33k (4Q, 16 animals). Two neither-losses (TinkerBotics,
+Alex Kapend) still in the sample — early-land opportunity cost unchanged
+as a secondary issue.
+
+### New episodes since Aug-11 table (12 public)
+
+| Episode | Opponent | Result | Money (us / opp) | Our BL | Opp land? | Opp animals? | Opp max hands | Opp Q |
+| --- | --- | --- | ---: | ---: | :---: | :---: | ---: | ---: |
+| 92112231 | Simon Ziegs | LOSS | 29,446 / 32,518 | 1 | yes | yes | 8 | 4 |
+| 92109442 | Hamed Seyed-allaei | LOSS | 17,491 / 50,302 | 1 | yes | yes | 8 | 4 |
+| 92101932 | Kers Aoyagi | LOSS | 17,079 / 131,865 | 1 | yes | yes | 14 | 3 |
+| 92100177 | Bum_Fy_Mz | LOSS | 24,483 / 29,741 | 1 | yes | yes | 5 | 3 |
+| 92089986 | danielle Ange | **WIN** | 23,070 / 1,123 | 1 | yes | yes | 2 | 3 |
+| 92038005 | SuroRitch | **WIN** | 29,133 / 14,834 | 1 | yes | no | 5 | 3 |
+| 91997037 | detectivseb | **WIN** | 29,305 / 23,291 | 1 | yes | yes | 9 | 2 |
+| 91995143 | Palak Choudhary | LOSS | 19,459 / 30,279 | 1 | yes | yes | 12 | 4 |
+| 91995071 | Ashray Bagde | **WIN** | 17,644 / 17,605 | 1 | yes | yes | 12 | 3 |
+| 91990479 | Fahim Montasir | LOSS | 16,734 / 17,543 | 1 | yes | yes | 11 | 2 |
+| 91956815 | Yuvraj singh | **WIN** | 15,100 / 14,609 | 1 | yes | yes | 10 | 3 |
+| 91929478 | guoqin gu | **WIN** | 28,989 / 3,000 | 1 | no | no | 0 | 1 |
