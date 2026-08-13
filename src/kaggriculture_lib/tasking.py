@@ -23,6 +23,7 @@ class TaskKind(str, Enum):
     HARVEST = "HARVEST"
     DIG = "DIG"
     BUILD_COOP = "BUILD_COOP"
+    BUILD_PASTURE = "BUILD_PASTURE"
     PLACE = "PLACE"
     FEED = "FEED"
     CARE = "CARE"
@@ -157,24 +158,46 @@ def _board_has_coop(tiles: list[list], unlocked: set[str], board_size: int) -> b
 
 
 def _first_empty_unlocked_build_target(
-    tiles: list[list], unlocked: set[str], board_size: int
+    tiles: list[list],
+    unlocked: set[str],
+    board_size: int,
+    exclude: set[tuple[int, int]] | None = None,
 ) -> tuple[int, int] | None:
-    """Pick where a BUILD_COOP should land: prefer the first empty, unlocked
-    shed-access tile (keeps the coop close to where PICKUP/PLACE happen),
-    else fall back to the first empty unlocked tile in scan order."""
+    """Pick where a BUILD_COOP / BUILD_PASTURE should land: prefer the first
+    empty, unlocked shed-access tile (keeps the structure close to where
+    PICKUP/PLACE happen), else fall back to the first empty unlocked tile in
+    scan order. `exclude` skips tiles already claimed by another build this turn.
+    """
+    skip = exclude or set()
     access_tiles = [
         (ax, ay)
         for ax, ay in economy.shed_access_tiles(board_size)
-        if _quadrant_of(ax, ay, board_size) in unlocked and tiles[ay][ax] is None
+        if _quadrant_of(ax, ay, board_size) in unlocked
+        and tiles[ay][ax] is None
+        and (ax, ay) not in skip
     ]
     if access_tiles:
         return access_tiles[0]
 
     for y in range(board_size):
         for x in range(board_size):
+            if (x, y) in skip:
+                continue
             if _quadrant_of(x, y, board_size) in unlocked and tiles[y][x] is None:
                 return (x, y)
     return None
+
+
+def _cap_feed_tasks(tasks: list[Task], max_feed_tasks: int | None) -> list[Task]:
+    """Keep at most `max_feed_tasks` FEED tasks, preferring lower (more urgent) tiers."""
+    if max_feed_tasks is None:
+        return tasks
+    feed = [t for t in tasks if t.task_id.kind == TaskKind.FEED]
+    if len(feed) <= max_feed_tasks:
+        return tasks
+    feed_sorted = sorted(feed, key=lambda t: (t.priority_tier, t.task_id.y, t.task_id.x))
+    keep = set(id(t) for t in feed_sorted[:max_feed_tasks])
+    return [t for t in tasks if t.task_id.kind != TaskKind.FEED or id(t) in keep]
 
 
 def generate_tasks(
@@ -189,22 +212,41 @@ def generate_tasks(
     want_coop: bool = False,
     goose_in_any_inventory: bool = False,
     wheat_needed_for_feed: bool = False,
+    want_pasture: bool = False,
+    cow_in_any_inventory: bool = False,
+    max_feed_tasks: int | None = None,
+    non_emergency_feed_tier: PriorityTier = PriorityTier.DAILY_CARE,
+    care_tier: PriorityTier = PriorityTier.DAILY_CARE,
 ) -> list[Task]:
     """Regenerate the full task list fresh from current farm state.
 
     Tasks are derived state, never persisted themselves (see `TeacherState`,
     which persists only the unit -> `TaskId` assignment). One-time crops
     only, per `task_teacher_v1`'s scope.
+
+    Pasture/cow kwargs and FEED/CARE tier overrides are additive: defaults
+    preserve the Goose path used by `task_teacher_v4`.
     """
     tasks: list[Task] = []
     unlocked = set(unlocked_quadrants)
 
     has_empty_coop = False
+    has_empty_pasture = False
     coop_planned = False
-    build_target = (
+    pasture_planned = False
+    coop_build_target = (
         None
         if not want_coop or _board_has_coop(tiles, unlocked, board_size)
         else _first_empty_unlocked_build_target(tiles, unlocked, board_size)
+    )
+    # Unlike coop (v4 only ever builds one structure while any coop exists),
+    # pastures must scale with MAX_COWS — agent sets want_pasture only when
+    # there is no empty pasture, so occupied pastures must not block builds.
+    pasture_exclude = {coop_build_target} if coop_build_target is not None else set()
+    pasture_build_target = (
+        None
+        if not want_pasture
+        else _first_empty_unlocked_build_target(tiles, unlocked, board_size, exclude=pasture_exclude)
     )
 
     for y in range(board_size):
@@ -214,13 +256,28 @@ def generate_tasks(
             tile = tiles[y][x]
 
             if tile is None:
-                if want_coop and not coop_planned and (x, y) == build_target:
+                if want_coop and not coop_planned and (x, y) == coop_build_target:
                     coop_planned = True
                     tasks.append(
                         Task(
                             task_id=TaskId(kind=TaskKind.BUILD_COOP, x=x, y=y),
                             target=(x, y),
                             priority_tier=PriorityTier.ECONOMIC,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                        )
+                    )
+                    continue
+                if want_pasture and not pasture_planned and (x, y) == pasture_build_target:
+                    pasture_planned = True
+                    # DAILY_CARE (not ECONOMIC/0-value): Melon PLANT otherwise
+                    # always outranks BUILD_PASTURE and cows rot in the shed.
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.BUILD_PASTURE, x=x, y=y),
+                            target=(x, y),
+                            priority_tier=PriorityTier.DAILY_CARE,
                             deadline_step=None,
                             expected_value=0.0,
                             action_cost=1,
@@ -261,6 +318,21 @@ def generate_tasks(
                             expected_value=0.0,
                             action_cost=1,
                             resource_needs=(ResourceNeed(item="GOOSE", quantity=1, source="INVENTORY"),),
+                        )
+                    )
+
+            elif isinstance(tile, dict) and tile.get("kind") == "PASTURE" and "animal" not in tile:
+                has_empty_pasture = True
+                if cow_in_any_inventory:
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.PLACE, x=x, y=y, item="COW"),
+                            target=(x, y),
+                            priority_tier=PriorityTier.DAILY_CARE,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                            resource_needs=(ResourceNeed(item="COW", quantity=1, source="INVENTORY"),),
                         )
                     )
 
@@ -319,7 +391,7 @@ def generate_tasks(
                     tier = (
                         PriorityTier.EMERGENCY
                         if tile.get("consecutive_unfed", 0) >= 1
-                        else PriorityTier.DAILY_CARE
+                        else non_emergency_feed_tier
                     )
                     tasks.append(
                         Task(
@@ -348,7 +420,7 @@ def generate_tasks(
                         Task(
                             task_id=TaskId(kind=TaskKind.CARE, x=x, y=y),
                             target=(x, y),
-                            priority_tier=PriorityTier.DAILY_CARE,
+                            priority_tier=care_tier,
                             deadline_step=None,
                             expected_value=0.0,
                             action_cost=1,
@@ -373,12 +445,42 @@ def generate_tasks(
                         resource_needs=(ResourceNeed(item="GOOSE", quantity=1, source="SHED"),),
                     )
                 )
+            if shed.get("COW", 0) > 0 and not cow_in_any_inventory and has_empty_pasture:
+                tasks.append(
+                    Task(
+                        task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="COW"),
+                        target=pickup_target,
+                        priority_tier=PriorityTier.DAILY_CARE,
+                        deadline_step=None,
+                        expected_value=0.0,
+                        action_cost=1,
+                        resource_needs=(ResourceNeed(item="COW", quantity=1, source="SHED"),),
+                    )
+                )
+            # Shed cows with no empty pasture yet: still PICKUP once a pasture
+            # build is in flight is handled next turn; if want_pasture built
+            # this turn, has_empty_pasture is still false at generation time.
+            # Also allow PICKUP when shed has cows and want_pasture was requested
+            # so the unit can carry the cow while another unit builds.
+            elif shed.get("COW", 0) > 0 and not cow_in_any_inventory and want_pasture:
+                tasks.append(
+                    Task(
+                        task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="COW"),
+                        target=pickup_target,
+                        priority_tier=PriorityTier.DAILY_CARE,
+                        deadline_step=None,
+                        expected_value=0.0,
+                        action_cost=1,
+                        resource_needs=(ResourceNeed(item="COW", quantity=1, source="SHED"),),
+                    )
+                )
             if wheat_needed_for_feed and shed.get("WHEAT", 0) > 0:
                 tasks.append(
                     Task(
                         task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="WHEAT"),
                         target=pickup_target,
-                        priority_tier=PriorityTier.ECONOMIC,
+                        # Match FEED urgency so wheat isn't stuck behind Melon PLANT.
+                        priority_tier=PriorityTier.DAILY_CARE,
                         deadline_step=None,
                         expected_value=0.0,
                         action_cost=1,
@@ -386,7 +488,7 @@ def generate_tasks(
                     )
                 )
 
-    return tasks
+    return _cap_feed_tasks(tasks, max_feed_tasks)
 
 
 HYSTERESIS_BONUS = 0.5  # switch-away penalty, in the same units as expected_value

@@ -95,6 +95,10 @@ def test_task_kind_includes_v4_animal_and_pickup_kinds():
         assert TaskKind[name].value == name
 
 
+def test_task_kind_includes_build_pasture():
+    assert TaskKind.BUILD_PASTURE.value == "BUILD_PASTURE"
+
+
 def test_task_id_is_hashable_and_orderable():
     a = TaskId(kind=TaskKind.PLANT, x=1, y=2, item="WHEAT")
     b = TaskId(kind=TaskKind.PLANT, x=1, y=2, item="WHEAT")
@@ -632,6 +636,117 @@ def test_generate_tasks_place_goose_when_inventory_has_goose_and_empty_coop():
     places = [t for t in tasks if t.task_id.kind == TaskKind.PLACE and t.target == (3, 3)]
     assert len(places) == 1
     assert places[0].task_id.item == "GOOSE"
+
+
+def make_cow_tile(placed_day, fed_today, cared_today, yield_units, consecutive_unfed=0):
+    return {
+        "kind": "PASTURE",
+        "animal": "COW",
+        "placed_day": placed_day,
+        "yield_units": yield_units,
+        "consecutive_unfed": consecutive_unfed,
+        "fed_today": fed_today,
+        "cared_today": cared_today,
+        "fertilizer_available": False,
+        "pending_care_bonus": 0,
+    }
+
+
+def test_generate_tasks_want_pasture_emits_build_pasture_on_empty_tile():
+    tiles = make_tiles()
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        want_pasture=True,
+    )
+    builds = [t for t in tasks if t.task_id.kind == TaskKind.BUILD_PASTURE]
+    assert len(builds) == 1
+    bx, by = builds[0].target
+    assert tiles[by][bx] is None
+
+
+def test_generate_tasks_pickup_cow_when_shed_has_cow_and_empty_pasture():
+    tiles = make_tiles({(3, 3): {"kind": "PASTURE"}})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        shed={"COW": 1},
+        cow_in_any_inventory=False,
+    )
+    pickups = [t for t in tasks if t.task_id.kind == TaskKind.PICKUP and t.task_id.item == "COW"]
+    assert len(pickups) == 1
+    assert pickups[0].target in economy.shed_access_tiles(BOARD_SIZE)
+
+
+def test_generate_tasks_place_cow_when_inventory_has_cow_and_empty_pasture():
+    tiles = make_tiles({(3, 3): {"kind": "PASTURE"}})
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        cow_in_any_inventory=True,
+    )
+    places = [t for t in tasks if t.task_id.kind == TaskKind.PLACE and t.target == (3, 3)]
+    assert len(places) == 1
+    assert places[0].task_id.item == "COW"
+
+
+def test_generate_tasks_max_feed_tasks_keeps_emergency_feed_first():
+    tiles = make_tiles(
+        {
+            (1, 1): make_cow_tile(0, fed_today=False, cared_today=False, yield_units=0, consecutive_unfed=1),
+            (2, 2): make_cow_tile(0, fed_today=False, cared_today=False, yield_units=0, consecutive_unfed=0),
+        }
+    )
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        max_feed_tasks=1,
+        non_emergency_feed_tier=PriorityTier.OPTIONAL,
+    )
+    feeds = [t for t in tasks if t.task_id.kind == TaskKind.FEED]
+    assert len(feeds) == 1
+    assert feeds[0].target == (1, 1)
+    assert feeds[0].priority_tier == PriorityTier.EMERGENCY
+
+
+def test_generate_tasks_non_emergency_feed_tier_optional_for_v7():
+    tiles = make_tiles(
+        {(2, 2): make_cow_tile(0, fed_today=False, cared_today=False, yield_units=0, consecutive_unfed=0)}
+    )
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=3,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        board_size=BOARD_SIZE,
+        non_emergency_feed_tier=PriorityTier.OPTIONAL,
+        care_tier=PriorityTier.OPTIONAL,
+    )
+    feeds = [t for t in tasks if t.task_id.kind == TaskKind.FEED]
+    assert len(feeds) == 1
+    assert feeds[0].priority_tier == PriorityTier.OPTIONAL
 
 
 # --- rank_tasks ------------------------------------------------------------

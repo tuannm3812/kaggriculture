@@ -1032,3 +1032,29 @@ available, and outcome/lesson.
   Next work should reconcile ladder day-1 NE unlock vs local day-~15 buy
   (attribution bug vs env mismatch) before any further reserve sweep —
   see `docs/6_next_steps.md`.
+
+## `task_teacher_v7` (2026-08-13) — Cow/pasture/milk on v5; **not promoted**
+
+- **Date:** 2026-08-13
+- **Extends `task_teacher_v5` with:** bounded Cow loop (`MAX_COWS=6`,
+  `MAX_FEED_ACTIONS_PER_DAY=6`, NE-gated buy/build, pasture task kinds in
+  shared `tasking.py`). Spec:
+  `docs/superpowers/specs/2026-08-13-task-teacher-v7-design.md`.
+- **Acceptance probe** (20×720 vs `starter`, seed 91000; after NE-gate +
+  FEED-tier fixes): DONE 20/20; mean ~29k; `BUY_LAND` 1.0/ep;
+  `BUY_ANIMAL:COW` > 0; `FEED/day` ~4; no Goose.
+- **Animal screen** (10×720): Melon sells still fire but below v5
+  (~140 vs ~165 units/ep); milk sells stayed ~0 in early probes
+  (placement/feed/inventory-assignment friction).
+- **Paired evaluation:**
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v5` (seed 92000, pre-priority fix) | 20/40 | 0.050 | −11224 | [0.000, 0.430] |
+  | vs. `task_teacher_v5` (seed 92100, post-priority/slot fix) | 20/40 | **0.000** | −17079 | **[0.000, 0.380]** |
+
+- **Outcome: not promoted.** CI wholly below 0.50. Do **not** notebook-submit.
+  Champion / ladder agent remains `task_teacher_v5` (`55425318`).
+- **Lesson:** scaled animals need inventory-aware assignment + a working
+  wheat→feed→milk revenue path; raising FEED/PLACE priority alone still
+  taxes Melon harder than milk pays back under the local harness.
