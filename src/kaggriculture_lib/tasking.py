@@ -742,6 +742,7 @@ def should_hire(
     money: float,
     safety_margin: float = 0.0,
     existing_hands: int = 0,
+    hire_cost_mult: int = economy.FARM_HAND_COST_MULT,
 ) -> bool:
     """Whether hiring one more hand today clears its fibonacci-scaled cost.
 
@@ -750,12 +751,20 @@ def should_hire(
     only if affordable at all. Not a diversity-seeking heuristic — value
     must be real and load-driven, per the design's explicit "do not hire
     merely to create training action diversity" rule.
+
+    `hire_cost_mult` defaults to the 1.29.3 library constant (10). Ladder-
+    match agents should pass `economy.hire_cost_mult(config)` (often 1).
     """
-    cost = economy.hire_cost(hires_today)
+    cost = economy.hire_cost(hires_today, mult=hire_cost_mult)
     if money < cost:
         return False
     value = estimate_hire_value(projected_load, remaining_turns_today, existing_hands)
     return value > cost + safety_margin
+
+
+# Default cash floor for the second extra quadrant (SW @ $2000).
+SW_BUDGET_RESERVE = 3000
+SW_MIN_PLANTS = 20
 
 
 def should_buy_land(
@@ -769,22 +778,41 @@ def should_buy_land(
     reserved_for_hire: float,
     plant_tile_count: int,
     budget_reserve: float = LAND_BUDGET_RESERVE,
+    max_extra_quadrants: int = 1,
+    sw_budget_reserve: float = SW_BUDGET_RESERVE,
+    sw_min_plants: int = SW_MIN_PLANTS,
 ) -> bool:
-    """Whether to emit BUY_LAND for NE this turn (hard-cap: one extra quadrant)."""
-    if len(unlocked_quadrants) != 1:
-        return False
-    if plant_tile_count < NW_SATURATION_PLANTS:
+    """Whether to emit BUY_LAND this turn.
+
+    Default `max_extra_quadrants=1` preserves v4/v5 NE-only behavior.
+    With `max_extra_quadrants=2`, a second buy (SW) is allowed after NE
+    when plants/cash clear the SW gates.
+    """
+    n_extra = len(unlocked_quadrants) - 1
+    if n_extra < 0 or n_extra >= max_extra_quadrants:
         return False
     if existing_hands < MIN_HANDS_BEFORE_LAND:
         return False
     if last_day - day < LAND_MIN_DAYS_REMAINING:
         return False
-    cost = economy.land_cost(0)
+    if estimate_hire_value(projected_load, remaining_turns_today, existing_hands) > 0:
+        return False
+
+    if n_extra == 0:
+        if plant_tile_count < NW_SATURATION_PLANTS:
+            return False
+        cost = economy.land_cost(0)
+        reserve = budget_reserve
+    else:
+        # Second extra → SW at LAND_PRICES[1].
+        if plant_tile_count < sw_min_plants:
+            return False
+        cost = economy.land_cost(1)
+        reserve = sw_budget_reserve
+
     if cost is None:
         return False
-    if money - reserved_for_hire < cost + budget_reserve:
-        return False
-    if estimate_hire_value(projected_load, remaining_turns_today, existing_hands) > 0:
+    if money - reserved_for_hire < cost + reserve:
         return False
     return True
 

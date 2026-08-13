@@ -111,6 +111,18 @@ def hire_cost(n_already_today: int, mult: int = FARM_HAND_COST_MULT) -> int:
     return mult * a
 
 
+def hire_cost_mult(config: dict | None = None) -> int:
+    """Hire multiplier from episode config, else `FARM_HAND_COST_MULT`.
+
+    Live ladder episodes set `farmHandCostMult=1`; bare 1.29.3 `make()`
+    defaults to 10. Agents that care about ladder-parity should pass
+    `config` through here (see `env_config.LADDER_MATCH_CONFIGURATION`).
+    """
+    if not config:
+        return FARM_HAND_COST_MULT
+    return int(config.get("farmHandCostMult", FARM_HAND_COST_MULT))
+
+
 def land_cost(n_unlocked_extra: int) -> int | None:
     """Cost of the next `BUY_LAND` order, or None if all land is unlocked.
 

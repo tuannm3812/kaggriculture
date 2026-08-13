@@ -29,20 +29,22 @@ ladder-match eval.
 Delay binds, but **does not beat v5** — stop (no 50-pair, no submit).
 Early NE with $3000 start appears net-positive vs delaying in this sample.
 
-**Next engineering priority (ordered):**
-1. Land-timing lever that beats v5 under ladder-match (not “just delay” —
-   v6’s reserve loses). Candidates: opponent-aware / Melon-cash-gated
-   delay, or keep early land and spend the research budget on animals.
-2. Re-run `scripts/analyze_ladder_submission.py --submission-id 55425318
-   --label task_teacher_v5` as n grows (now includes `our_land_cause_*`).
-3. Carefully capped animal path using ladder-match eval
-   (`task_teacher_v7` is the failed first cut under old defaults).
-4. Align `economy.FARM_HAND_COST_MULT` / hire reservations with
-   `config["farmHandCostMult"]` so agent budget math matches ladder
-   charges (agent still assumes mult=10 today).
+**`task_teacher_v8` (gated SW + hire helpers):** not promoted. Ladder-match
+vs v5 WR **0.300** (CI `[0.000, 0.680]`). SW unlocks work but lose to
+focused NE Melon; raw ladder hire-mult=1 hire-runaways after day clear.
 
-Do **not** submit v4, v6, or v7 until a ladder-match Hoeffding promote
-clears. v2 remains the second tracked submission.
+**Next engineering priority (ordered):**
+1. **S2 animals under ladder-match** — inventory-correct tiny cow/sheep
+   on **v5 (2Q)**, not on SW. Prove product revenue; FEED budget; promote
+   vs v5. (`task_teacher_v7` was the failed first cut under wrong config.)
+2. Re-run ladder analysis on `55425318` as n grows.
+3. Only revisit 3Q land after a working animal loop, or with
+   opponent-conditioned expansion.
+4. Hire parity needs a **daily spend / re-hire model**, not only
+   `farmHandCostMult` (hands clear each day).
+
+Do **not** submit v4, v6, v7, or v8 until a ladder-match Hoeffding
+promote clears. v2 remains the second tracked submission. Champion: v5.
 
 ## Prior Recommendation (2026-08-02)
 

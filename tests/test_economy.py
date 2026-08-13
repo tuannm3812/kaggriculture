@@ -75,6 +75,16 @@ def test_hire_cost_matches_real_module(n):
     assert economy.hire_cost(n) == real._hire_cost(n)
 
 
+def test_hire_cost_mult_defaults_to_library_constant():
+    assert economy.hire_cost_mult(None) == economy.FARM_HAND_COST_MULT
+    assert economy.hire_cost_mult({}) == economy.FARM_HAND_COST_MULT
+
+
+def test_hire_cost_mult_reads_farm_hand_cost_mult_from_config():
+    assert economy.hire_cost_mult({"farmHandCostMult": 1}) == 1
+    assert economy.hire_cost_mult({"farmHandCostMult": 10}) == 10
+
+
 @pytest.mark.parametrize("n_extra", [0, 1, 2, 3])
 def test_land_cost_matches_real_module(n_extra):
     expected = real.LAND_PRICES[n_extra] if n_extra < len(real.LAND_ORDER) else None

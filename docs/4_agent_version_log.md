@@ -1033,6 +1033,21 @@ available, and outcome/lesson.
   (attribution bug vs env mismatch) before any further reserve sweep —
   see `docs/6_next_steps.md`.
 
+## `task_teacher_v8` (2026-08-13) — hire helpers + gated SW; **not promoted**
+
+- **Extends v5 with:** `max_extra_quadrants=2` (NE then SW @
+  `SW_BUDGET_RESERVE_V8=3000`); additive `should_hire(hire_cost_mult=…)` /
+  `economy.hire_cost_mult`. Agent keeps **decision** hire mult=10 (ladder
+  mult=1 without a daily spend model re-hires to cap every day after
+  hand clear → first screen WR 0.000).
+- **Acceptance** (ladder-match, 20×720): DONE; NE cause-day 0; SW ~90%
+  episodes ~day 15; no animals.
+- **Paired (ladder-match):** vs v5 20-pair seed 97400 → **WR 0.300**,
+  margin −$1626, CI `[0.000, 0.680]` — stop. Do not submit.
+- **Lesson:** third quadrant without animals (or a better labor model)
+  does not beat focused NE Melon locally; next research = S2 animals
+  under ladder-match, not more land alone.
+
 ## Ladder-config reconciliation (2026-08-13)
 
 - Live ladder replays use `startingMoney=3000`, `farmHandCostMult=1` (not

@@ -1234,6 +1234,65 @@ def test_should_buy_land_true_when_cash_clears_high_budget_reserve():
     )
 
 
+def test_should_buy_land_sw_true_when_max_extra_two_and_cash_clears():
+    # SW costs 2000 + default sw_budget_reserve 3000 = 5000.
+    assert should_buy_land(
+        unlocked_quadrants=["NW", "NE"],
+        money=5000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=10,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=20,
+        max_extra_quadrants=2,
+    )
+
+
+def test_should_buy_land_sw_false_when_cash_only_clears_ne_bar():
+    assert not should_buy_land(
+        unlocked_quadrants=["NW", "NE"],
+        money=3500.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=3,
+        day=10,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=20,
+        max_extra_quadrants=2,
+    )
+
+
+def test_should_buy_land_sw_false_under_default_max_extra_one():
+    assert not should_buy_land(
+        unlocked_quadrants=["NW", "NE"],
+        money=10_000.0,
+        projected_load=10,
+        remaining_turns_today=20,
+        existing_hands=5,
+        day=10,
+        last_day=29,
+        reserved_for_hire=0.0,
+        plant_tile_count=40,
+    )
+
+
+def test_should_hire_respects_explicit_hire_cost_mult():
+    # 6th hire today: fib=13 → cost 130 at mult=10 (unaffordable at $100),
+    # cost 13 at mult=1 (affordable and value-positive under this load).
+    kwargs = dict(
+        projected_load=100,
+        remaining_turns_today=20,
+        hires_today=6,
+        money=100.0,
+        existing_hands=0,
+    )
+    assert not should_hire(**kwargs, hire_cost_mult=10)
+    assert should_hire(**kwargs, hire_cost_mult=1)
+
+
 def test_hiring_runaway_terminates_within_a_bounded_number_of_hires():
     """Regression test for the exact bug: with a large constant load and
     unlimited money, repeatedly asking "should I hire one more?" (correctly
