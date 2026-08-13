@@ -2,32 +2,47 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
-## Current Recommendation (2026-08-12, post-v6 review correction)
+## Current Recommendation (2026-08-13, post ladder-config reconciliation)
 
-**Ladder agent: `task_teacher_v5`** (ref `55425318`, `publicScore` **448.8**;
-still `competitive_champion`). Ladder replay refresh: **14W–15L / 29
-public** (48.3%); land+animals opponents **6W–10L (38%)**. See
-`docs/8_ladder_replay_analysis.md` (2026-08-12 section).
+**Ladder agent: `task_teacher_v5`** (ref `55425318`; still
+`competitive_champion`). See `docs/8_ladder_replay_analysis.md`.
 
-**`task_teacher_v6` built and evaluated — not promoted.** Acceptance /
-regressions clean, but local Hoeffding vs v5 is an exact `0.500` /
-`+0.0` tie (CI `[0.260, 0.740]`). Whole-branch review + spot-check: under
-the local harness v6 is **behaviorally identical** to v5 — `budget_reserve=2000`
-never binds (saturation+hands open only when cash already clears $3000).
-Do not treat the docs/8 ladder “day 0/1” figure as a local v5 baseline.
+**Item 1 resolved (2026-08-13):** ladder “day-1 land” vs local day-~15 was
+**not** an attribution bug in the agent — live ladder episodes use
+`startingMoney=3000` / `farmHandCostMult=1` (plus town-interval overrides),
+while bare `make()` on pinned `1.29.3` defaults to `2000` / `10`. Under
+ladder-match config, v5’s land cause-day is **0** (matches all 29 public
+replays at day 0 hour 23, money=$1873). v6’s `budget_reserve=2000`
+**does bind** (cause-day ~13–14). The prior “v6 ≡ v5” local result was an
+artifact of the wrong episode defaults. Details in docs/8 (2026-08-13
+correction); harness helper:
+`kaggriculture_lib.env_config.tournament_configuration`.
+`scripts/run_tournament.py` now defaults to ladder-match config
+(`--legacy-1293-defaults` to opt out).
+
+**`task_teacher_v7` (Cow):** implemented, not promoted under old defaults;
+do not submit. Revisit animals only after land-timing is settled on
+ladder-match eval.
+
+**v6 re-screen under ladder-match (2026-08-13):** 20-pair vs v5 (seed
+96000) → `win_rate=0.300`, margin `-$1499`, Hoeffding CI `[0.000, 0.680]`.
+Delay binds, but **does not beat v5** — stop (no 50-pair, no submit).
+Early NE with $3000 start appears net-positive vs delaying in this sample.
 
 **Next engineering priority (ordered):**
-1. **Reconcile ladder day-1 NE unlock vs local day-~15 buy** — check
-   `scripts/analyze_ladder_submission.py` day attribution and whether
-   ladder env/config differs from local defaults. This motivated v6 and
-   is still unverified.
-2. Only after (1) is settled, redesign a land-timing lever that actually
-   binds locally (reserve sweeps below ~$4500 are futile on current gates).
-3. Carefully capped animal path (v4 Goose tax still applies).
-4. Re-run `scripts/analyze_ladder_submission.py --submission-id 55425318
-   --label task_teacher_v5` as n grows.
+1. Land-timing lever that beats v5 under ladder-match (not “just delay” —
+   v6’s reserve loses). Candidates: opponent-aware / Melon-cash-gated
+   delay, or keep early land and spend the research budget on animals.
+2. Re-run `scripts/analyze_ladder_submission.py --submission-id 55425318
+   --label task_teacher_v5` as n grows (now includes `our_land_cause_*`).
+3. Carefully capped animal path using ladder-match eval
+   (`task_teacher_v7` is the failed first cut under old defaults).
+4. Align `economy.FARM_HAND_COST_MULT` / hire reservations with
+   `config["farmHandCostMult"]` so agent budget math matches ladder
+   charges (agent still assumes mult=10 today).
 
-Do **not** submit v4 or v6. v2 remains the second tracked submission.
+Do **not** submit v4, v6, or v7 until a ladder-match Hoeffding promote
+clears. v2 remains the second tracked submission.
 
 ## Prior Recommendation (2026-08-02)
 

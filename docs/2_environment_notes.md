@@ -1,5 +1,23 @@
 # 2. Environment Notes
 
+## Ladder-match configuration (2026-08-13)
+
+Live Kaggriculture ladder episode `configuration` blocks (measured from
+`task_teacher_v5` submission `55425318` replays) do **not** match bare
+`make()` defaults on pinned `kaggle-environments==1.29.3`:
+
+| Key | 1.29.3 default | Live ladder |
+| --- | ---: | ---: |
+| `startingMoney` | 2000 | **3000** |
+| `farmHandCostMult` | 10 | **1** |
+| `townShopSellInterval` | 2 | **4** |
+| `townCenterSellInterval` | 6 | **24** |
+
+Use `kaggriculture_lib.env_config.tournament_configuration` (wired into
+`scripts/run_tournament.py` by default) for any local eval that should
+predict ladder land timing. See `docs/8_ladder_replay_analysis.md`
+(2026-08-13 correction).
+
 ## Local Installation
 
 `kaggle-environments==1.29.3` from PyPI, pinned in `requirements.txt` — no

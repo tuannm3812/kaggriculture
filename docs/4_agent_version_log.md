@@ -1033,6 +1033,17 @@ available, and outcome/lesson.
   (attribution bug vs env mismatch) before any further reserve sweep —
   see `docs/6_next_steps.md`.
 
+## Ladder-config reconciliation (2026-08-13)
+
+- Live ladder replays use `startingMoney=3000`, `farmHandCostMult=1` (not
+  1.29.3 `make()` defaults of 2000/10). Helper:
+  `kaggriculture_lib.env_config`; `run_tournament.py` defaults to
+  ladder-match.
+- Under ladder-match: v5 land cause-day **0** (matches 29/29 public);
+  v6 reserve **binds** (cause-day ~13–14) but **loses** 20-pair vs v5
+  (`WR=0.300`, CI `[0.000, 0.680]`, seed 96000) — still not promoted.
+- Full write-up: `docs/8_ladder_replay_analysis.md` (2026-08-13 section).
+
 ## `task_teacher_v7` (2026-08-13) — Cow/pasture/milk on v5; **not promoted**
 
 - **Date:** 2026-08-13

@@ -33,6 +33,8 @@ if str(REPO_ROOT / "src") not in sys.path:
 
 from kaggle_environments import make  # noqa: E402
 
+from kaggriculture_lib.env_config import tournament_configuration  # noqa: E402
+
 
 class GameFailure(RuntimeError):
     """Raised when a played episode did not complete cleanly.
@@ -66,7 +68,14 @@ def pairwise_score(a: float, b: float) -> float:
     return 0.0
 
 
-def run_pair(agent_ref: str, opponent_ref: str, episode_steps: int, seed: int) -> tuple[float, float, float]:
+def run_pair(
+    agent_ref: str,
+    opponent_ref: str,
+    episode_steps: int,
+    seed: int,
+    *,
+    ladder_match: bool = True,
+) -> tuple[float, float, float]:
     """Play one seed with both seat assignments.
 
     Returns `(agent_score, mean_money_margin, wall_time_seconds)`:
@@ -74,14 +83,25 @@ def run_pair(agent_ref: str, opponent_ref: str, episode_steps: int, seed: int) -
     0.0 loss per seat, averaged over both seats — so a fully-swept pair
     scores 1.0, a fully-lost pair scores 0.0); `mean_money_margin` is the
     agent's mean final money minus the opponent's, averaged over both seats.
+
+    By default uses ladder-match configuration (`startingMoney=3000`,
+    `farmHandCostMult=1`, …) so local land timing matches live ladder
+    replays — see `kaggriculture_lib.env_config`.
     """
     t0 = time.time()
 
-    env_a = make("kaggriculture", configuration={"episodeSteps": episode_steps, "seed": seed}, debug=False)
+    if ladder_match:
+        cfg_a = tournament_configuration(episode_steps=episode_steps, seed=seed)
+        cfg_b = tournament_configuration(episode_steps=episode_steps, seed=seed)
+    else:
+        cfg_a = {"episodeSteps": episode_steps, "seed": seed}
+        cfg_b = {"episodeSteps": episode_steps, "seed": seed}
+
+    env_a = make("kaggriculture", configuration=cfg_a, debug=False)
     env_a.run([agent_ref, opponent_ref])
     agent_money_a, opp_money_a = final_rewards(env_a)
 
-    env_b = make("kaggriculture", configuration={"episodeSteps": episode_steps, "seed": seed}, debug=False)
+    env_b = make("kaggriculture", configuration=cfg_b, debug=False)
     env_b.run([opponent_ref, agent_ref])
     opp_money_b, agent_money_b = final_rewards(env_b)
 
@@ -140,13 +160,23 @@ def hoeffding_ci(
     return max(0.0, mean - epsilon), min(1.0, mean + epsilon)
 
 
-def tournament(agent_ref: str, opponent_ref: str, episodes: int, episode_steps: int, base_seed: int) -> None:
+def tournament(
+    agent_ref: str,
+    opponent_ref: str,
+    episodes: int,
+    episode_steps: int,
+    base_seed: int,
+    *,
+    ladder_match: bool = True,
+) -> None:
     total_margin = 0.0
     total_wall = 0.0
     pair_scores = []
     for i in range(episodes):
         seed = base_seed + i
-        score, margin, wall = run_pair(agent_ref, opponent_ref, episode_steps, seed)
+        score, margin, wall = run_pair(
+            agent_ref, opponent_ref, episode_steps, seed, ladder_match=ladder_match
+        )
         pair_scores.append(score)
         total_margin += margin
         total_wall += wall
@@ -158,10 +188,12 @@ def tournament(agent_ref: str, opponent_ref: str, episodes: int, episode_steps: 
     if episodes >= 1:
         lo, hi = hoeffding_ci(pair_scores)
         ci_msg = f", hoeffding_95%_ci=[{lo:.3f}, {hi:.3f}]"
+    mode = "ladder-match" if ladder_match else "1.29.3-defaults"
     print(
         f"{agent_ref!r} vs {opponent_ref!r}: "
         f"win_rate={win_rate:.3f} ({episodes} seed pairs / {n_games} games), "
         f"mean_money_margin={mean_margin:+.1f}{ci_msg}, "
+        f"config={mode}, "
         f"wall_time={total_wall:.1f}s ({steps_per_sec:.0f} steps/sec)"
     )
 
@@ -173,10 +205,23 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=10, help="Seed pairs per opponent (default 10)")
     parser.add_argument("--episode-steps", type=int, default=720, help="Turns per episode (default 720)")
     parser.add_argument("--seed", type=int, default=0, help="Base seed; seed pair i uses base_seed+i")
+    parser.add_argument(
+        "--legacy-1293-defaults",
+        action="store_true",
+        help="Use bare 1.29.3 schema defaults (startingMoney=2000, farmHandCostMult=10) "
+        "instead of measured ladder-match configuration",
+    )
     args = parser.parse_args()
 
     for opponent in args.opponents:
-        tournament(args.agent, opponent, args.episodes, args.episode_steps, args.seed)
+        tournament(
+            args.agent,
+            opponent,
+            args.episodes,
+            args.episode_steps,
+            args.seed,
+            ladder_match=not args.legacy_1293_defaults,
+        )
 
 
 if __name__ == "__main__":

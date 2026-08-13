@@ -333,3 +333,54 @@ as a secondary issue.
 | 91990479 | Fahim Montasir | LOSS | 16,734 / 17,543 | 1 | yes | yes | 11 | 2 |
 | 91956815 | Yuvraj singh | **WIN** | 15,100 / 14,609 | 1 | yes | yes | 10 | 3 |
 | 91929478 | guoqin gu | **WIN** | 28,989 / 3,000 | 1 | no | no | 0 | 1 |
+
+## Correction — 2026-08-13: “day-1 land” vs local day-15 was a config mismatch
+
+Reconciled `docs/6_next_steps.md` item 1 against cached
+`task_teacher_v5` ladder replays (`55425318`, 29 public) and local
+`kaggle-environments==1.29.3`.
+
+### Replay attribution
+
+Kaggriculture JSON labels `BUY_LAND` on the **post-unlock** step (typically
+day N+1 hour 0, hands already cleared). The decision cleared on the prior
+hour. Prefer **cause-day** = observation immediately before
+`n_unlocked` increases. `scripts/analyze_ladder_submission.py` now emits
+`our_land_cause_*` fields.
+
+### Measured cause-day (29/29 public)
+
+| Field at cause obs | Value |
+| --- | --- |
+| day / hour | **0 / 23** (all 29) |
+| money / hands / plants | **$1873 / 4 / 13** (identical across all 29) |
+
+So the Aug-11 “day 1” wording was the post-unlock label; the gate actually
+fires at **end of day 0**, once NW saturation (12) + min hands (3) + cash
+($1000+$400) all clear.
+
+### Why local eval showed day ~15
+
+Live ladder `configuration` (from replay JSON) ≠ bare `make()` defaults on
+pinned 1.29.3:
+
+| Key | Local 1.29.3 default | Live ladder |
+| --- | ---: | ---: |
+| `startingMoney` | 2000 | **3000** |
+| `farmHandCostMult` | 10 | **1** |
+| `townShopSellInterval` | 2 | **4** |
+| `townCenterSellInterval` | 6 | **24** |
+
+With ladder-match config locally, v5’s cause-day is **0** (money ~$1873,
+matches ladder). With 1.29.3 defaults, cause-day stays **~14–15** because
+day-0 cash is only ~$810 (< $1400 bar).
+
+### Consequence for v6
+
+Under ladder-match config, `LAND_BUDGET_RESERVE_V6=2000` **does bind**:
+10-seed probe → v5 cause-day 0×10; v6 cause-day 13–14. The earlier “v6 ≡
+v5 locally” result was an artifact of evaluating against the wrong
+episode defaults. Harness fix:
+`kaggriculture_lib.env_config.tournament_configuration` +
+`scripts/run_tournament.py` (default ladder-match; `--legacy-1293-defaults`
+to opt out).

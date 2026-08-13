@@ -86,6 +86,55 @@ def _max_hands(steps, seat: int) -> int:
     return mx
 
 
+def _first_land_unlock_cause(steps, seat: int) -> dict:
+    """Day/hour/money/hands/plants on the observation *before* NE appears.
+
+    Kaggriculture replays label `BUY_LAND` on the post-unlock step (often
+    day N+1 hour 0) while the decision cleared on the prior hour. Prefer
+    this cause-day for land-timing analysis — see docs/8 (2026-08-13).
+    """
+    for i in range(1, len(steps)):
+        if not isinstance(steps[i], list):
+            continue
+        prev_farms = _farms_from_step(steps[i - 1])
+        cur_farms = _farms_from_step(steps[i])
+        if not prev_farms or not cur_farms:
+            continue
+        prev_u = prev_farms[seat].get("unlocked_quadrants") or []
+        cur_u = cur_farms[seat].get("unlocked_quadrants") or []
+        if len(cur_u) <= len(prev_u):
+            continue
+        obs = None
+        for cell in steps[i - 1]:
+            o = cell.get("observation") if isinstance(cell, dict) else None
+            if isinstance(o, dict) and "farms" in o:
+                obs = o
+                break
+        if obs is None:
+            break
+        farm = obs["farms"][seat]
+        plants = sum(
+            1
+            for row in farm.get("tiles") or []
+            for tile in row
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT"
+        )
+        return {
+            "our_land_cause_day": obs.get("day"),
+            "our_land_cause_hour": obs.get("hour"),
+            "our_land_cause_money": farm.get("money"),
+            "our_land_cause_hands": len(farm.get("hands") or []),
+            "our_land_cause_plants": plants,
+        }
+    return {
+        "our_land_cause_day": None,
+        "our_land_cause_hour": None,
+        "our_land_cause_money": None,
+        "our_land_cause_hands": None,
+        "our_land_cause_plants": None,
+    }
+
+
 def analyze(submission_id: int, label: str, team_name: str) -> list[dict]:
     out_dir = REPO_ROOT / "replays" / "ladder" / label
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -134,6 +183,7 @@ def analyze(submission_id: int, label: str, team_name: str) -> list[dict]:
             result = "LOSS"
         else:
             result = "TIE"
+        land_cause = _first_land_unlock_cause(steps, our_idx)
         rows.append(
             {
                 "episode_id": ep.id,
@@ -150,6 +200,7 @@ def analyze(submission_id: int, label: str, team_name: str) -> list[dict]:
                 "our_n_unlocked": our_farm["n_unlocked"],
                 "our_max_hands": _max_hands(steps, our_idx),
                 "our_animals_placed": our_farm["animals_placed"],
+                **land_cause,
                 "opp_buy_land": int(opp_ops.get("BUY_LAND", 0)),
                 "opp_buy_animal": int(opp_ops.get("BUY_ANIMAL", 0)),
                 "opp_hire": int(opp_ops.get("HIRE", 0)),
