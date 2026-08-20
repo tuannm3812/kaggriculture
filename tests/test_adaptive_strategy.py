@@ -151,7 +151,7 @@ def test_executable_backlog_uses_queued_market_orders_for_shed_pickups(
 
 
 def test_executable_backlog_accepts_dict_queued_items_for_shed_pickup() -> None:
-    """Legacy dictionary queued items populate every resource-source bucket."""
+    """Legacy dictionary queues populate SEED/SHED, with UNIT/INVENTORY empty."""
     task = make_backlog_task(
         TaskKind.PICKUP, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "SHED"),)
     )
@@ -173,12 +173,17 @@ def test_executable_backlog_accepts_dict_queued_items_for_shed_pickup() -> None:
             ["BUY_ANIMAL", "GOOSE", 1],
         ),
         (
+            make_backlog_task(TaskKind.FEED, needs=(ResourceNeed("WHEAT", 1, "UNIT"),)),
+            ["BUY_PRODUCT", "WHEAT", 1],
+        ),
+        (
             make_backlog_task(
                 TaskKind.PLACE, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "UNIT"),)
             ),
             ["BUY_ANIMAL", "GOOSE", 1],
         ),
     ],
+    ids=["inventory-product", "inventory-animal", "unit-product", "unit-animal"],
 )
 def test_executable_backlog_does_not_treat_queued_shed_stock_as_unit_inventory(
     task: Task, order: list[object]
