@@ -3,9 +3,12 @@
 import pytest
 
 from kaggriculture_lib.adaptive_strategy import (
+    CashLedger,
+    LandDecision,
     ThreatLevel,
     ThreatMemory,
     ThreatSnapshot,
+    authorize_land_purchase,
     parse_public_threat_snapshot,
 )
 
@@ -126,3 +129,135 @@ def test_public_snapshot_counts_only_recognized_animals() -> None:
 
     assert snapshot == snap(2, 2, 3)
     assert reason is None
+
+
+def test_cash_ledger_deducts_every_reserve_once() -> None:
+    """Land affordability subtracts each planned reserve and the purchase once."""
+    ledger = CashLedger(100, 200, 300, 1200, 500)
+
+    assert ledger.total_reserved == 2300
+    assert ledger.remaining(money=10_000, purchase_cost=2_000) == 5700
+
+
+def test_third_land_authorizes_compounding_at_the_end_of_day_with_horizon() -> None:
+    """A compounding opponent permits the third land on the eligible boundary."""
+    decision = authorize_land_purchase(
+        threat=ThreatLevel.COMPOUNDING,
+        n_extra=1,
+        day=15,
+        hour=23,
+        last_day=27,
+        money=10_000,
+        land_cost=2_000,
+        ledger=CashLedger(100, 200, 300, 1200, 500),
+        productive_utilization=0.0,
+        opponent_quadrants=3,
+        opponent_animals=4,
+    )
+
+    assert decision == LandDecision(True, "third_land_compounding", 5700)
+
+
+@pytest.mark.parametrize(
+    ("threat", "hour", "last_day", "money", "land_cost", "reason"),
+    [
+        (ThreatLevel.BUILDING, 23, 27, 10_000, 2_000, "third_land_threat_not_compounding"),
+        (ThreatLevel.COMPOUNDING, 22, 27, 10_000, 2_000, "third_land_not_end_of_day"),
+        (ThreatLevel.COMPOUNDING, 23, 26, 10_000, 2_000, "third_land_horizon_too_short"),
+        (ThreatLevel.COMPOUNDING, 23, 27, 4_299, 2_000, "insufficient_cash"),
+        (ThreatLevel.COMPOUNDING, 23, 27, 10_000, 0, "invalid_land_cost"),
+    ],
+)
+def test_third_land_returns_a_telemetry_reason_for_each_rejected_gate(
+    threat: ThreatLevel,
+    hour: int,
+    last_day: int,
+    money: float,
+    land_cost: float,
+    reason: str,
+) -> None:
+    """Each third-land gate reports the condition that prevented expansion."""
+    decision = authorize_land_purchase(
+        threat, 1, 15, hour, last_day, money, land_cost,
+        CashLedger(100, 200, 300, 1200, 500), 0.0, 3, 4,
+    )
+
+    assert not decision.authorized
+    assert decision.reason == reason
+
+
+def test_land_purchase_rejects_after_the_fourth_quadrant_is_already_open() -> None:
+    """The policy never authorizes more than three extra quadrants."""
+    decision = authorize_land_purchase(
+        ThreatLevel.COMPOUNDING, 3, 15, 23, 29, 20_000, 4_000,
+        CashLedger(0, 0, 0), 1.0, 4, 10,
+    )
+
+    assert decision == LandDecision(False, "maximum_extra_quadrants_reached", 14_300)
+
+
+def test_fourth_land_authorizes_on_every_required_boundary() -> None:
+    """Fourth land opens only at the precise attack-mode thresholds."""
+    decision = authorize_land_purchase(
+        ThreatLevel.BUILDING, 2, 15, 23, 29, 14_300, 4_000,
+        CashLedger(100, 200, 300, 1200, 500), 0.70, 4, 0,
+    )
+
+    assert decision == LandDecision(True, "fourth_land_severe_threat", 8000)
+
+
+@pytest.mark.parametrize(
+    ("hour", "last_day", "utilization", "quadrants", "animals", "land_cost", "money", "reason"),
+    [
+        (22, 29, 0.70, 4, 0, 4_000, 14_300, "fourth_land_not_end_of_day"),
+        (23, 28, 0.70, 4, 0, 4_000, 14_300, "fourth_land_horizon_too_short"),
+        (23, 29, 0.699, 4, 0, 4_000, 14_300, "fourth_land_utilization_too_low"),
+        (23, 29, 0.70, 3, 9, 4_000, 14_300, "fourth_land_threat_not_severe"),
+        (23, 29, 0.70, 4, 0, 3_999, 14_300, "fourth_land_cost_must_be_4000"),
+        (23, 29, 0.70, 4, 0, 4_000, 14_299, "fourth_land_cash_below_reserve"),
+    ],
+)
+def test_fourth_land_returns_a_telemetry_reason_for_each_rejected_gate(
+    hour: int,
+    last_day: int,
+    utilization: float,
+    quadrants: int,
+    animals: int,
+    land_cost: float,
+    money: float,
+    reason: str,
+) -> None:
+    """Each fourth-land gate independently guards the attack expansion."""
+    decision = authorize_land_purchase(
+        ThreatLevel.COMPOUNDING, 2, 15, hour, last_day, money, land_cost,
+        CashLedger(100, 200, 300, 1200, 500), utilization, quadrants, animals,
+    )
+
+    assert not decision.authorized
+    assert decision.reason == reason
+
+
+@pytest.mark.parametrize("field", ["queued_hires", "assigned_seeds", "two_day_feed", "animal_liquidity", "operating"])
+@pytest.mark.parametrize("invalid", [-1, float("nan"), float("inf"), float("-inf")])
+def test_cash_ledger_rejects_negative_or_nonfinite_reserves(field: str, invalid: float) -> None:
+    """Invalid reserve inputs cannot be used to fabricate available cash."""
+    values = {"queued_hires": 100, "assigned_seeds": 200, "two_day_feed": 300,
+              "animal_liquidity": 1200, "operating": 500}
+    values[field] = invalid
+
+    with pytest.raises(ValueError):
+        CashLedger(**values)
+
+
+@pytest.mark.parametrize("money", [float("nan"), float("inf"), float("-inf")])
+def test_cash_ledger_rejects_nonfinite_money(money: float) -> None:
+    """Non-finite money cannot yield a land affordability decision."""
+    with pytest.raises(ValueError):
+        CashLedger(100, 200, 300).remaining(money)
+
+
+@pytest.mark.parametrize("purchase_cost", [float("nan"), float("inf"), float("-inf")])
+def test_cash_ledger_rejects_nonfinite_purchase_cost(purchase_cost: float) -> None:
+    """Non-finite purchase prices cannot yield a land affordability decision."""
+    with pytest.raises(ValueError):
+        CashLedger(100, 200, 300).remaining(10_000, purchase_cost)

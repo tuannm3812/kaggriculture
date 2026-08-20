@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import IntEnum
+from math import isfinite
 
 
 class ThreatLevel(IntEnum):
@@ -10,6 +11,53 @@ class ThreatLevel(IntEnum):
     COMPACT = 0
     BUILDING = 1
     COMPOUNDING = 2
+
+
+@dataclass(frozen=True)
+class CashLedger:
+    """Planned cash commitments that must be reserved before expansion."""
+
+    queued_hires: float
+    assigned_seeds: float
+    two_day_feed: float
+    animal_liquidity: float = 1200.0
+    operating: float = 500.0
+
+    def __post_init__(self) -> None:
+        for value in (
+            self.queued_hires,
+            self.assigned_seeds,
+            self.two_day_feed,
+            self.animal_liquidity,
+            self.operating,
+        ):
+            _require_nonnegative_finite(value)
+
+    @property
+    def total_reserved(self) -> float:
+        """Return the total of each reserve, counted exactly once."""
+        return sum((
+            self.queued_hires,
+            self.assigned_seeds,
+            self.two_day_feed,
+            self.animal_liquidity,
+            self.operating,
+        ))
+
+    def remaining(self, money: float, purchase_cost: float = 0.0) -> float:
+        """Return money after all reserves and one prospective purchase."""
+        _require_finite(money)
+        _require_finite(purchase_cost)
+        return money - self.total_reserved - purchase_cost
+
+
+@dataclass(frozen=True)
+class LandDecision:
+    """An expansion authorization and its telemetry-friendly explanation."""
+
+    authorized: bool
+    reason: str
+    remaining_cash: float
 
 
 @dataclass(frozen=True)
@@ -129,3 +177,71 @@ def _classify(snapshot: ThreatSnapshot) -> tuple[ThreatLevel, str]:
     if snapshot.placed_animals >= 3:
         return ThreatLevel.BUILDING, "three_animals"
     return ThreatLevel.COMPACT, "compact"
+
+
+def authorize_land_purchase(
+    threat: ThreatLevel,
+    n_extra: int,
+    day: int,
+    hour: int,
+    last_day: int,
+    money: float,
+    land_cost: float,
+    ledger: CashLedger,
+    productive_utilization: float,
+    opponent_quadrants: int,
+    opponent_animals: int,
+) -> LandDecision:
+    """Authorize the third or fourth quadrant without spending reserves twice."""
+    _require_finite(money)
+    _require_finite(land_cost)
+    if land_cost <= 0:
+        return LandDecision(False, "invalid_land_cost", ledger.remaining(money))
+
+    remaining_cash = ledger.remaining(money, land_cost)
+    if n_extra >= 3:
+        return LandDecision(False, "maximum_extra_quadrants_reached", remaining_cash)
+    if n_extra < 1:
+        return LandDecision(False, "unsupported_land_stage", remaining_cash)
+    if remaining_cash < 0:
+        return LandDecision(False, "insufficient_cash", remaining_cash)
+
+    if n_extra == 1:
+        if threat < ThreatLevel.COMPOUNDING:
+            return LandDecision(False, "third_land_threat_not_compounding", remaining_cash)
+        if hour != 23:
+            return LandDecision(False, "third_land_not_end_of_day", remaining_cash)
+        if last_day - day < 12:
+            return LandDecision(False, "third_land_horizon_too_short", remaining_cash)
+        return LandDecision(True, "third_land_compounding", remaining_cash)
+
+    if hour != 23:
+        return LandDecision(False, "fourth_land_not_end_of_day", remaining_cash)
+    if last_day - day < 14:
+        return LandDecision(False, "fourth_land_horizon_too_short", remaining_cash)
+    if productive_utilization < 0.70:
+        return LandDecision(False, "fourth_land_utilization_too_low", remaining_cash)
+    if opponent_quadrants < 4 and opponent_animals < 10:
+        return LandDecision(False, "fourth_land_threat_not_severe", remaining_cash)
+    if land_cost != 4_000:
+        return LandDecision(False, "fourth_land_cost_must_be_4000", remaining_cash)
+    if remaining_cash < 8_000:
+        return LandDecision(False, "fourth_land_cash_below_reserve", remaining_cash)
+    return LandDecision(True, "fourth_land_severe_threat", remaining_cash)
+
+
+def _require_nonnegative_finite(value: float) -> None:
+    """Reject amounts that cannot represent a real cash commitment."""
+    _require_finite(value)
+    if value < 0:
+        raise ValueError("cash amounts must be nonnegative")
+
+
+def _require_finite(value: float) -> None:
+    """Reject NaN and infinities before they can bypass affordability checks."""
+    try:
+        valid = isfinite(value)
+    except TypeError as error:
+        raise ValueError("cash amounts must be finite") from error
+    if not valid:
+        raise ValueError("cash amounts must be finite")
