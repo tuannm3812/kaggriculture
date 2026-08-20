@@ -203,10 +203,18 @@ def test_cli_parser_accepts_the_documented_flags():
     assert args.output_json == Path("result.json")
 
 
-def test_two_pair_real_smoke_has_valid_actions_and_both_candidate_seats(tmp_path):
+def test_two_pair_real_smoke_uses_tracked_v18_fixture_and_checks_both_seats(tmp_path):
+    """Keep the real smoke runnable from a clean checkout.
+
+    The 96-step horizon makes adaptive land time-ineligible, so committed v18
+    is a suitable real opponent fixture here. Task 4 separately proves that
+    disabled v18 is action-identical to v16; this test owns harness integration,
+    both-seat coverage, diagnostics, and action-schema validation.
+    """
+    tracked_v18 = str(REPO_ROOT / "agents" / "task_teacher_v18" / "main.py")
     report = evaluate.evaluate(
-        candidate=str(REPO_ROOT / "agents" / "task_teacher_v18" / "main.py"),
-        opponent=str(REPO_ROOT / "agents" / "task_teacher_v16" / "main.py"),
+        candidate=tracked_v18,
+        opponent=tracked_v18,
         episodes=2,
         episode_steps=96,
         base_seed=31,
