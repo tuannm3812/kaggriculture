@@ -2,6 +2,19 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
+## Task Teacher v18 Decision (2026-08-20)
+
+**`task_teacher_v18`: `reject`; do not submit.** The 100-game ladder-match
+acceptance run was deterministic, finite, schema-valid, and free of bankruptcy,
+but 15 animals escaped after two consecutive unfed days across 13 games. That
+repeated feed-starvation signature fails the approved acceptance gate and stops
+promotion regardless of the `1.000` point win rate against `starter`. The
+disabled classifier ablation retained exact v16 reward/action identity. The
+v16 screen, 50-pair promotion run, and comparator screens were not run after
+the acceptance stop rule. Full measured evidence and the distinction between
+point estimates and Hoeffding support are in
+[`docs/9_task_teacher_v18_evaluation.md`](9_task_teacher_v18_evaluation.md).
+
 ## Current Recommendation (2026-08-13, post ladder-config reconciliation)
 
 **Ladder agent: `task_teacher_v5`** (ref `55425318`; still
