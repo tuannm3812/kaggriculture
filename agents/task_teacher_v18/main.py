@@ -158,6 +158,7 @@ def _planned_seed_intents(tasks, seeds, day, last_day, money) -> list[list]:
 def _prioritize_market_orders(
     orders: list[list],
     assigned_seed_quantities: dict[str, int],
+    workload_seed_quantities: dict[str, int],
     feed_shortage: int,
     limit: int,
 ) -> tuple[list[list], int]:
@@ -169,7 +170,10 @@ def _prioritize_market_orders(
     for order in orders:
         if (
             order[0] == "BUY_SEED"
-            and assigned_seed_quantities.get(order[1], 0) > 0
+            and (
+                assigned_seed_quantities.get(order[1], 0) > 0
+                or workload_seed_quantities.get(order[1], 0) > 0
+            )
         ) or (order[0] == "BUY_PRODUCT" and order[1] == "WHEAT" and feed_shortage > 0):
             required.append(order)
         elif order[0] == "BUY_LAND":
@@ -798,9 +802,15 @@ def agent(obs, config=None):
     if threat_expansion_enabled:
         planned_market_orders = len(market_orders)
         market_order_limit = max(1, int((config or {}).get("maxMarketOrdersPerTurn", 10)))
+        workload_seed_quantities = {
+            order[1]: order[2]
+            for order in planned_seed_intents
+            if order[0] == "BUY_SEED"
+        }
         market_orders, dropped_market_orders = _prioritize_market_orders(
             market_orders,
             assigned_seed_quantities,
+            workload_seed_quantities,
             feed_shortage,
             market_order_limit,
         )

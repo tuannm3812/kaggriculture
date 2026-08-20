@@ -579,6 +579,48 @@ def test_attack_backlog_never_exceeds_seed_quantity_after_cash_commitments():
     assert diagnostics["executable_backlog"] == emitted_seeds
 
 
+def test_workload_backed_seed_order_survives_saturated_market_prefix():
+    """All eleven seeds used to justify backlog outrank seven discretionary sales."""
+    module = load_agent_module("task_teacher_v18")
+    shed = {
+        item: 1
+        for item in (
+            "CARROT",
+            "MELON",
+            "STRAWBERRY",
+            "MILK",
+            "WOOL",
+            "EGG",
+            "FERTILIZER",
+        )
+    }
+
+    action = module.agent(
+        make_attack_labor_obs(
+            backlog=12,
+            hour=1,
+            seeds={"STRAWBERRY": 1},
+            shed=shed,
+        ),
+        {**V18_CONFIG, "farmHandCostMult": 1, "maxMarketOrdersPerTurn": 10},
+    )
+
+    matching_seed_orders = [
+        order
+        for order in action["market"]
+        if order[0] == "BUY_SEED" and order[1] == "STRAWBERRY"
+    ]
+    executable_backlog = module.get_last_diagnostics(0)["executable_backlog"]
+    emitted_seed_quantity = sum(order[2] for order in matching_seed_orders)
+    assert executable_backlog == 12
+    assert executable_backlog <= 1 + emitted_seed_quantity
+    assert matching_seed_orders == [["BUY_SEED", "STRAWBERRY", 11]]
+    assert action["market"][0] == ["BUY_SEED", "STRAWBERRY", 11]
+    assert action["market"].count(["HIRE"]) == 9
+    assert not any(order[0] == "SELL" for order in action["market"])
+    assert len(action["market"]) == 10
+
+
 def test_final_day_non_terminal_backlog_cannot_raise_attack_labor():
     """Final-day PLANT work is excluded before it can justify a ninth hand."""
     module = load_agent_module("task_teacher_v18")
