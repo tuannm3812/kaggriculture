@@ -150,6 +150,15 @@ def test_executable_backlog_uses_queued_market_orders_for_shed_pickups(
     assert count_executable_backlog([task], [{}], [order], [(0, 0)], 22, 23) == 1
 
 
+def test_executable_backlog_accepts_dict_queued_items_for_shed_pickup() -> None:
+    """Legacy dictionary queued items populate every resource-source bucket."""
+    task = make_backlog_task(
+        TaskKind.PICKUP, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "SHED"),)
+    )
+
+    assert count_executable_backlog([task], [{}], {"GOOSE": 1}, [(0, 0)], 22, 23) == 1
+
+
 @pytest.mark.parametrize(
     ("task", "order"),
     [
@@ -160,6 +169,12 @@ def test_executable_backlog_uses_queued_market_orders_for_shed_pickups(
         (
             make_backlog_task(
                 TaskKind.PLACE, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "INVENTORY"),)
+            ),
+            ["BUY_ANIMAL", "GOOSE", 1],
+        ),
+        (
+            make_backlog_task(
+                TaskKind.PLACE, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "UNIT"),)
             ),
             ["BUY_ANIMAL", "GOOSE", 1],
         ),

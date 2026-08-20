@@ -101,9 +101,11 @@ def _queued_quantities(queued_items: list[object] | dict[str, int]) -> dict[str,
     """Aggregate queued resources by their destination store."""
     if isinstance(queued_items, dict):
         quantities = {item: quantity for item, quantity in queued_items.items() if quantity > 0}
-        return {"SEED": quantities, "INVENTORY": quantities}
+        return {"SEED": quantities, "SHED": quantities, "INVENTORY": {}, "UNIT": {}}
 
-    quantities: dict[str, dict[str, int]] = {"SEED": {}, "INVENTORY": {}, "SHED": {}}
+    quantities: dict[str, dict[str, int]] = {
+        "SEED": {}, "INVENTORY": {}, "UNIT": {}, "SHED": {},
+    }
     for queued in queued_items:
         if isinstance(queued, (list, tuple)) and len(queued) >= 3:
             order, item, quantity = queued[0], queued[1], queued[2]
@@ -154,7 +156,7 @@ def _resource_is_available(
     source = need.source
     if source in {"INVENTORY", "UNIT"}:
         held = inventory.get(need.item, 0)
-        queued = queued_by_source["INVENTORY"].get(need.item, 0)
+        queued = 0
     elif source == "SEED":
         held = inventory.get(need.item, 0) if seeds is None else seeds.get(need.item, 0)
         queued = queued_by_source["SEED"].get(need.item, 0)
