@@ -2,17 +2,18 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
-## Task Teacher v18 Decision (2026-08-20)
+## Task Teacher v18 Decision (2026-08-20, patched acceptance refresh)
 
-**`task_teacher_v18`: `reject`; do not submit.** The 100-game ladder-match
-acceptance run was deterministic, finite, schema-valid, and free of bankruptcy,
-but 15 animals escaped after two consecutive unfed days across 13 games. That
-repeated feed-starvation signature fails the approved acceptance gate and stops
-promotion regardless of the `1.000` point win rate against `starter`. The
-disabled classifier ablation retained exact v16 reward/action identity. The
-v16 screen, 50-pair promotion run, and comparator screens were not run after
-the acceptance stop rule. Full measured evidence and the distinction between
-point estimates and Hoeffding support are in
+**`task_teacher_v18` at `a6f6444`: `reject`; do not submit.** The refreshed
+100-game ladder-match acceptance run was deterministic, finite, schema-valid,
+market-cap-valid, land-gate-valid, and free of bankruptcy, but 47 animals
+(24 Cows, 23 Sheep) escaped after two consecutive unfed days across 24 games.
+That repeated feed-starvation signature fails acceptance and stops promotion
+regardless of the `1.000` point win rate and `+$43,962.03` mean margin against
+`starter`. The earlier `78e8e0a` acceptance run (15 escapes in 13 games) and
+its disabled ablation are historical rather than evidence for the patched
+policy. Per the stop rule, no patched ablation, v16 screen, 50-pair promotion,
+comparator screen, or Kaggle submission was run. Full measured evidence is in
 [`docs/9_task_teacher_v18_evaluation.md`](9_task_teacher_v18_evaluation.md).
 
 ## Current Recommendation (2026-08-13, post ladder-config reconciliation)

@@ -2,7 +2,8 @@
 
 Evaluation date: 2026-08-20
 
-Evaluated repository commit: `78e8e0aed39ae375c978a27c1642781da45ca33d`
+Current evaluated repository commit:
+`a6f6444ebcd9abab5b34b62e26a749fc14cad1a5`
 
 Decision: **`reject`**
 
@@ -18,43 +19,50 @@ The approved v18 protocol classifies a candidate as:
 - `local_champion` only when the Hoeffding 95% lower bound exceeds `0.50`
   and every regression gate passes.
 
-The point estimate and Hoeffding evidence are separate claims. A high point
-estimate does not override a failed acceptance gate. No Kaggle submission was
-made.
+The point estimate and Hoeffding interval are separate from the safety gates.
+A strong result against `starter` cannot override failed acceptance. No Kaggle
+submission was made.
 
-## Acceptance: failed
+## Patched acceptance at `a6f6444`: failed
 
 Evidence: [`task_teacher_v18_acceptance.json`](../replays/analysis/task_teacher_v18_acceptance.json)
 
-The acceptance run used candidate
-`agents/task_teacher_v18/main.py`, built-in opponent `starter`, ladder-match
-configuration, 50 paired seeds `110000`-`110049`, 720 steps, and both seats:
-100 games total.
+The refresh evaluated `agents/task_teacher_v18/main.py` against built-in
+`starter` using ladder-match configuration, 50 paired seeds
+`110000`-`110049`, 720 steps, and both seats: 100 games total. The JSON embeds
+the exact candidate path and evaluated commit.
 
-Every game ended `DONE`; all 200 terminal agent statuses were `DONE`; every
-terminal reward was finite. A second full replay of all 100 games was exactly
-identical to the stored rewards, actions, diagnostics, and aggregates. Every
-candidate action had exactly the competition keys `farmer`, `hands`, and
-`market`. There was at most one `BUY_LAND` order per turn, and all 100 land
-orders matched an affirmative land authorization. Minimum observed cash was
-`$1,668`, so the run showed no bankruptcy signature.
+The structural gates passed:
 
-Acceptance nevertheless failed the starvation gate. Direct replay inspection
-found 13 placed-animal decrease events in 13/100 games, losing 15 animals in
-total: 12 Cows and 3 Sheep. The pinned simulator removes a placed animal only
-after two consecutive unfed days, so these decreases are animal escapes rather
-than liquidation or normal aging. They occurred at daily-refresh steps 432,
-480, 576, 600, or 672. The evaluator also recorded a positive feed-inventory
-shortage forecast on 30,554/71,900 candidate turns (42.50%). The direct escape
-events, rather than that forecast count alone, establish the repeated
-feed-starvation signature.
+- all 200 terminal agent statuses were `DONE` and all rewards were finite;
+- a second full 100-game replay exactly matched the stored rewards, actions,
+  diagnostics, and aggregate;
+- every action used exactly the `farmer`, `hands`, and `market` schema;
+- returned actions contained at most 10 market orders, with zero
+  planned/emitted/dropped cap-accounting mismatches;
+- every turn contained at most one `BUY_LAND`, with zero order/authorization
+  mismatches and zero invalid authorized post-land cash values; and
+- all recorded cash values were finite and minimum cash was `$1,668`, so no
+  bankruptcy signature was present.
 
-The acceptance point estimate against `starter` was win rate `1.000`, mean
-money margin `+$37,867.07`, with Hoeffding 95% interval
-`[0.7598267085, 1.0000000000]`. These are acceptance-opponent measurements,
-not promotion evidence, and cannot override the failed safety gate.
+Acceptance nevertheless failed the starvation gate. Direct simulator-state
+inspection found 47 placed animals disappearing in 24/100 games: 24 Cows and
+23 Sheep. The pinned simulator removes an animal at daily refresh after its
+second consecutive unfed day, so the largest observable pre-removal
+`consecutive_unfed` value is 1. These disappearances are animal escapes, not
+normal aging or liquidation, and establish a repeated feed-starvation
+signature. Example escape refreshes occurred at steps 624, 648, and 696.
 
-Other acceptance telemetry:
+The evaluator's feed-inventory forecast was positive on 26,587/71,900
+candidate turns (36.98%). That forecast count is context; the direct escape
+events are the acceptance-failing evidence.
+
+The acceptance-opponent point estimate was win rate `1.000`, mean money margin
+`+$43,962.03`, with Hoeffding 95% interval
+`[0.7598267085, 1.0000000000]`. This is not promotion evidence and does not
+override the failed safety gate.
+
+Other patched acceptance telemetry:
 
 | Metric | Measured value |
 | --- | ---: |
@@ -62,45 +70,52 @@ Other acceptance telemetry:
 | Threat transitions | 0 |
 | Land orders / authorizations | 100 / 100 |
 | Land activation | step 313 (day 13, hour 1) in all 100 games |
-| Mean productive utilization | 0.51535 |
+| Mean productive utilization | 0.55954 |
 | Maximum hands | 8 in each seat |
-| Total hire spend | $33,479 |
-| Pass-action rate | 0.20868 |
-| Crop sale value | Melon $3,748,262; Strawberry $404,604; Carrot $48,056 |
-| Animal-product sale value | Milk $932,195; Wool $361,304; Egg $75,238 |
+| Total hire spend | $29,800 |
+| Pass-action rate | 0.18250 |
+| Crop sale value | Melon $4,431,282; Strawberry $672,308; Carrot $12,278 |
+| Animal-product sale value | Milk $802,857; Wool $271,042; Egg $57,302 |
 
-The opponent remained COMPACT throughout, so the acceptance run exercised
-v18's preserved first-land path but did not activate threat-conditioned third
-or fourth land.
+The opponent remained COMPACT throughout. This acceptance run exercised the
+preserved first-land path, not threat-conditioned third or fourth land.
 
-## Classifier-only ablation: identity retained
+## Historical acceptance at `78e8e0a`
 
-Evidence: [`task_teacher_v18_ablation.json`](../replays/analysis/task_teacher_v18_ablation.json)
+The replaced acceptance artifact previously described commit
+`78e8e0aed39ae375c978a27c1642781da45ca33d`, before the final-review
+correctness patches. Its result remains historical context, not current
+evidence:
 
-The ablation used candidate `agents/task_teacher_v18/main.py`, opponent
-`agents/task_teacher_v16/main.py`, `enableThreatExpansion=False`, ladder-match
-configuration, 20 paired seeds `110100`-`110119`, 720 steps, and both seats:
-40 games total. Mirrored paired rewards were exactly identical. Its point
-estimate was win rate `0.500`, mean margin `$0.00`, with Hoeffding 95% interval
-`[0.1202526828, 0.8797473172]`. This wide interval describes sampling
-uncertainty; exact reward identity is the relevant ablation result.
+| Metric | Historical `78e8e0a` | Patched `a6f6444` |
+| --- | ---: | ---: |
+| Animal escapes | 15 (12 Cow, 3 Sheep) | 47 (24 Cow, 23 Sheep) |
+| Games with escape | 13/100 | 24/100 |
+| Feed-shortage forecast turns | 30,554 | 26,587 |
+| Win-rate point estimate vs `starter` | 1.000 | 1.000 |
+| Mean margin vs `starter` | +$37,867.07 | +$43,962.03 |
+| Mean productive utilization | 0.51535 | 0.55954 |
+| Total hire spend | $33,479 | $29,800 |
 
-Task 4's full simulator action-stream comparison also passed: v18 with threat
-expansion disabled matched v16 exactly for seeds `18000`-`18009` in both
-seats (`tests/test_task_teacher_v18.py::test_classifier_only_ablation_is_action_identical_to_v16_for_ten_seed_pairs`).
+The patched run improved the margin point estimate, utilization, pass rate,
+and feed-shortage forecast count, but actual escapes increased by 32 and
+affected 11 more games. Those economic point estimates therefore do not
+establish acceptance safety.
 
-Ablation telemetry was COMPACT for all 28,760 candidate turns, with zero threat
-transitions, 40 first-land orders at step 313, minimum cash `$954`, maximum 8
-hands, mean productive utilization `0.69355`, total hire spend `$12,904`, and
-pass-action rate `0.12366`.
+## Historical ablation and stopped later gates
 
-## Promotion and comparator disposition
+[`task_teacher_v18_ablation.json`](../replays/analysis/task_teacher_v18_ablation.json)
+remains the historical `78e8e0a` classifier-only run: 20 paired seeds
+`110100`-`110119`, exact mirrored rewards, point estimate `0.500`, margin
+`$0.00`, and Hoeffding interval `[0.1202526828, 0.8797473172]`. It was not
+rerun for patched commit `a6f6444` and must not be represented as current
+evaluation evidence.
 
-The acceptance failure independently satisfies the `reject` rule. Evaluation
-therefore stopped before the 20-pair v16 screen, 50-pair promotion evaluation,
-and comparator screens against v17, v10, v2, and v12. No comparator result is
-reported or inferred, and no promotion JSON was created.
+The patched acceptance failure independently satisfies the `reject` rule.
+The stop rule therefore prevented a patched ablation, v16 screen, 50-pair
+promotion evaluation, comparator screens against v17/v10/v2/v12, and Kaggle
+submission. No unrun result is inferred.
 
-The measured decision is **`reject`**. `task_teacher_v18` is neither an
-experimental-submission candidate nor a local champion, and it was not
-submitted to Kaggle.
+The measured decision for patched commit `a6f6444` is **`reject`**.
+`task_teacher_v18` is neither an experimental-submission candidate nor a local
+champion.
