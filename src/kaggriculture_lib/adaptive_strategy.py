@@ -103,11 +103,11 @@ def _queued_quantities(queued_items: list[object] | dict[str, int]) -> dict[str,
         quantities = {item: quantity for item, quantity in queued_items.items() if quantity > 0}
         return {"SEED": quantities, "INVENTORY": quantities}
 
-    quantities: dict[str, dict[str, int]] = {"SEED": {}, "INVENTORY": {}}
+    quantities: dict[str, dict[str, int]] = {"SEED": {}, "INVENTORY": {}, "SHED": {}}
     for queued in queued_items:
         if isinstance(queued, (list, tuple)) and len(queued) >= 3:
             order, item, quantity = queued[0], queued[1], queued[2]
-            source = {"BUY_SEED": "SEED", "BUY_PRODUCT": "INVENTORY", "BUY_ANIMAL": "INVENTORY"}.get(order)
+            source = {"BUY_SEED": "SEED", "BUY_PRODUCT": "SHED", "BUY_ANIMAL": "SHED"}.get(order)
         elif isinstance(queued, dict):
             item, quantity = queued.get("item"), queued.get("quantity", 0)
             source = queued.get("source", "INVENTORY")
@@ -160,7 +160,7 @@ def _resource_is_available(
         queued = queued_by_source["SEED"].get(need.item, 0)
     elif source == "SHED":
         held = 0 if shed is None else shed.get(need.item, 0)
-        queued = 0
+        queued = queued_by_source["SHED"].get(need.item, 0)
     else:
         return False
     return held >= need.quantity or queued >= need.quantity

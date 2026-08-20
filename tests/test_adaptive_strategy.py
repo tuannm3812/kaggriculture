@@ -119,15 +119,57 @@ def test_terminal_backlog_counts_pickup_when_the_shed_holds_its_resource() -> No
             ),
             ["BUY_SEED", "WHEAT", 1],
         ),
+    ],
+)
+def test_executable_backlog_parses_buy_seed_order_lists(task: Task, order: list[object]) -> None:
+    """An actual agent BUY_SEED order covers its matching seed prerequisite."""
+    assert count_executable_backlog([task], [{}], [order], [(0, 0)], 22, 23) == 1
+
+
+@pytest.mark.parametrize(
+    ("task", "order"),
+    [
+        (
+            make_backlog_task(
+                TaskKind.PICKUP, item="WHEAT", needs=(ResourceNeed("WHEAT", 1, "SHED"),)
+            ),
+            ["BUY_PRODUCT", "WHEAT", 1],
+        ),
+        (
+            make_backlog_task(
+                TaskKind.PICKUP, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "SHED"),)
+            ),
+            ["BUY_ANIMAL", "GOOSE", 1],
+        ),
+    ],
+)
+def test_executable_backlog_uses_queued_market_orders_for_shed_pickups(
+    task: Task, order: list[object]
+) -> None:
+    """Product and animal orders create future shed stock for PICKUP work."""
+    assert count_executable_backlog([task], [{}], [order], [(0, 0)], 22, 23) == 1
+
+
+@pytest.mark.parametrize(
+    ("task", "order"),
+    [
         (
             make_backlog_task(TaskKind.FEED, needs=(ResourceNeed("WHEAT", 1, "INVENTORY"),)),
             ["BUY_PRODUCT", "WHEAT", 1],
         ),
+        (
+            make_backlog_task(
+                TaskKind.PLACE, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "INVENTORY"),)
+            ),
+            ["BUY_ANIMAL", "GOOSE", 1],
+        ),
     ],
 )
-def test_executable_backlog_parses_agent_market_order_lists(task: Task, order: list[object]) -> None:
-    """Actual agent BUY_SEED and BUY_PRODUCT orders cover their matching source."""
-    assert count_executable_backlog([task], [{}], [order], [(0, 0)], 22, 23) == 1
+def test_executable_backlog_does_not_treat_queued_shed_stock_as_unit_inventory(
+    task: Task, order: list[object]
+) -> None:
+    """Queued market stock requires a PICKUP before it can feed or place."""
+    assert count_executable_backlog([task], [{}], [order], [(0, 0)], 22, 23) == 0
 
 
 @pytest.mark.parametrize(
