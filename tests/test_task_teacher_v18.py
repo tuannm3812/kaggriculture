@@ -116,6 +116,36 @@ def make_plant_tile(crop="STRAWBERRY", *, day=15):
     }
 
 
+def make_backlog_tiles(count, *, kind="PLANT", day=15):
+    """Build exactly ``count`` reachable workload tasks on a four-quadrant board."""
+    tiles = [[{"kind": "DECORATION"}] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    coordinates = [(x, y) for y in range(BOARD_SIZE) for x in range(BOARD_SIZE)]
+    for x, y in coordinates[:count]:
+        if kind == "PLANT":
+            tiles[y][x] = None
+        elif kind == "HARVEST":
+            tiles[y][x] = make_plant_tile("MELON", day=day - 12)
+        else:
+            raise ValueError(f"unsupported backlog task kind: {kind}")
+    return tiles
+
+
+def make_attack_labor_obs(
+    *, backlog, day=15, kind="PLANT", money=10_000.0, seeds=None, **kwargs
+):
+    """Create a high-cash, four-quadrant attack state with real generated tasks."""
+    return make_obs(
+        day=day,
+        hour=0,
+        money=money,
+        farmer=(0, 0),
+        tiles=make_backlog_tiles(backlog, kind=kind, day=day),
+        seeds={"STRAWBERRY": backlog} if seeds is None else seeds,
+        unlocked_quadrants=["NW", "NE", "SW", "SE"],
+        **kwargs,
+    )
+
+
 def make_third_land_obs(
     *,
     day=15,
@@ -420,6 +450,101 @@ def test_enabled_first_land_seed_capacity_does_not_deduct_land_twice():
         ["BUY_SEED", "MELON", 2]
     ]
     assert module.get_last_diagnostics(0)["post_land_cash"] == 230
+
+
+@pytest.mark.parametrize(
+    ("backlog", "expected_hands"),
+    [(9, 8), (10, 9), (11, 10), (12, 11)],
+)
+def test_four_quadrant_attack_labor_tracks_executable_backlog(backlog, expected_hands):
+    """Wrong workload thresholds must not retain the former unconditional 11 hands."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=backlog),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert diagnostics["executable_backlog"] == backlog
+    assert diagnostics["hands_floor"] == expected_hands
+    assert action["market"].count(["HIRE"]) == expected_hands
+    assert diagnostics["terminal_labor_only"] is False
+
+
+def test_missing_executable_workload_evidence_does_not_raise_attack_target():
+    """Unfunded planting is not evidence for the former unconditional 11-hand target."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12, money=10_000.0, seeds={}),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert diagnostics["executable_backlog"] == 0
+    assert diagnostics["hands_floor"] == 8
+    assert action["market"].count(["HIRE"]) == 8
+
+
+def test_final_day_non_terminal_backlog_cannot_raise_attack_labor():
+    """Final-day PLANT work is excluded before it can justify a ninth hand."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12, day=29),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert diagnostics["executable_backlog"] == 0
+    assert diagnostics["hands_floor"] == 8
+    assert diagnostics["terminal_labor_only"] is True
+    assert action["market"].count(["HIRE"]) == 8
+
+
+def test_final_day_terminal_backlog_can_raise_attack_labor():
+    """Final-day harvest work still permits added labor when it fits the horizon."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12, day=29, kind="HARVEST"),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert diagnostics["executable_backlog"] == 12
+    assert diagnostics["hands_floor"] == 11
+    assert action["market"].count(["HIRE"]) == 11
+
+
+def test_expensive_hiring_preserves_the_three_hand_cap_in_attack_mode():
+    """Attack workload must not bypass the established expensive-hire safeguard."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12),
+        {**V18_CONFIG, "farmHandCostMult": 5},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert diagnostics["hands_floor"] == 3
+    assert action["market"].count(["HIRE"]) == 3
+
+
+def test_attack_hiring_reserves_only_the_affordable_fibonacci_prefix():
+    """A partial attack target must reserve exactly the hires cash can fund today."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12, money=6_000.0, hires_today=10),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert diagnostics["hands_floor"] == 7
+    assert diagnostics["hire_cost_reserved"] == 4_037
+    assert action["market"].count(["HIRE"]) == 7
 
 
 def test_classifier_only_ablation_is_action_identical_to_v16_for_ten_seed_pairs():

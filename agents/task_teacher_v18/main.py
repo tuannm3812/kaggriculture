@@ -10,7 +10,9 @@ from kaggriculture_lib.adaptive_strategy import (
     ThreatMemory,
     ThreatSnapshot,
     ThreatTransition,
+    attack_hand_target,
     authorize_land_purchase,
+    count_executable_backlog,
     parse_public_threat_snapshot,
     productive_utilization,
 )
@@ -271,6 +273,14 @@ def agent(obs, config=None):
     n_quadrants = len(me["unlocked_quadrants"])
     hands_floor = 0
     mult_val = economy.hire_cost_mult(config)
+    terminal_labor_only = day == last_day
+    executable_backlog = 0
+    attack_labor_active = (
+        threat_expansion_enabled
+        and n_quadrants >= 4
+        and me["money"] >= 6000.0
+        and day >= 10
+    )
     if day < 10:
         if mult_val >= 5.0:
             hands_floor = 0
@@ -305,6 +315,22 @@ def agent(obs, config=None):
         if mult_val >= 5.0:
             hands_floor = min(hands_floor, 3)
 
+    if attack_labor_active:
+        executable_backlog = count_executable_backlog(
+            tasks,
+            inventories,
+            market_orders,
+            unit_positions,
+            hour,
+            turns_per_day - 1,
+            seeds=private["seeds"],
+            shed=shed,
+            terminal_only=terminal_labor_only,
+        )
+        hands_floor = attack_hand_target(executable_backlog)
+        if mult_val >= 5.0:
+            hands_floor = min(hands_floor, 3)
+
     # Calculate Cash Reservation for essential expenditures (Hiring, Seed purchases, Feed)
     mult = economy.hire_cost_mult(config)
     hires_to_queue = 0
@@ -322,6 +348,9 @@ def agent(obs, config=None):
             temp_existing += 1
         else:
             break
+
+    if attack_labor_active:
+        hands_floor = min(hands_floor, temp_existing)
 
     reserved_for_hire = 0.0
     temp_hires_today = me["hires_today"]
@@ -435,6 +464,10 @@ def agent(obs, config=None):
         market_orders.append(["BUY_LAND"])
 
     _last_diagnostics[player].update({
+        "executable_backlog": executable_backlog,
+        "hands_floor": hands_floor,
+        "hire_cost_reserved": reserved_for_hire,
+        "terminal_labor_only": terminal_labor_only,
         "land_authorized": land_authorized,
         "land_reason": land_reason,
         "land_cost": land_cost,
