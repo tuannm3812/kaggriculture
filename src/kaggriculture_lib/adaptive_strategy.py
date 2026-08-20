@@ -52,12 +52,14 @@ def count_executable_backlog(
     hour: int,
     last_hour: int,
     *,
+    seeds: dict[str, int] | None = None,
+    shed: dict[str, int] | None = None,
     terminal_only: bool = False,
 ) -> int:
     """Count unique tasks with resources and time to be completed this turn.
 
-    Queued market items cover a resource prerequisite for planning purposes;
-    held items must be carried by the unit that travels to the task.
+    Queued market items cover a matching resource prerequisite for planning
+    purposes. Unit inventory, farm seeds, and shed stock remain distinct.
     """
     remaining_actions = last_hour - hour + 1
     if remaining_actions <= 0:
@@ -75,7 +77,9 @@ def count_executable_backlog(
         seen.add(task.task_id)
         if terminal_only and task.task_id.kind not in terminal_kinds:
             continue
-        if _task_is_executable(task, unit_inventories, queued_by_item, positions, remaining_actions):
+        if _task_is_executable(
+            task, unit_inventories, queued_by_item, positions, remaining_actions, seeds, shed
+        ):
             count += 1
     return count
 
@@ -93,42 +97,73 @@ def attack_hand_target(executable_backlog: int) -> int:
     return 11
 
 
-def _queued_quantities(queued_items: list[object] | dict[str, int]) -> dict[str, int]:
-    """Aggregate queued order quantities without changing caller-owned data."""
+def _queued_quantities(queued_items: list[object] | dict[str, int]) -> dict[str, dict[str, int]]:
+    """Aggregate queued resources by their destination store."""
     if isinstance(queued_items, dict):
-        return {item: quantity for item, quantity in queued_items.items() if quantity > 0}
+        quantities = {item: quantity for item, quantity in queued_items.items() if quantity > 0}
+        return {"SEED": quantities, "INVENTORY": quantities}
 
-    quantities: dict[str, int] = {}
+    quantities: dict[str, dict[str, int]] = {"SEED": {}, "INVENTORY": {}}
     for queued in queued_items:
-        if isinstance(queued, dict):
+        if isinstance(queued, (list, tuple)) and len(queued) >= 3:
+            order, item, quantity = queued[0], queued[1], queued[2]
+            source = {"BUY_SEED": "SEED", "BUY_PRODUCT": "INVENTORY", "BUY_ANIMAL": "INVENTORY"}.get(order)
+        elif isinstance(queued, dict):
             item, quantity = queued.get("item"), queued.get("quantity", 0)
+            source = queued.get("source", "INVENTORY")
         else:
             item, quantity = getattr(queued, "item", None), getattr(queued, "quantity", 0)
+            source = "SEED" if getattr(queued, "reason", None) == "PLANT" else "INVENTORY"
         if isinstance(item, str) and isinstance(quantity, (int, float)) and quantity > 0:
-            quantities[item] = quantities.get(item, 0) + quantity
+            if source in quantities:
+                quantities[source][item] = quantities[source].get(item, 0) + quantity
     return quantities
 
 
 def _task_is_executable(
     task: Task,
     inventories: list[dict[str, int]],
-    queued_by_item: dict[str, int],
+    queued_by_item: dict[str, dict[str, int]],
     positions: list[tuple[int, int]],
     remaining_actions: int,
+    seeds: dict[str, int] | None,
+    shed: dict[str, int] | None,
 ) -> bool:
     """Whether one unit can reach a task and satisfy each resource need."""
     for index, position in enumerate(positions):
         distance = abs(task.target[0] - position[0]) + abs(task.target[1] - position[1])
-        if distance + 1 > remaining_actions:
+        if distance + task.action_cost > remaining_actions:
             continue
         inventory = inventories[index] if index < len(inventories) else {}
         if all(
-            inventory.get(need.item, 0) >= need.quantity
-            or queued_by_item.get(need.item, 0) >= need.quantity
+            _resource_is_available(need, inventory, queued_by_item, seeds, shed)
             for need in task.resource_needs
         ):
             return True
     return False
+
+
+def _resource_is_available(
+    need: object,
+    inventory: dict[str, int],
+    queued_by_source: dict[str, dict[str, int]],
+    seeds: dict[str, int] | None,
+    shed: dict[str, int] | None,
+) -> bool:
+    """Check one resource need against its declared, non-interchangeable store."""
+    source = need.source
+    if source in {"INVENTORY", "UNIT"}:
+        held = inventory.get(need.item, 0)
+        queued = queued_by_source["INVENTORY"].get(need.item, 0)
+    elif source == "SEED":
+        held = inventory.get(need.item, 0) if seeds is None else seeds.get(need.item, 0)
+        queued = queued_by_source["SEED"].get(need.item, 0)
+    elif source == "SHED":
+        held = 0 if shed is None else shed.get(need.item, 0)
+        queued = 0
+    else:
+        return False
+    return held >= need.quantity or queued >= need.quantity
 
 
 @dataclass(frozen=True)

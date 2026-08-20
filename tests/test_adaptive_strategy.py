@@ -44,6 +44,7 @@ def make_backlog_task(
     y: int = 0,
     item: str | None = None,
     needs: tuple[ResourceNeed, ...] = (),
+    action_cost: int = 1,
 ) -> Task:
     """Build a real scheduler task with only backlog-relevant fields."""
     return Task(
@@ -52,7 +53,7 @@ def make_backlog_task(
         priority_tier=PriorityTier.ECONOMIC,
         deadline_step=None,
         expected_value=0.0,
-        action_cost=1,
+        action_cost=action_cost,
         resource_needs=needs,
     )
 
@@ -81,6 +82,52 @@ def test_executable_backlog_accepts_plant_with_queued_seed_purchase() -> None:
     )
 
     assert count == 1
+
+
+def test_executable_backlog_uses_the_seed_store_instead_of_unit_inventory() -> None:
+    """Planting uses the farm's seed store, not a unit's carried products."""
+    task = make_backlog_task(
+        TaskKind.PLANT, item="WHEAT", needs=(ResourceNeed("WHEAT", 1, "SEED"),)
+    )
+
+    count = count_executable_backlog(
+        [task], [{"WHEAT": 1}], [], [(0, 0)], 22, 23, seeds={}
+    )
+
+    assert count == 0
+
+
+def test_terminal_backlog_counts_pickup_when_the_shed_holds_its_resource() -> None:
+    """An on-target final-day pickup is executable from separately tracked shed stock."""
+    task = make_backlog_task(
+        TaskKind.PICKUP, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "SHED"),)
+    )
+
+    count = count_executable_backlog(
+        [task], [{}], [], [(0, 0)], 22, 23, shed={"GOOSE": 1}, terminal_only=True
+    )
+
+    assert count == 1
+
+
+@pytest.mark.parametrize(
+    ("task", "order"),
+    [
+        (
+            make_backlog_task(
+                TaskKind.PLANT, item="WHEAT", needs=(ResourceNeed("WHEAT", 1, "SEED"),)
+            ),
+            ["BUY_SEED", "WHEAT", 1],
+        ),
+        (
+            make_backlog_task(TaskKind.FEED, needs=(ResourceNeed("WHEAT", 1, "INVENTORY"),)),
+            ["BUY_PRODUCT", "WHEAT", 1],
+        ),
+    ],
+)
+def test_executable_backlog_parses_agent_market_order_lists(task: Task, order: list[object]) -> None:
+    """Actual agent BUY_SEED and BUY_PRODUCT orders cover their matching source."""
+    assert count_executable_backlog([task], [{}], [order], [(0, 0)], 22, 23) == 1
 
 
 @pytest.mark.parametrize(
@@ -114,6 +161,13 @@ def test_executable_backlog_accepts_resource_task_when_a_unit_holds_resource(
 def test_executable_backlog_rejects_task_outside_route_and_action_horizon() -> None:
     """Movement plus the action must fit in the remaining hours of the day."""
     task = make_backlog_task(TaskKind.HARVEST, x=2)
+
+    assert count_executable_backlog([task], [{}], [], [(0, 0)], 22, 23) == 0
+
+
+def test_executable_backlog_uses_task_action_cost_in_its_horizon() -> None:
+    """A non-unit action cost also consumes the remaining turn horizon."""
+    task = make_backlog_task(TaskKind.HARVEST, x=1, action_cost=2)
 
     assert count_executable_backlog([task], [{}], [], [(0, 0)], 22, 23) == 0
 
