@@ -5,11 +5,14 @@ from __future__ import annotations
 
 from kaggriculture_lib import economy
 from kaggriculture_lib.adaptive_strategy import (
+    CashLedger,
     ThreatLevel,
     ThreatMemory,
     ThreatSnapshot,
     ThreatTransition,
+    authorize_land_purchase,
     parse_public_threat_snapshot,
+    productive_utilization,
 )
 from kaggriculture_lib.tasking import (
     PriorityTier,
@@ -338,13 +341,22 @@ def agent(obs, config=None):
                 reserved_for_seeds += economy.CROPS[crop]["seed"]
 
     # Reserve for wheat feed
-    reserved_for_feed = 0.0
-    if total_owned_animals > 0:
-        total_wheat = shed.get("WHEAT", 0) + sum(inv.get("WHEAT", 0) for inv in inventories)
-        target_wheat = max(2, total_owned_animals * 2)
-        if total_wheat < target_wheat:
-            buy_qty = target_wheat - total_wheat
-            reserved_for_feed = buy_qty * prices.get("WHEAT", 25.0)
+    total_wheat = shed.get("WHEAT", 0) + sum(inv.get("WHEAT", 0) for inv in inventories)
+    target_wheat = max(2, total_owned_animals * 2) if total_owned_animals > 0 else 0
+    feed_shortage = max(0, target_wheat - total_wheat)
+    wheat_price = prices.get("WHEAT", 25.0)
+    reserved_for_feed = feed_shortage * wheat_price
+
+    ledger = CashLedger(
+        queued_hires=reserved_for_hire,
+        assigned_seeds=reserved_for_seeds,
+        two_day_feed=2 * feed_shortage * wheat_price,
+        animal_liquidity=1200.0,
+        operating=500.0,
+    )
+    utilization = productive_utilization(
+        me["tiles"], me["unlocked_quadrants"], board_size
+    )
 
     # Dynamic minimum liquidity reserve to prevent starvation and labor shortage
     feed_reserve = total_owned_animals * 50.0
@@ -364,27 +376,94 @@ def agent(obs, config=None):
     for _ in range(hires_to_queue):
         market_orders.append(["HIRE"])
 
-    # 2. BUY_LAND (up to max 1 extra quadrant, saving $6,000)
+    # 2. BUY_LAND
     land_cost = economy.land_cost(len(me["unlocked_quadrants"]) - 1)
     n_extra = len(me["unlocked_quadrants"]) - 1
-    can_buy_land = False
-    if land_cost is not None and 0 <= n_extra < 1 and last_day - day >= 12 and day >= 9:
-        reserve = max(1000.0 * (n_extra + 1), minimum_liquidity)
-        if me["money"] - reserved_for_hire >= land_cost + reserve:
-            can_buy_land = True
+    land_authorized = False
+    land_reason = "threat_expansion_disabled"
+    post_land_cash = ledger.remaining(me["money"], land_cost or 0.0)
 
-    if can_buy_land:
+    if threat_expansion_enabled:
+        if n_extra == 0:
+            if land_cost is None:
+                land_reason = "invalid_land_cost"
+            elif last_day - day < 12 or day < 9:
+                land_reason = "v16_first_land_ineligible"
+            else:
+                reserve = max(1000.0 * (n_extra + 1), minimum_liquidity)
+                land_authorized = me["money"] - reserved_for_hire >= land_cost + reserve
+                land_reason = (
+                    "v16_first_land" if land_authorized else "v16_first_land_insufficient_cash"
+                )
+        elif land_cost is None:
+            land_reason = "maximum_extra_quadrants_reached"
+        elif n_extra in (1, 2):
+            land_decision = authorize_land_purchase(
+                threat=transition.level,
+                n_extra=n_extra,
+                day=day,
+                hour=hour,
+                last_day=last_day,
+                money=me["money"],
+                land_cost=land_cost,
+                ledger=ledger,
+                productive_utilization=utilization,
+                opponent_quadrants=snapshot.quadrants,
+                opponent_animals=snapshot.placed_animals,
+            )
+            land_authorized = land_decision.authorized
+            land_reason = land_decision.reason
+            post_land_cash = land_decision.remaining_cash
+        else:
+            land_reason = "unsupported_land_stage"
+    else:
+        # 2. BUY_LAND (up to max 1 extra quadrant, saving $6,000)
+        can_buy_land = False
+        if land_cost is not None and 0 <= n_extra < 1 and last_day - day >= 12 and day >= 9:
+            reserve = max(1000.0 * (n_extra + 1), minimum_liquidity)
+            if me["money"] - reserved_for_hire >= land_cost + reserve:
+                can_buy_land = True
+
+        if can_buy_land:
+            market_orders.append(["BUY_LAND"])
+            available_money -= land_cost
+
+        land_authorized = can_buy_land
+        land_reason = "v16_land" if can_buy_land else "v16_land_not_authorized"
+
+    if threat_expansion_enabled and land_authorized:
         market_orders.append(["BUY_LAND"])
-        available_money -= land_cost
+
+    _last_diagnostics[player].update({
+        "land_authorized": land_authorized,
+        "land_reason": land_reason,
+        "land_cost": land_cost,
+        "ledger_reserved": ledger.total_reserved,
+        "post_land_cash": post_land_cash,
+        "money": me["money"],
+        "feed_shortage": feed_shortage,
+        "productive_utilization": utilization,
+    })
+
+    if threat_expansion_enabled:
+        committed_land_cost = land_cost if land_authorized and land_cost is not None else 0.0
+        cash_after_committed_orders = max(
+            0.0, ledger.remaining(me["money"], committed_land_cost)
+        )
+        available_money = cash_after_committed_orders
 
     # 3. BUY_ANIMAL COW (matures in 8 days, needs at least 7 days to yield 3 milkings)
-    cash_reserve = me["money"] - reserved_for_hire
+    cash_reserve = (
+        cash_after_committed_orders
+        if threat_expansion_enabled
+        else me["money"] - reserved_for_hire
+    )
     if (
         animals_unlocked
         and day + 15 <= last_day
         and (owned_cows + cow_in_transit < MAX_COWS)
         and available_money >= COW_COST
-        and cash_reserve >= COW_COST + 1200.0
+        and cash_reserve >= COW_COST + (0.0 if threat_expansion_enabled else 1200.0)
     ):
         market_orders.append(["BUY_ANIMAL", "COW", 1])
         available_money -= COW_COST
@@ -396,7 +475,7 @@ def agent(obs, config=None):
         and day + 15 <= last_day
         and (owned_sheep + sheep_in_transit < MAX_SHEEP)
         and available_money >= SHEEP_COST
-        and cash_reserve >= SHEEP_COST + 1200.0
+        and cash_reserve >= SHEEP_COST + (0.0 if threat_expansion_enabled else 1200.0)
     ):
         market_orders.append(["BUY_ANIMAL", "SHEEP", 1])
         available_money -= SHEEP_COST
@@ -409,7 +488,7 @@ def agent(obs, config=None):
         and day + 10 <= last_day
         and (owned_geese + goose_in_transit < max_geese_allowed)
         and available_money >= GOOSE_COST
-        and cash_reserve >= GOOSE_COST + 1200.0
+        and cash_reserve >= GOOSE_COST + (0.0 if threat_expansion_enabled else 1200.0)
     ):
         market_orders.append(["BUY_ANIMAL", "GOOSE", 1])
         available_money -= GOOSE_COST
@@ -429,9 +508,9 @@ def agent(obs, config=None):
         # Compute actual remaining cash for seed buying inside resolve_unit_action
         market_cash_remaining = available_money
         for order in market_orders:
-            if order[0] == "BUY_LAND":
+            if order[0] == "BUY_LAND" and not threat_expansion_enabled:
                 market_cash_remaining -= economy.land_cost(len(me["unlocked_quadrants"]) - 1)
-            elif order[0] == "BUY_ANIMAL":
+            elif order[0] == "BUY_ANIMAL" and not threat_expansion_enabled:
                 market_cash_remaining -= economy.ANIMALS[order[1]]["cost"]
             elif order[0] == "BUY_PRODUCT" and order[1] == "WHEAT":
                 market_cash_remaining -= order[2] * prices.get("WHEAT", 25.0)
@@ -472,9 +551,9 @@ def agent(obs, config=None):
         # Re-compute market_cash_remaining for resolve_unit_action when hour != 1
         market_cash_remaining = available_money
         for order in market_orders:
-            if order[0] == "BUY_LAND":
+            if order[0] == "BUY_LAND" and not threat_expansion_enabled:
                 market_cash_remaining -= economy.land_cost(len(me["unlocked_quadrants"]) - 1)
-            elif order[0] == "BUY_ANIMAL":
+            elif order[0] == "BUY_ANIMAL" and not threat_expansion_enabled:
                 market_cash_remaining -= economy.ANIMALS[order[1]]["cost"]
 
     seeds_remaining = dict(private["seeds"])
