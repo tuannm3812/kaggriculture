@@ -124,6 +124,65 @@ def _owned_animal_count(animal: str, placed: int, shed: dict, inventories: list[
     )
 
 
+def _planned_seed_intents(tasks, seeds, day, last_day, money) -> list[list]:
+    """Return affordable seed orders the hour-one market branch will attempt."""
+    if sum(seeds.get(crop, 0) for crop in CANDIDATE_CROPS) >= sum(
+        task.task_id.kind == TaskKind.PLANT for task in tasks
+    ):
+        return []
+
+    intents = []
+    remaining_money = money
+    for crop in CANDIDATE_CROPS:
+        crop_data = economy.CROPS[crop]
+        if crop_data["ongoing"]:
+            can_mature = economy.can_ongoing_crop_reach_any_tick(crop, day + 1, last_day)
+        else:
+            can_mature = economy.can_mature_in_time(crop, day + 1, last_day)
+        if not can_mature:
+            continue
+        plant_tasks = sum(
+            task.task_id.kind == TaskKind.PLANT and task.task_id.item == crop
+            for task in tasks
+        )
+        needed = max(0, plant_tasks - seeds.get(crop, 0))
+        seed_cost = crop_data["seed"]
+        buy_limit = 25 if day == 0 else 12
+        quantity = min(needed, buy_limit, int(remaining_money // seed_cost))
+        if quantity > 0:
+            intents.append(["BUY_SEED", crop, quantity])
+            remaining_money -= quantity * seed_cost
+    return intents
+
+
+def _prioritize_market_orders(
+    orders: list[list],
+    assigned_seed_quantities: dict[str, int],
+    feed_shortage: int,
+    limit: int,
+) -> tuple[list[list], int]:
+    """Keep essential commitments in the simulator-executed market prefix."""
+    required = []
+    land = []
+    hires = []
+    discretionary = []
+    for order in orders:
+        if (
+            order[0] == "BUY_SEED"
+            and assigned_seed_quantities.get(order[1], 0) > 0
+        ) or (order[0] == "BUY_PRODUCT" and order[1] == "WHEAT" and feed_shortage > 0):
+            required.append(order)
+        elif order[0] == "BUY_LAND":
+            land.append(order)
+        elif order[0] == "HIRE":
+            hires.append(order)
+        else:
+            discretionary.append(order)
+    prioritized = required + land + hires + discretionary
+    emitted = prioritized[:limit]
+    return emitted, len(prioritized) - len(emitted)
+
+
 def agent(obs, config=None):
     threat_expansion_enabled = (
         True if config is None else bool(config.get("enableThreatExpansion", True))
@@ -281,6 +340,11 @@ def agent(obs, config=None):
         and me["money"] >= 6000.0
         and day >= 10
     )
+    planned_seed_intents = (
+        _planned_seed_intents(tasks, private["seeds"], day, last_day, me["money"])
+        if threat_expansion_enabled and hour == 1
+        else []
+    )
     if day < 10:
         if mult_val >= 5.0:
             hands_floor = 0
@@ -319,7 +383,7 @@ def agent(obs, config=None):
         executable_backlog = count_executable_backlog(
             tasks,
             inventories,
-            market_orders,
+            market_orders + planned_seed_intents,
             unit_positions,
             hour,
             turns_per_day - 1,
@@ -327,7 +391,11 @@ def agent(obs, config=None):
             shed=shed,
             terminal_only=terminal_labor_only,
         )
-        hands_floor = attack_hand_target(executable_backlog)
+        hands_floor = (
+            len(me["hands"])
+            if executable_backlog == 0
+            else attack_hand_target(executable_backlog)
+        )
         if mult_val >= 5.0:
             hands_floor = min(hands_floor, 3)
 
@@ -361,6 +429,7 @@ def agent(obs, config=None):
     # Reserve for seeds assigned to units this turn
     temp_seeds = dict(private["seeds"])
     reserved_for_seeds = 0.0
+    assigned_seed_quantities = {crop: 0 for crop in CANDIDATE_CROPS}
     for unit_idx, task_id in assignment.items():
         if task_id and task_id.kind == TaskKind.PLANT:
             crop = task_id.item
@@ -368,6 +437,7 @@ def agent(obs, config=None):
                 temp_seeds[crop] -= 1
             else:
                 reserved_for_seeds += economy.CROPS[crop]["seed"]
+                assigned_seed_quantities[crop] += 1
 
     # Reserve for wheat feed
     total_wheat = shed.get("WHEAT", 0) + sum(inv.get("WHEAT", 0) for inv in inventories)
@@ -576,10 +646,26 @@ def agent(obs, config=None):
             if needed > 0:
                 seed_cost = economy.CROPS[crop]["seed"]
                 buy_limit = 25 if day == 0 else 12
-                buy_qty = min(needed, buy_limit, int(market_cash_remaining // seed_cost))
+                if threat_expansion_enabled:
+                    required_qty = min(
+                        needed, buy_limit, assigned_seed_quantities.get(crop, 0)
+                    )
+                    discretionary_limit = buy_limit - required_qty
+                    discretionary_qty = min(
+                        needed - required_qty,
+                        discretionary_limit,
+                        int(market_cash_remaining // seed_cost),
+                    )
+                    buy_qty = required_qty + discretionary_qty
+                else:
+                    required_qty = 0
+                    discretionary_qty = min(
+                        needed, buy_limit, int(market_cash_remaining // seed_cost)
+                    )
+                    buy_qty = discretionary_qty
                 if buy_qty > 0:
                     market_orders.append(["BUY_SEED", crop, buy_qty])
-                    market_cash_remaining -= buy_qty * seed_cost
+                    market_cash_remaining -= discretionary_qty * seed_cost
     else:
         # Re-compute market_cash_remaining for resolve_unit_action when hour != 1
         market_cash_remaining = available_money
@@ -649,5 +735,47 @@ def agent(obs, config=None):
         resolve_unit_action(unit_positions[i + 1], assignment.get(i + 1), i + 1)
         for i in range(len(me["hands"]))
     ]
+
+    if threat_expansion_enabled:
+        planned_market_orders = len(market_orders)
+        market_order_limit = max(1, int((config or {}).get("maxMarketOrdersPerTurn", 10)))
+        market_orders, dropped_market_orders = _prioritize_market_orders(
+            market_orders,
+            assigned_seed_quantities,
+            feed_shortage,
+            market_order_limit,
+        )
+        executed_hires = sum(order[0] == "HIRE" for order in market_orders)
+        hands_floor = min(hands_floor, len(me["hands"]) + executed_hires)
+        actual_hire_reserve = 0.0
+        temp_hires_today = me["hires_today"]
+        for _ in range(executed_hires):
+            actual_hire_reserve += economy.hire_cost(temp_hires_today, mult=mult)
+            temp_hires_today += 1
+        actual_ledger = CashLedger(
+            queued_hires=actual_hire_reserve,
+            assigned_seeds=reserved_for_seeds,
+            two_day_feed=2 * feed_shortage * wheat_price,
+            animal_liquidity=1200.0,
+            operating=500.0,
+        )
+        emitted_land = any(order[0] == "BUY_LAND" for order in market_orders)
+        if land_authorized and not emitted_land:
+            land_authorized = False
+            land_reason = "market_slots_unavailable"
+        _last_diagnostics[player].update({
+            "hands_floor": hands_floor,
+            "hire_cost_reserved": actual_hire_reserve,
+            "land_authorized": land_authorized,
+            "land_reason": land_reason,
+            "ledger_reserved": actual_ledger.total_reserved,
+            "post_land_cash": actual_ledger.remaining(
+                me["money"], land_cost if emitted_land and land_cost is not None else 0.0
+            ),
+            "market_order_limit": market_order_limit,
+            "market_orders_planned": planned_market_orders,
+            "market_orders_emitted": len(market_orders),
+            "market_orders_dropped": dropped_market_orders,
+        })
 
     return {"farmer": farmer_action, "hands": hands_actions, "market": market_orders}

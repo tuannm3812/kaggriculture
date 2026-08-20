@@ -131,12 +131,12 @@ def make_backlog_tiles(count, *, kind="PLANT", day=15):
 
 
 def make_attack_labor_obs(
-    *, backlog, day=15, kind="PLANT", money=10_000.0, seeds=None, **kwargs
+    *, backlog, day=15, hour=0, kind="PLANT", money=10_000.0, seeds=None, **kwargs
 ):
     """Create a high-cash, four-quadrant attack state with real generated tasks."""
     return make_obs(
         day=day,
-        hour=0,
+        hour=hour,
         money=money,
         farmer=(0, 0),
         tiles=make_backlog_tiles(backlog, kind=kind, day=day),
@@ -306,6 +306,15 @@ def test_diagnostics_are_json_safe_scalars_and_returned_as_a_copy():
     assert module.get_last_diagnostics(0)["threat_level"] == "COMPACT"
 
 
+def test_enabled_policy_uses_default_market_limit_without_config():
+    """The enabled default-config path still emits a simulator-valid action."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(make_obs(), None)
+
+    assert len(action["market"]) <= 10
+
+
 def test_compounding_opponent_authorizes_third_land_with_each_commitment_once():
     """Missing the ledger integration would omit the threat-conditioned order."""
     module = load_agent_module("task_teacher_v18")
@@ -431,7 +440,7 @@ def test_fourth_land_requires_three_existing_quadrants_and_never_duplicates_land
 
 
 def test_enabled_first_land_seed_capacity_does_not_deduct_land_twice():
-    """The post-ledger $230 buys two seeds; a second land deduction would buy none."""
+    """Four reserved seeds plus two residual-funded seeds survive one land deduction."""
     module = load_agent_module("task_teacher_v18")
 
     action = module.agent(
@@ -447,14 +456,35 @@ def test_enabled_first_land_seed_capacity_does_not_deduct_land_twice():
 
     assert action["market"].count(["BUY_LAND"]) == 1
     assert [order for order in action["market"] if order[0] == "BUY_SEED"] == [
-        ["BUY_SEED", "MELON", 2]
+        ["BUY_SEED", "MELON", 6]
     ]
     assert module.get_last_diagnostics(0)["post_land_cash"] == 230
 
 
+def test_assigned_seed_orders_spend_their_reserved_bucket_exactly_once():
+    """Four assigned MELON seeds remain funded when discretionary cash is zero."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_obs(
+            day=15,
+            hour=1,
+            money=3_020.0,
+            hands=[(4, 4)] * 3,
+            unlocked_quadrants=["NW"],
+        ),
+        V18_CONFIG,
+    )
+
+    assert module.get_last_diagnostics(0)["post_land_cash"] == 0
+    assert [order for order in action["market"] if order[0] == "BUY_SEED"] == [
+        ["BUY_SEED", "MELON", 4]
+    ]
+
+
 @pytest.mark.parametrize(
     ("backlog", "expected_hands"),
-    [(9, 8), (10, 9), (11, 10), (12, 11)],
+    [(9, 8), (10, 9), (11, 10), (12, 10)],
 )
 def test_four_quadrant_attack_labor_tracks_executable_backlog(backlog, expected_hands):
     """Wrong workload thresholds must not retain the former unconditional 11 hands."""
@@ -472,8 +502,8 @@ def test_four_quadrant_attack_labor_tracks_executable_backlog(backlog, expected_
     assert diagnostics["terminal_labor_only"] is False
 
 
-def test_missing_executable_workload_evidence_does_not_raise_attack_target():
-    """Unfunded planting is not evidence for the former unconditional 11-hand target."""
+def test_missing_executable_workload_evidence_preserves_current_attack_workforce():
+    """Unfunded planting cannot justify any attack-mode hiring."""
     module = load_agent_module("task_teacher_v18")
 
     action = module.agent(
@@ -483,8 +513,21 @@ def test_missing_executable_workload_evidence_does_not_raise_attack_target():
 
     diagnostics = module.get_last_diagnostics(0)
     assert diagnostics["executable_backlog"] == 0
-    assert diagnostics["hands_floor"] == 8
-    assert action["market"].count(["HIRE"]) == 8
+    assert diagnostics["hands_floor"] == 0
+    assert action["market"].count(["HIRE"]) == 0
+
+
+def test_attack_backlog_uses_seed_orders_actually_planned_for_this_turn():
+    """Affordable hour-one seed orders make their matching planting work useful."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12, money=10_000.0, seeds={}, hour=1),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    assert module.get_last_diagnostics(0)["executable_backlog"] == 12
+    assert sum(order[2] for order in action["market"] if order[0] == "BUY_SEED") == 12
 
 
 def test_final_day_non_terminal_backlog_cannot_raise_attack_labor():
@@ -498,9 +541,9 @@ def test_final_day_non_terminal_backlog_cannot_raise_attack_labor():
 
     diagnostics = module.get_last_diagnostics(0)
     assert diagnostics["executable_backlog"] == 0
-    assert diagnostics["hands_floor"] == 8
+    assert diagnostics["hands_floor"] == 0
     assert diagnostics["terminal_labor_only"] is True
-    assert action["market"].count(["HIRE"]) == 8
+    assert action["market"].count(["HIRE"]) == 0
 
 
 def test_final_day_terminal_backlog_can_raise_attack_labor():
@@ -514,8 +557,8 @@ def test_final_day_terminal_backlog_can_raise_attack_labor():
 
     diagnostics = module.get_last_diagnostics(0)
     assert diagnostics["executable_backlog"] == 12
-    assert diagnostics["hands_floor"] == 11
-    assert action["market"].count(["HIRE"]) == 11
+    assert diagnostics["hands_floor"] == 10
+    assert action["market"].count(["HIRE"]) == 10
 
 
 def test_expensive_hiring_preserves_the_three_hand_cap_in_attack_mode():
@@ -545,6 +588,113 @@ def test_attack_hiring_reserves_only_the_affordable_fibonacci_prefix():
     assert diagnostics["hands_floor"] == 7
     assert diagnostics["hire_cost_reserved"] == 4_037
     assert action["market"].count(["HIRE"]) == 7
+
+
+def test_attack_hiring_uses_only_the_simulator_executable_market_slots():
+    """An eleven-hand target cannot emit an eleventh order that the simulator drops."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12),
+        {**V18_CONFIG, "farmHandCostMult": 1, "maxMarketOrdersPerTurn": 10},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert len(action["market"]) == 10
+    assert action["market"].count(["HIRE"]) == 10
+    assert diagnostics["hands_floor"] == 10
+
+
+def test_required_feed_seed_land_and_hires_precede_saturated_discretionary_orders():
+    """Every essential commitment fits in the simulator's ten-order prefix."""
+    module = load_agent_module("task_teacher_v18")
+    tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    tiles[0][0] = make_animal_tile()
+    shed = {
+        item: 1
+        for item in ("CARROT", "MELON", "STRAWBERRY", "MILK", "WOOL", "EGG", "FERTILIZER")
+    }
+
+    action = module.agent(
+        make_obs(
+            day=15,
+            hour=1,
+            money=10_000.0,
+            farmer=(1, 0),
+            tiles=tiles,
+            shed=shed,
+            prices={"WHEAT": 25.0},
+            unlocked_quadrants=["NW"],
+        ),
+        {**V18_CONFIG, "maxMarketOrdersPerTurn": 10},
+    )
+
+    operations = [order[0] for order in action["market"]]
+    diagnostics = module.get_last_diagnostics(0)
+    assert len(action["market"]) == 10
+    assert operations[:3] == ["BUY_PRODUCT", "BUY_SEED", "BUY_LAND"]
+    assert operations.count("HIRE") == 3
+    assert diagnostics["land_authorized"] is True
+    assert diagnostics["market_orders_emitted"] == 10
+    assert diagnostics["market_orders_dropped"] > 0
+
+
+def test_authorized_fourth_land_stays_in_saturated_discretionary_prefix():
+    """Fourth land executes before saturated sales and animal purchases."""
+    module = load_agent_module("task_teacher_v18")
+    obs = make_fourth_land_obs(money=30_000.0, day=14)
+    obs["private"]["shed"].update({
+        item: 1
+        for item in ("CARROT", "MELON", "STRAWBERRY", "MILK", "WOOL", "EGG", "FERTILIZER")
+    })
+
+    action = module.agent(
+        obs,
+        {**V18_CONFIG, "farmHandCostMult": 1, "maxMarketOrdersPerTurn": 10},
+    )
+
+    operations = [order[0] for order in action["market"]]
+    assert len(action["market"]) == 10
+    assert operations[0] == "BUY_LAND"
+    assert module.get_last_diagnostics(0)["market_orders_dropped"] > 0
+    assert module.get_last_diagnostics(0)["land_authorized"] is True
+
+
+def test_real_simulator_executes_third_land_and_unlocks_the_quadrant():
+    """The real ten-order market processor executes v18's authorized third land."""
+    module = load_agent_module("task_teacher_v18")
+    third_land_actions = []
+
+    def candidate(obs, config):
+        action = module.agent(obs, config)
+        if (
+            len(obs["farms"][obs["player"]]["unlocked_quadrants"]) == 2
+            and ["BUY_LAND"] in action["market"]
+        ):
+            third_land_actions.append(action)
+        return action
+
+    def land_rushing_opponent(obs, _config):
+        hand_count = len(obs["farms"][obs["player"]]["hands"])
+        return {
+            "farmer": ["PASS"],
+            "hands": [["PASS"] for _ in range(hand_count)],
+            "market": [["BUY_LAND"]],
+        }
+
+    configuration = {
+        **tournament_configuration(episode_steps=720, seed=19_001),
+        "startingMoney": 30_000,
+        "maxMarketOrdersPerTurn": 10,
+    }
+    env = make("kaggriculture", configuration=configuration, debug=True)
+    env.run([candidate, land_rushing_opponent])
+
+    final_farm = env.steps[-1][0].observation.farms[0]
+    assert all(state.status == "DONE" for state in env.steps[-1])
+    assert third_land_actions
+    assert all(len(action["market"]) <= 10 for action in third_land_actions)
+    assert final_farm["unlocked_quadrants"][:3] == ["NW", "NE", "SW"]
 
 
 def test_classifier_only_ablation_is_action_identical_to_v16_for_ten_seed_pairs():

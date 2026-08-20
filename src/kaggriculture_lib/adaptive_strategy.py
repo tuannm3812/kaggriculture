@@ -66,7 +66,10 @@ def count_executable_backlog(
         return 0
 
     unit_inventories = [inventories] if isinstance(inventories, dict) else inventories
+    available_inventories = [dict(inventory) for inventory in unit_inventories]
     queued_by_item = _queued_quantities(queued_items)
+    available_seeds = None if seeds is None else dict(seeds)
+    available_shed = {} if shed is None else dict(shed)
     seen = set()
     count = 0
     terminal_kinds = {TaskKind.HARVEST, TaskKind.PICKUP}
@@ -77,8 +80,14 @@ def count_executable_backlog(
         seen.add(task.task_id)
         if terminal_only and task.task_id.kind not in terminal_kinds:
             continue
-        if _task_is_executable(
-            task, unit_inventories, queued_by_item, positions, remaining_actions, seeds, shed
+        if _reserve_executable_task(
+            task,
+            available_inventories,
+            queued_by_item,
+            positions,
+            remaining_actions,
+            available_seeds,
+            available_shed,
         ):
             count += 1
     return count
@@ -122,7 +131,7 @@ def _queued_quantities(queued_items: list[object] | dict[str, int]) -> dict[str,
     return quantities
 
 
-def _task_is_executable(
+def _reserve_executable_task(
     task: Task,
     inventories: list[dict[str, int]],
     queued_by_item: dict[str, dict[str, int]],
@@ -131,41 +140,63 @@ def _task_is_executable(
     seeds: dict[str, int] | None,
     shed: dict[str, int] | None,
 ) -> bool:
-    """Whether one unit can reach a task and satisfy each resource need."""
+    """Reserve resources for the first unit that can complete a task."""
     for index, position in enumerate(positions):
         distance = abs(task.target[0] - position[0]) + abs(task.target[1] - position[1])
         if distance + task.action_cost > remaining_actions:
             continue
         inventory = inventories[index] if index < len(inventories) else {}
+        trial_inventory = dict(inventory)
+        trial_queued = {source: dict(items) for source, items in queued_by_item.items()}
+        trial_seeds = None if seeds is None else dict(seeds)
+        trial_shed = dict(shed or {})
         if all(
-            _resource_is_available(need, inventory, queued_by_item, seeds, shed)
+            _consume_resource(need, trial_inventory, trial_queued, trial_seeds, trial_shed)
             for need in task.resource_needs
         ):
+            if index < len(inventories):
+                inventories[index] = trial_inventory
+            queued_by_item.clear()
+            queued_by_item.update(trial_queued)
+            if seeds is not None and trial_seeds is not None:
+                seeds.clear()
+                seeds.update(trial_seeds)
+            if shed is not None:
+                shed.clear()
+                shed.update(trial_shed)
             return True
     return False
 
 
-def _resource_is_available(
+def _consume_resource(
     need: object,
     inventory: dict[str, int],
     queued_by_source: dict[str, dict[str, int]],
     seeds: dict[str, int] | None,
     shed: dict[str, int] | None,
 ) -> bool:
-    """Check one resource need against its declared, non-interchangeable store."""
+    """Consume one need from its detached held/queued availability."""
     source = need.source
     if source in {"INVENTORY", "UNIT"}:
-        held = inventory.get(need.item, 0)
-        queued = 0
+        held_store = inventory
+        queued_store = None
     elif source == "SEED":
-        held = inventory.get(need.item, 0) if seeds is None else seeds.get(need.item, 0)
-        queued = queued_by_source["SEED"].get(need.item, 0)
+        held_store = inventory if seeds is None else seeds
+        queued_store = queued_by_source["SEED"]
     elif source == "SHED":
-        held = 0 if shed is None else shed.get(need.item, 0)
-        queued = queued_by_source["SHED"].get(need.item, 0)
+        held_store = {} if shed is None else shed
+        queued_store = queued_by_source["SHED"]
     else:
         return False
-    return held >= need.quantity or queued >= need.quantity
+    held = held_store.get(need.item, 0)
+    queued = 0 if queued_store is None else queued_store.get(need.item, 0)
+    if held + queued < need.quantity:
+        return False
+    held_used = min(held, need.quantity)
+    held_store[need.item] = held - held_used
+    if queued_store is not None:
+        queued_store[need.item] = queued - (need.quantity - held_used)
+    return True
 
 
 @dataclass(frozen=True)

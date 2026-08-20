@@ -241,6 +241,23 @@ def test_executable_backlog_counts_duplicate_task_ids_once() -> None:
     assert count_executable_backlog([task, task], [{}], [], [(0, 0)], 22, 23) == 1
 
 
+def test_executable_backlog_reserves_one_seed_for_only_one_task() -> None:
+    """A single detached seed cannot make two distinct planting tasks executable."""
+    tasks = [
+        make_backlog_task(
+            TaskKind.PLANT,
+            x=x,
+            item="WHEAT",
+            needs=(ResourceNeed("WHEAT", 1, "SEED"),),
+        )
+        for x in (0, 1)
+    ]
+
+    assert count_executable_backlog(
+        tasks, [{}], [], [(0, 0)], 20, 23, seeds={"WHEAT": 1}
+    ) == 1
+
+
 @pytest.mark.parametrize(
     ("backlog", "target"), [(0, 8), (9, 8), (10, 9), (11, 10), (12, 11)])
 def test_attack_hand_target_uses_the_workload_threshold_map(backlog: int, target: int) -> None:
