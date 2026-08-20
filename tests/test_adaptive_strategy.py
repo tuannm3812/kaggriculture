@@ -3,18 +3,158 @@
 import pytest
 
 from kaggriculture_lib.adaptive_strategy import (
+    attack_hand_target,
     CashLedger,
+    count_executable_backlog,
     LandDecision,
     ThreatLevel,
     ThreatMemory,
     ThreatSnapshot,
     authorize_land_purchase,
     parse_public_threat_snapshot,
+    productive_utilization,
 )
+from kaggriculture_lib.tasking import MarketIntent, PriorityTier, ResourceNeed, Task, TaskId, TaskKind
 
 
 def snap(quadrants: int = 1, hands: int = 0, animals: int = 0) -> ThreatSnapshot:
     return ThreatSnapshot(quadrants, hands, animals)
+
+
+def test_productive_utilization_counts_only_productive_tiles_in_unlocked_quadrants() -> None:
+    """Plants and occupied animal structures are productive land."""
+    tiles = [[None for _ in range(10)] for _ in range(10)]
+    tiles[0][0] = {"kind": "PLANT", "crop": "WHEAT"}
+    tiles[0][1] = {"kind": "PLANT", "crop": "MELON", "ready": True}
+    tiles[0][2] = {"kind": "COOP", "animal": "GOOSE"}
+    tiles[0][3] = {"kind": "PASTURE", "animal": "COW"}
+    tiles[0][4] = {"kind": "PASTURE"}
+    tiles[0][5] = {"kind": "COOP", "animal": None}
+    tiles[0][6] = {"kind": "DECORATION", "animal": "COW"}
+    tiles[9][9] = {"kind": "PLANT", "crop": "WHEAT"}
+
+    utilization = productive_utilization(tiles, ["NW", "NE", "SW"], 10)
+
+    assert utilization == 4 / 75
+
+
+def make_backlog_task(
+    kind: TaskKind,
+    x: int = 0,
+    y: int = 0,
+    item: str | None = None,
+    needs: tuple[ResourceNeed, ...] = (),
+) -> Task:
+    """Build a real scheduler task with only backlog-relevant fields."""
+    return Task(
+        task_id=TaskId(kind=kind, x=x, y=y, item=item),
+        target=(x, y),
+        priority_tier=PriorityTier.ECONOMIC,
+        deadline_step=None,
+        expected_value=0.0,
+        action_cost=1,
+        resource_needs=needs,
+    )
+
+
+def test_executable_backlog_accepts_plant_with_held_seed_without_mutating_inventory() -> None:
+    """A unit holding the required seed makes its plant task executable."""
+    task = make_backlog_task(
+        TaskKind.PLANT, item="WHEAT", needs=(ResourceNeed("WHEAT", 1, "SEED"),)
+    )
+    inventories = [{"WHEAT": 1}]
+
+    count = count_executable_backlog([task], inventories, [], [(0, 0)], 22, 23)
+
+    assert count == 1
+    assert inventories == [{"WHEAT": 1}]
+
+
+def test_executable_backlog_accepts_plant_with_queued_seed_purchase() -> None:
+    """A queued seed order covers a plant task's prerequisite."""
+    task = make_backlog_task(
+        TaskKind.PLANT, item="WHEAT", needs=(ResourceNeed("WHEAT", 1, "SEED"),)
+    )
+
+    count = count_executable_backlog(
+        [task], [{}], [MarketIntent("WHEAT", 1, "PLANT")], [(0, 0)], 22, 23
+    )
+
+    assert count == 1
+
+
+@pytest.mark.parametrize(
+    ("task", "inventory"),
+    [
+        (make_backlog_task(TaskKind.FEED, needs=(ResourceNeed("WHEAT", 1, "INVENTORY"),)), {}),
+        (make_backlog_task(TaskKind.PLACE, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "INVENTORY"),)), {}),
+    ],
+)
+def test_executable_backlog_rejects_resource_task_without_held_or_queued_resource(
+    task: Task, inventory: dict[str, int]
+) -> None:
+    """Feed and placement work is not useful backlog until its resource exists."""
+    assert count_executable_backlog([task], [inventory], [], [(0, 0)], 22, 23) == 0
+
+
+@pytest.mark.parametrize(
+    ("task", "inventory"),
+    [
+        (make_backlog_task(TaskKind.FEED, needs=(ResourceNeed("WHEAT", 1, "INVENTORY"),)), {"WHEAT": 1}),
+        (make_backlog_task(TaskKind.PLACE, item="GOOSE", needs=(ResourceNeed("GOOSE", 1, "INVENTORY"),)), {"GOOSE": 1}),
+    ],
+)
+def test_executable_backlog_accepts_resource_task_when_a_unit_holds_resource(
+    task: Task, inventory: dict[str, int]
+) -> None:
+    """A unit carrying feed or an animal can finish the corresponding task."""
+    assert count_executable_backlog([task], [inventory], [], [(0, 0)], 22, 23) == 1
+
+
+def test_executable_backlog_rejects_task_outside_route_and_action_horizon() -> None:
+    """Movement plus the action must fit in the remaining hours of the day."""
+    task = make_backlog_task(TaskKind.HARVEST, x=2)
+
+    assert count_executable_backlog([task], [{}], [], [(0, 0)], 22, 23) == 0
+
+
+def test_executable_backlog_counts_duplicate_task_ids_once() -> None:
+    """Task identity, rather than repeated list entries, determines backlog."""
+    task = make_backlog_task(TaskKind.HARVEST)
+
+    assert count_executable_backlog([task, task], [{}], [], [(0, 0)], 22, 23) == 1
+
+
+@pytest.mark.parametrize(
+    ("backlog", "target"), [(0, 8), (9, 8), (10, 9), (11, 10), (12, 11)])
+def test_attack_hand_target_uses_the_workload_threshold_map(backlog: int, target: int) -> None:
+    """Attack-mode hiring changes only at the documented useful-work boundaries."""
+    assert attack_hand_target(backlog) == target
+
+
+def test_attack_hand_target_rejects_negative_backlog() -> None:
+    """A task count cannot be negative."""
+    with pytest.raises(ValueError):
+        attack_hand_target(-1)
+
+
+def test_terminal_only_backlog_keeps_only_harvest_and_pickup() -> None:
+    """Final-day added labor may service only terminal production tasks."""
+    tasks = [
+        make_backlog_task(TaskKind.HARVEST),
+        make_backlog_task(TaskKind.PICKUP, x=1),
+        make_backlog_task(TaskKind.PLANT, x=2),
+        make_backlog_task(TaskKind.WATER, x=3),
+        make_backlog_task(TaskKind.BUILD_COOP, x=4),
+        make_backlog_task(TaskKind.FEED, x=5, needs=(ResourceNeed("WHEAT", 1, "INVENTORY"),)),
+        make_backlog_task(TaskKind.CARE, x=6),
+    ]
+
+    count = count_executable_backlog(
+        tasks, [{"WHEAT": 1}], [], [(0, 0)], 0, 23, terminal_only=True
+    )
+
+    assert count == 2
 
 
 def test_compact_boundaries() -> None:

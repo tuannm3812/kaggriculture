@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from math import isfinite
 
+from kaggriculture_lib.tasking import Task, TaskKind
+
+
+_SUPPORTED_ANIMALS = frozenset({"COW", "SHEEP", "GOOSE"})
+
 
 class ThreatLevel(IntEnum):
     """Monotonic opponent expansion-risk levels."""
@@ -11,6 +16,119 @@ class ThreatLevel(IntEnum):
     COMPACT = 0
     BUILDING = 1
     COMPOUNDING = 2
+
+
+def quadrant_of(x: int, y: int, board_size: int) -> str:
+    """Return the board quadrant containing the given tile coordinate."""
+    half = board_size // 2
+    return ("N" if y < half else "S") + ("W" if x < half else "E")
+
+
+def productive_utilization(tiles: list[list], quadrants: list[str], board_size: int) -> float:
+    """Return the productive share of tiles in the supplied quadrants."""
+    unlocked = set(quadrants)
+    total = productive = 0
+    for y in range(board_size):
+        for x in range(board_size):
+            if quadrant_of(x, y, board_size) not in unlocked:
+                continue
+            total += 1
+            tile = tiles[y][x]
+            if not isinstance(tile, dict):
+                continue
+            if tile.get("kind") == "PLANT" or (
+                tile.get("kind") in {"COOP", "PASTURE"}
+                and tile.get("animal") in _SUPPORTED_ANIMALS
+            ):
+                productive += 1
+    return productive / total if total else 0.0
+
+
+def count_executable_backlog(
+    tasks: list[Task],
+    inventories: list[dict[str, int]] | dict[str, int],
+    queued_items: list[object] | dict[str, int],
+    positions: list[tuple[int, int]],
+    hour: int,
+    last_hour: int,
+    *,
+    terminal_only: bool = False,
+) -> int:
+    """Count unique tasks with resources and time to be completed this turn.
+
+    Queued market items cover a resource prerequisite for planning purposes;
+    held items must be carried by the unit that travels to the task.
+    """
+    remaining_actions = last_hour - hour + 1
+    if remaining_actions <= 0:
+        return 0
+
+    unit_inventories = [inventories] if isinstance(inventories, dict) else inventories
+    queued_by_item = _queued_quantities(queued_items)
+    seen = set()
+    count = 0
+    terminal_kinds = {TaskKind.HARVEST, TaskKind.PICKUP}
+
+    for task in tasks:
+        if task.task_id in seen:
+            continue
+        seen.add(task.task_id)
+        if terminal_only and task.task_id.kind not in terminal_kinds:
+            continue
+        if _task_is_executable(task, unit_inventories, queued_by_item, positions, remaining_actions):
+            count += 1
+    return count
+
+
+def attack_hand_target(executable_backlog: int) -> int:
+    """Return the attack-mode hand target justified by useful workload."""
+    if executable_backlog < 0:
+        raise ValueError("executable backlog must be nonnegative")
+    if executable_backlog <= 9:
+        return 8
+    if executable_backlog == 10:
+        return 9
+    if executable_backlog == 11:
+        return 10
+    return 11
+
+
+def _queued_quantities(queued_items: list[object] | dict[str, int]) -> dict[str, int]:
+    """Aggregate queued order quantities without changing caller-owned data."""
+    if isinstance(queued_items, dict):
+        return {item: quantity for item, quantity in queued_items.items() if quantity > 0}
+
+    quantities: dict[str, int] = {}
+    for queued in queued_items:
+        if isinstance(queued, dict):
+            item, quantity = queued.get("item"), queued.get("quantity", 0)
+        else:
+            item, quantity = getattr(queued, "item", None), getattr(queued, "quantity", 0)
+        if isinstance(item, str) and isinstance(quantity, (int, float)) and quantity > 0:
+            quantities[item] = quantities.get(item, 0) + quantity
+    return quantities
+
+
+def _task_is_executable(
+    task: Task,
+    inventories: list[dict[str, int]],
+    queued_by_item: dict[str, int],
+    positions: list[tuple[int, int]],
+    remaining_actions: int,
+) -> bool:
+    """Whether one unit can reach a task and satisfy each resource need."""
+    for index, position in enumerate(positions):
+        distance = abs(task.target[0] - position[0]) + abs(task.target[1] - position[1])
+        if distance + 1 > remaining_actions:
+            continue
+        inventory = inventories[index] if index < len(inventories) else {}
+        if all(
+            inventory.get(need.item, 0) >= need.quantity
+            or queued_by_item.get(need.item, 0) >= need.quantity
+            for need in task.resource_needs
+        ):
+            return True
+    return False
 
 
 @dataclass(frozen=True)
