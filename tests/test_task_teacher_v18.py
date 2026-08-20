@@ -461,6 +461,32 @@ def test_enabled_first_land_seed_capacity_does_not_deduct_land_twice():
     assert module.get_last_diagnostics(0)["post_land_cash"] == 230
 
 
+def test_first_land_is_not_authorized_ahead_of_unfunded_required_feed():
+    """Two $1,000 feed units must prevent a $1,000 land order at $2,500 cash."""
+    module = load_agent_module("task_teacher_v18")
+    tiles = [[{"kind": "DECORATION"}] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    tiles[0][0] = make_animal_tile()
+
+    action = module.agent(
+        make_obs(
+            day=15,
+            hour=1,
+            money=2_500.0,
+            hands=[(4, 4)] * 3,
+            tiles=tiles,
+            prices={"WHEAT": 1_000.0},
+            unlocked_quadrants=["NW"],
+        ),
+        V18_CONFIG,
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert ["BUY_PRODUCT", "WHEAT", 2] in action["market"]
+    assert ["BUY_LAND"] not in action["market"]
+    assert diagnostics["land_authorized"] is False
+    assert diagnostics["land_reason"] == "v16_first_land_insufficient_cash"
+
+
 def test_assigned_seed_orders_spend_their_reserved_bucket_exactly_once():
     """Four assigned MELON seeds remain funded when discretionary cash is zero."""
     module = load_agent_module("task_teacher_v18")
@@ -530,6 +556,29 @@ def test_attack_backlog_uses_seed_orders_actually_planned_for_this_turn():
     assert sum(order[2] for order in action["market"] if order[0] == "BUY_SEED") == 12
 
 
+def test_attack_backlog_never_exceeds_seed_quantity_after_cash_commitments():
+    """Expensive queued hires leave only two emitted seeds and two useful plant tasks."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(
+            backlog=12,
+            money=6_000.0,
+            seeds={},
+            hour=1,
+            hires_today=10,
+        ),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    emitted_seeds = sum(
+        order[2] for order in action["market"] if order[0] == "BUY_SEED"
+    )
+    diagnostics = module.get_last_diagnostics(0)
+    assert emitted_seeds == 2
+    assert diagnostics["executable_backlog"] == emitted_seeds
+
+
 def test_final_day_non_terminal_backlog_cannot_raise_attack_labor():
     """Final-day PLANT work is excluded before it can justify a ninth hand."""
     module = load_agent_module("task_teacher_v18")
@@ -543,6 +592,22 @@ def test_final_day_non_terminal_backlog_cannot_raise_attack_labor():
     assert diagnostics["executable_backlog"] == 0
     assert diagnostics["hands_floor"] == 0
     assert diagnostics["terminal_labor_only"] is True
+    assert action["market"].count(["HIRE"]) == 0
+
+
+def test_final_day_terminal_gate_applies_below_attack_cash_threshold():
+    """Four-quadrant final-day planting cannot reach the legacy five-hand branch."""
+    module = load_agent_module("task_teacher_v18")
+
+    action = module.agent(
+        make_attack_labor_obs(backlog=12, day=29, money=5_000.0),
+        {**V18_CONFIG, "farmHandCostMult": 1},
+    )
+
+    diagnostics = module.get_last_diagnostics(0)
+    assert diagnostics["terminal_labor_only"] is True
+    assert diagnostics["executable_backlog"] == 0
+    assert diagnostics["hands_floor"] == 0
     assert action["market"].count(["HIRE"]) == 0
 
 
@@ -603,6 +668,21 @@ def test_attack_hiring_uses_only_the_simulator_executable_market_slots():
     assert len(action["market"]) == 10
     assert action["market"].count(["HIRE"]) == 10
     assert diagnostics["hands_floor"] == 10
+
+
+def test_market_slot_budget_does_not_change_disabled_v16_policy():
+    """The classifier-only path preserves v16's complete legacy action dictionary."""
+    v16 = load_agent_module("task_teacher_v16")
+    v18 = load_agent_module("task_teacher_v18")
+    observation = make_attack_labor_obs(backlog=12)
+    config = {
+        **V18_CONFIG,
+        "farmHandCostMult": 1,
+        "maxMarketOrdersPerTurn": 10,
+        "enableThreatExpansion": False,
+    }
+
+    assert v18.agent(observation, config) == v16.agent(observation, config)
 
 
 def test_required_feed_seed_land_and_hires_precede_saturated_discretionary_orders():

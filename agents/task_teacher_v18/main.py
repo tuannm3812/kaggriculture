@@ -183,6 +183,26 @@ def _prioritize_market_orders(
     return emitted, len(prioritized) - len(emitted)
 
 
+def _plan_hires(
+    existing_hands: int,
+    target_hands: int,
+    hires_today: int,
+    money: float,
+    multiplier: float,
+    max_orders: int,
+) -> tuple[int, float, int]:
+    """Return the affordable, executable hire prefix and resulting hand count."""
+    count = 0
+    reserved = 0.0
+    while existing_hands + count < target_hands and count < max_orders:
+        cost = economy.hire_cost(hires_today + count, mult=multiplier)
+        if reserved + cost > money:
+            break
+        reserved += cost
+        count += 1
+    return count, reserved, existing_hands + count
+
+
 def agent(obs, config=None):
     threat_expansion_enabled = (
         True if config is None else bool(config.get("enableThreatExpansion", True))
@@ -287,6 +307,26 @@ def agent(obs, config=None):
     assignment = joint_assign(unit_positions, tasks, _state.assignments, unit_inventories=inventories)
     _state.assignments = {unit: tid for unit, tid in assignment.items() if tid is not None}
 
+    # Reserve seeds already assigned to units before labor/market planning.
+    temp_seeds = dict(private["seeds"])
+    reserved_for_seeds = 0.0
+    assigned_seed_quantities = {crop: 0 for crop in CANDIDATE_CROPS}
+    for task_id in assignment.values():
+        if task_id and task_id.kind == TaskKind.PLANT:
+            crop = task_id.item
+            if temp_seeds.get(crop, 0) > 0:
+                temp_seeds[crop] -= 1
+            else:
+                reserved_for_seeds += economy.CROPS[crop]["seed"]
+                assigned_seed_quantities[crop] += 1
+
+    total_wheat = shed.get("WHEAT", 0) + sum(
+        inventory.get("WHEAT", 0) for inventory in inventories
+    )
+    target_wheat = max(2, total_owned_animals * 2) if total_owned_animals > 0 else 0
+    feed_shortage = max(0, target_wheat - total_wheat)
+    wheat_price = prices.get("WHEAT", 25.0)
+
     market_orders: list[list] = []
 
     is_terminal_liquidation = (day == last_day and hour >= 20)
@@ -337,14 +377,40 @@ def agent(obs, config=None):
     attack_labor_active = (
         threat_expansion_enabled
         and n_quadrants >= 4
-        and me["money"] >= 6000.0
         and day >= 10
+        and (me["money"] >= 6000.0 or day == last_day)
     )
-    planned_seed_intents = (
-        _planned_seed_intents(tasks, private["seeds"], day, last_day, me["money"])
-        if threat_expansion_enabled and hour == 1
-        else []
-    )
+    mult = economy.hire_cost_mult(config)
+    market_order_limit = max(1, int((config or {}).get("maxMarketOrdersPerTurn", 10)))
+    planned_seed_intents = []
+    if attack_labor_active and hour == 1:
+        raw_seed_intents = _planned_seed_intents(
+            tasks, private["seeds"], day, last_day, me["money"]
+        )
+        essential_slots = len(raw_seed_intents) + int(feed_shortage > 0)
+        max_hire_orders = max(0, market_order_limit - essential_slots)
+        maximal_target = 3 if mult >= 5.0 else 11
+        _, maximal_hire_reserve, _ = _plan_hires(
+            len(me["hands"]),
+            maximal_target,
+            me["hires_today"],
+            me["money"],
+            mult,
+            max_hire_orders,
+        )
+        conservative_ledger = CashLedger(
+            queued_hires=maximal_hire_reserve,
+            assigned_seeds=reserved_for_seeds,
+            two_day_feed=2 * feed_shortage * wheat_price,
+            animal_liquidity=1200.0,
+            operating=500.0,
+        )
+        seed_budget = reserved_for_seeds + max(
+            0.0, conservative_ledger.remaining(me["money"])
+        )
+        planned_seed_intents = _planned_seed_intents(
+            tasks, private["seeds"], day, last_day, seed_budget
+        )
     if day < 10:
         if mult_val >= 5.0:
             hands_floor = 0
@@ -400,51 +466,27 @@ def agent(obs, config=None):
             hands_floor = min(hands_floor, 3)
 
     # Calculate Cash Reservation for essential expenditures (Hiring, Seed purchases, Feed)
-    mult = economy.hire_cost_mult(config)
-    hires_to_queue = 0
-    temp_money = me["money"]
-    temp_hires_today = me["hires_today"]
-    temp_existing = len(me["hands"])
-
-    # 1. Hire to meet the hands floor (no extra hiring to prevent bankruptcy)
-    while temp_existing < hands_floor:
-        cost = economy.hire_cost(temp_hires_today, mult=mult)
-        if temp_money >= cost:
-            hires_to_queue += 1
-            temp_money -= cost
-            temp_hires_today += 1
-            temp_existing += 1
-        else:
-            break
+    max_hire_orders = (
+        market_order_limit
+        if threat_expansion_enabled
+        else max(0, hands_floor - len(me["hands"]))
+    )
+    if attack_labor_active:
+        max_hire_orders = max(
+            0,
+            market_order_limit - len(planned_seed_intents) - int(feed_shortage > 0),
+        )
+    hires_to_queue, reserved_for_hire, temp_existing = _plan_hires(
+        len(me["hands"]),
+        hands_floor,
+        me["hires_today"],
+        me["money"],
+        mult,
+        max_hire_orders,
+    )
 
     if attack_labor_active:
         hands_floor = min(hands_floor, temp_existing)
-
-    reserved_for_hire = 0.0
-    temp_hires_today = me["hires_today"]
-    for _ in range(hires_to_queue):
-        reserved_for_hire += economy.hire_cost(temp_hires_today, mult=mult)
-        temp_hires_today += 1
-
-    # Reserve for seeds assigned to units this turn
-    temp_seeds = dict(private["seeds"])
-    reserved_for_seeds = 0.0
-    assigned_seed_quantities = {crop: 0 for crop in CANDIDATE_CROPS}
-    for unit_idx, task_id in assignment.items():
-        if task_id and task_id.kind == TaskKind.PLANT:
-            crop = task_id.item
-            if temp_seeds.get(crop, 0) > 0:
-                temp_seeds[crop] -= 1
-            else:
-                reserved_for_seeds += economy.CROPS[crop]["seed"]
-                assigned_seed_quantities[crop] += 1
-
-    # Reserve for wheat feed
-    total_wheat = shed.get("WHEAT", 0) + sum(inv.get("WHEAT", 0) for inv in inventories)
-    target_wheat = max(2, total_owned_animals * 2) if total_owned_animals > 0 else 0
-    feed_shortage = max(0, target_wheat - total_wheat)
-    wheat_price = prices.get("WHEAT", 25.0)
-    reserved_for_feed = feed_shortage * wheat_price
 
     ledger = CashLedger(
         queued_hires=reserved_for_hire,
@@ -489,8 +531,7 @@ def agent(obs, config=None):
             elif last_day - day < 12 or day < 9:
                 land_reason = "v16_first_land_ineligible"
             else:
-                reserve = max(1000.0 * (n_extra + 1), minimum_liquidity)
-                land_authorized = me["money"] - reserved_for_hire >= land_cost + reserve
+                land_authorized = ledger.remaining(me["money"], land_cost) >= 0.0
                 land_reason = (
                     "v16_first_land" if land_authorized else "v16_first_land_insufficient_cash"
                 )
@@ -619,41 +660,59 @@ def agent(obs, config=None):
                 market_cash_remaining -= order[2] * prices.get("WHEAT", 25.0)
 
         # 6. BUY_SEED batch buying
-        seeds_in_shed = private["seeds"]
-        total_seeds_in_shed = sum(seeds_in_shed.get(c, 0) for c in CANDIDATE_CROPS)
-        total_plant_tasks = sum(1 for t in tasks if t.task_id.kind == TaskKind.PLANT)
-        if total_seeds_in_shed >= total_plant_tasks:
-            seeds_needed = {c: 0 for c in CANDIDATE_CROPS}
+        if attack_labor_active:
+            market_orders.extend(planned_seed_intents)
+            market_cash_remaining -= sum(
+                order[2] * economy.CROPS[order[1]]["seed"]
+                for order in planned_seed_intents
+            )
         else:
-            seeds_needed = {}
-            for crop in CANDIDATE_CROPS:
-                plant_tasks = sum(1 for t in tasks if t.task_id.kind == TaskKind.PLANT and t.task_id.item == crop)
-                current_seeds = seeds_in_shed.get(crop, 0)
-                seeds_needed[crop] = max(0, plant_tasks - current_seeds)
-
-        for crop in CANDIDATE_CROPS:
-            # Check if crop can mature if planted tomorrow (Day D+1)
-            cd = economy.CROPS[crop]
-            can_mature_tomorrow = False
-            if cd["ongoing"]:
-                can_mature_tomorrow = economy.can_ongoing_crop_reach_any_tick(crop, day + 1, last_day)
+            seeds_in_shed = private["seeds"]
+            total_seeds_in_shed = sum(
+                seeds_in_shed.get(crop, 0) for crop in CANDIDATE_CROPS
+            )
+            total_plant_tasks = sum(
+                task.task_id.kind == TaskKind.PLANT for task in tasks
+            )
+            if total_seeds_in_shed >= total_plant_tasks:
+                seeds_needed = {crop: 0 for crop in CANDIDATE_CROPS}
             else:
-                can_mature_tomorrow = economy.can_mature_in_time(crop, day + 1, last_day)
-            if not can_mature_tomorrow:
-                continue
+                seeds_needed = {
+                    crop: max(
+                        0,
+                        sum(
+                            task.task_id.kind == TaskKind.PLANT
+                            and task.task_id.item == crop
+                            for task in tasks
+                        )
+                        - seeds_in_shed.get(crop, 0),
+                    )
+                    for crop in CANDIDATE_CROPS
+                }
 
-            needed = seeds_needed.get(crop, 0)
-            if needed > 0:
-                seed_cost = economy.CROPS[crop]["seed"]
+            for crop in CANDIDATE_CROPS:
+                crop_data = economy.CROPS[crop]
+                if crop_data["ongoing"]:
+                    can_mature = economy.can_ongoing_crop_reach_any_tick(
+                        crop, day + 1, last_day
+                    )
+                else:
+                    can_mature = economy.can_mature_in_time(crop, day + 1, last_day)
+                if not can_mature:
+                    continue
+
+                needed = seeds_needed.get(crop, 0)
+                if needed <= 0:
+                    continue
+                seed_cost = crop_data["seed"]
                 buy_limit = 25 if day == 0 else 12
                 if threat_expansion_enabled:
                     required_qty = min(
                         needed, buy_limit, assigned_seed_quantities.get(crop, 0)
                     )
-                    discretionary_limit = buy_limit - required_qty
                     discretionary_qty = min(
                         needed - required_qty,
-                        discretionary_limit,
+                        buy_limit - required_qty,
                         int(market_cash_remaining // seed_cost),
                     )
                     buy_qty = required_qty + discretionary_qty
