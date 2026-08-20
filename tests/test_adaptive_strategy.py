@@ -196,6 +196,16 @@ def test_land_purchase_rejects_after_the_fourth_quadrant_is_already_open() -> No
     assert decision == LandDecision(False, "maximum_extra_quadrants_reached", 14_300)
 
 
+def test_land_purchase_rejects_an_intermediate_extra_quadrant_stage() -> None:
+    """Only exactly two extra quadrants may reach fourth-land authorization."""
+    decision = authorize_land_purchase(
+        ThreatLevel.BUILDING, 1.5, 15, 23, 29, 14_300, 4_000,
+        CashLedger(100, 200, 300, 1200, 500), 0.70, 4, 0,
+    )
+
+    assert decision == LandDecision(False, "unsupported_land_stage", 8000)
+
+
 def test_fourth_land_authorizes_on_every_required_boundary() -> None:
     """Fourth land opens only at the precise attack-mode thresholds."""
     decision = authorize_land_purchase(

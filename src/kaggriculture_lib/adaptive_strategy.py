@@ -215,6 +215,9 @@ def authorize_land_purchase(
             return LandDecision(False, "third_land_horizon_too_short", remaining_cash)
         return LandDecision(True, "third_land_compounding", remaining_cash)
 
+    if n_extra != 2:
+        return LandDecision(False, "unsupported_land_stage", remaining_cash)
+
     if hour != 23:
         return LandDecision(False, "fourth_land_not_end_of_day", remaining_cash)
     if last_day - day < 14:
