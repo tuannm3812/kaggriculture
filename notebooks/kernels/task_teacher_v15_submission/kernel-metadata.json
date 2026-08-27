@@ -1,0 +1,16 @@
+{
+  "id": "tuannm3812/kaggriculture-htdc-submission",
+  "title": "Kaggriculture HTDC Submission",
+  "code_file": "03_task_teacher_v15_submission.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [
+    "kaggriculture"
+  ],
+  "kernel_sources": []
+}

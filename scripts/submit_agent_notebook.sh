@@ -24,11 +24,16 @@ fi
 
 AGENT_DIR=""
 MESSAGE=""
+PUBLIC=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m|--message)
       MESSAGE="${2:?}"
       shift 2
+      ;;
+    --public)
+      PUBLIC="--public"
+      shift
       ;;
     -*)
       echo "Unknown flag: $1" >&2
@@ -47,14 +52,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$AGENT_DIR" || -z "$MESSAGE" ]]; then
-  echo "Usage: $0 agents/<version> -m \"submission message\"" >&2
+  echo "Usage: $0 agents/<version> -m \"submission message\" [--public]" >&2
   exit 1
 fi
 
 AGENT_NAME="$(basename "$AGENT_DIR")"
 KERNEL_DIR="$REPO_ROOT/notebooks/kernels/${AGENT_NAME}_submission"
 NOTEBOOK="03_${AGENT_NAME}_submission.ipynb"
-SLUG="kaggriculture-${AGENT_NAME//_/-}-submission"
+if [[ -n "$PUBLIC" ]]; then
+  SLUG="kaggriculture-htdc"
+else
+  SLUG="kaggriculture-htdc-submission"
+fi
 KERNEL_ID="tuannm3812/$SLUG"
 
 PY="${REPO_ROOT}/.venv/bin/python"
@@ -66,7 +75,7 @@ echo "==> Package $AGENT_DIR"
 "$PY" scripts/package_agent.py "$AGENT_DIR"
 
 echo "==> Build submission notebook"
-"$PY" scripts/build_agent_submission_notebook.py "$AGENT_DIR"
+"$PY" scripts/build_agent_submission_notebook.py "$AGENT_DIR" ${PUBLIC}
 
 echo "==> Push kernel $KERNEL_ID"
 cp "$REPO_ROOT/notebooks/$NOTEBOOK" "$KERNEL_DIR/$NOTEBOOK"

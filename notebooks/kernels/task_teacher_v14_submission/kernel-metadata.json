@@ -1,0 +1,16 @@
+{
+  "id": "tuannm3812/kaggriculture-task-teacher-v14-submission",
+  "title": "Kaggriculture - task_teacher_v14 Submission",
+  "code_file": "03_task_teacher_v14_submission.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [
+    "kaggriculture"
+  ],
+  "kernel_sources": []
+}

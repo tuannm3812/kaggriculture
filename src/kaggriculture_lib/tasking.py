@@ -129,7 +129,7 @@ def _best_feasible_crop(
     scored: list[tuple[float, str]] = []
     for crop in candidate_crops:
         cd = economy.CROPS[crop]
-        price = market_prices.get(crop, cd["seed"])
+        price = economy.MARKET_PARAMS[crop]["base"]
         if cd["ongoing"]:
             if not economy.can_ongoing_crop_reach_any_tick(crop, day, last_day):
                 continue
@@ -214,6 +214,7 @@ def generate_tasks(
     wheat_needed_for_feed: bool = False,
     want_pasture: bool = False,
     cow_in_any_inventory: bool = False,
+    sheep_in_any_inventory: bool = False,
     max_feed_tasks: int | None = None,
     non_emergency_feed_tier: PriorityTier = PriorityTier.DAILY_CARE,
     care_tier: PriorityTier = PriorityTier.DAILY_CARE,
@@ -243,11 +244,28 @@ def generate_tasks(
     # pastures must scale with MAX_COWS — agent sets want_pasture only when
     # there is no empty pasture, so occupied pastures must not block builds.
     pasture_exclude = {coop_build_target} if coop_build_target is not None else set()
+    pasture_allowed_quads = unlocked - {"NW"} if len(unlocked) > 1 else unlocked
     pasture_build_target = (
         None
         if not want_pasture
-        else _first_empty_unlocked_build_target(tiles, unlocked, board_size, exclude=pasture_exclude)
+        else _first_empty_unlocked_build_target(tiles, pasture_allowed_quads, board_size, exclude=pasture_exclude)
     )
+
+    # Count current crops on board
+    n_melons = 0
+    n_strawberries = 0
+    n_wheat = 0
+    for r_idx in range(board_size):
+        for c_idx in range(board_size):
+            tile = tiles[r_idx][c_idx]
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+                crop_kind = tile.get("crop")
+                if crop_kind == "MELON":
+                    n_melons += 1
+                elif crop_kind == "STRAWBERRY":
+                    n_strawberries += 1
+                elif crop_kind == "WHEAT":
+                    n_wheat += 1
 
     for y in range(board_size):
         for x in range(board_size):
@@ -284,7 +302,25 @@ def generate_tasks(
                         )
                     )
                     continue
-                crop = _best_feasible_crop(day, last_day, market_prices, candidate_crops)
+                # Choose crop based on dynamic allocation rules
+                crop = None
+                if wheat_needed_for_feed and n_wheat < 4 and "WHEAT" in candidate_crops and economy.can_mature_in_time("WHEAT", day, last_day):
+                    crop = "WHEAT"
+                    n_wheat += 1
+                else:
+                    best = _best_feasible_crop(day, last_day, market_prices, candidate_crops)
+                    if "STRAWBERRY" in candidate_crops and day >= 10 and n_strawberries < 12 and economy.can_ongoing_crop_reach_any_tick("STRAWBERRY", day, last_day):
+                        crop = "STRAWBERRY"
+                        n_strawberries += 1
+                    else:
+                        crop = best
+                        if crop == "MELON":
+                            n_melons += 1
+                        elif crop == "STRAWBERRY":
+                            n_strawberries += 1
+                        elif crop == "WHEAT":
+                            n_wheat += 1
+
                 if crop is None:
                     continue
                 cd = economy.CROPS[crop]
@@ -313,7 +349,7 @@ def generate_tasks(
                         Task(
                             task_id=TaskId(kind=TaskKind.PLACE, x=x, y=y, item="GOOSE"),
                             target=(x, y),
-                            priority_tier=PriorityTier.ECONOMIC,
+                            priority_tier=PriorityTier.EMERGENCY,
                             deadline_step=None,
                             expected_value=0.0,
                             action_cost=1,
@@ -328,11 +364,23 @@ def generate_tasks(
                         Task(
                             task_id=TaskId(kind=TaskKind.PLACE, x=x, y=y, item="COW"),
                             target=(x, y),
-                            priority_tier=PriorityTier.DAILY_CARE,
+                            priority_tier=PriorityTier.EMERGENCY,
                             deadline_step=None,
                             expected_value=0.0,
                             action_cost=1,
                             resource_needs=(ResourceNeed(item="COW", quantity=1, source="INVENTORY"),),
+                        )
+                    )
+                if sheep_in_any_inventory:
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.PLACE, x=x, y=y, item="SHEEP"),
+                            target=(x, y),
+                            priority_tier=PriorityTier.EMERGENCY,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                            resource_needs=(ResourceNeed(item="SHEEP", quantity=1, source="INVENTORY"),),
                         )
                     )
 
@@ -457,11 +505,6 @@ def generate_tasks(
                         resource_needs=(ResourceNeed(item="COW", quantity=1, source="SHED"),),
                     )
                 )
-            # Shed cows with no empty pasture yet: still PICKUP once a pasture
-            # build is in flight is handled next turn; if want_pasture built
-            # this turn, has_empty_pasture is still false at generation time.
-            # Also allow PICKUP when shed has cows and want_pasture was requested
-            # so the unit can carry the cow while another unit builds.
             elif shed.get("COW", 0) > 0 and not cow_in_any_inventory and want_pasture:
                 tasks.append(
                     Task(
@@ -474,17 +517,52 @@ def generate_tasks(
                         resource_needs=(ResourceNeed(item="COW", quantity=1, source="SHED"),),
                     )
                 )
+            if shed.get("SHEEP", 0) > 0 and not sheep_in_any_inventory and has_empty_pasture:
+                tasks.append(
+                    Task(
+                        task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="SHEEP"),
+                        target=pickup_target,
+                        priority_tier=PriorityTier.DAILY_CARE,
+                        deadline_step=None,
+                        expected_value=0.0,
+                        action_cost=1,
+                        resource_needs=(ResourceNeed(item="SHEEP", quantity=1, source="SHED"),),
+                    )
+                )
+            elif shed.get("SHEEP", 0) > 0 and not sheep_in_any_inventory and want_pasture:
+                tasks.append(
+                    Task(
+                        task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="SHEEP"),
+                        target=pickup_target,
+                        priority_tier=PriorityTier.DAILY_CARE,
+                        deadline_step=None,
+                        expected_value=0.0,
+                        action_cost=1,
+                        resource_needs=(ResourceNeed(item="SHEEP", quantity=1, source="SHED"),),
+                    )
+                )
             if wheat_needed_for_feed and shed.get("WHEAT", 0) > 0:
+                emergency_feed = False
+                for r in tiles:
+                    for t in r:
+                        if isinstance(t, dict) and "animal" in t and not t["fed_today"]:
+                            if t.get("consecutive_unfed", 0) >= 1:
+                                emergency_feed = True
+                                break
+                    if emergency_feed:
+                        break
+                pickup_tier = PriorityTier.EMERGENCY if emergency_feed else PriorityTier.DAILY_CARE
+                qty = min(6, shed.get("WHEAT", 0))
                 tasks.append(
                     Task(
                         task_id=TaskId(kind=TaskKind.PICKUP, x=pickup_target[0], y=pickup_target[1], item="WHEAT"),
                         target=pickup_target,
                         # Match FEED urgency so wheat isn't stuck behind Melon PLANT.
-                        priority_tier=PriorityTier.DAILY_CARE,
+                        priority_tier=pickup_tier,
                         deadline_step=None,
                         expected_value=0.0,
                         action_cost=1,
-                        resource_needs=(ResourceNeed(item="WHEAT", quantity=1, source="SHED"),),
+                        resource_needs=(ResourceNeed(item="WHEAT", quantity=qty, source="SHED"),),
                     )
                 )
 
@@ -547,6 +625,7 @@ def _greedy_assign(
     unit_positions: list[tuple[int, int]],
     tasks: list[Task],
     current_assignments: dict[int, TaskId],
+    unit_inventories: list[dict] | None = None,
 ) -> dict[int, TaskId | None]:
     """Deterministic greedy fallback for when there are too many units for
     exhaustive search: each unit, in order, claims its own top-ranked task
@@ -559,7 +638,23 @@ def _greedy_assign(
         if not remaining:
             assignment[i] = None
             continue
-        ranked = rank_tasks(remaining, current_position=pos, current_assignment=current_assignments.get(i))
+        unit_tasks = remaining
+        if unit_inventories is not None and i < len(unit_inventories):
+            inv = unit_inventories[i]
+            unit_tasks = []
+            for t in remaining:
+                if t.task_id.kind == TaskKind.PLACE:
+                    item = t.task_id.item
+                    if item and inv.get(item, 0) <= 0:
+                        continue
+                elif t.task_id.kind == TaskKind.FEED:
+                    if inv.get("WHEAT", 0) <= 0:
+                        continue
+                unit_tasks.append(t)
+        if not unit_tasks:
+            assignment[i] = None
+            continue
+        ranked = rank_tasks(unit_tasks, current_position=pos, current_assignment=current_assignments.get(i))
         chosen = ranked[0]
         assignment[i] = chosen.task_id
         remaining = [t for t in remaining if t.task_id != chosen.task_id]
@@ -571,6 +666,7 @@ def _exhaustive_assign(
     tasks: list[Task],
     current_assignments: dict[int, TaskId],
     max_candidates_per_unit: int = MAX_CANDIDATES_PER_UNIT,
+    unit_inventories: list[dict] | None = None,
 ) -> dict[int, TaskId | None]:
     """Bounded exhaustive joint assignment across units (farmer + hands).
 
@@ -599,7 +695,20 @@ def _exhaustive_assign(
 
     candidate_lists: list[list[TaskId | None]] = []
     for i, pos in enumerate(unit_positions):
-        ranked = rank_tasks(tasks, current_position=pos, current_assignment=current_assignments.get(i))
+        unit_tasks = tasks
+        if unit_inventories is not None and i < len(unit_inventories):
+            inv = unit_inventories[i]
+            unit_tasks = []
+            for t in tasks:
+                if t.task_id.kind == TaskKind.PLACE:
+                    item = t.task_id.item
+                    if item and inv.get(item, 0) <= 0:
+                        continue
+                elif t.task_id.kind == TaskKind.FEED:
+                    if inv.get("WHEAT", 0) <= 0:
+                        continue
+                unit_tasks.append(t)
+        ranked = rank_tasks(unit_tasks, current_position=pos, current_assignment=current_assignments.get(i))
         candidate_lists.append([t.task_id for t in ranked[:max_candidates_per_unit]] + [None])
 
     best_key = None
@@ -639,6 +748,7 @@ def joint_assign(
     tasks: list[Task],
     current_assignments: dict[int, TaskId],
     max_candidates_per_unit: int = MAX_CANDIDATES_PER_UNIT,
+    unit_inventories: list[dict] | None = None,
 ) -> dict[int, TaskId | None]:
     """Bounded exhaustive joint assignment across units (farmer + hands),
     falling back to `_greedy_assign` (fast, not joint-optimal) if there are
@@ -648,8 +758,8 @@ def joint_assign(
     for the scoring objective.
     """
     if len(unit_positions) > MAX_EXHAUSTIVE_UNITS:
-        return _greedy_assign(unit_positions, tasks, current_assignments)
-    return _exhaustive_assign(unit_positions, tasks, current_assignments, max_candidates_per_unit)
+        return _greedy_assign(unit_positions, tasks, current_assignments, unit_inventories)
+    return _exhaustive_assign(unit_positions, tasks, current_assignments, max_candidates_per_unit, unit_inventories)
 
 
 @dataclass(frozen=True)

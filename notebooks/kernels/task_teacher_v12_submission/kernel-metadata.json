@@ -1,0 +1,16 @@
+{
+  "id": "tuannm3812/hierarchical-task-coordinator-htdc-v12",
+  "title": "Hierarchical Task Coordinator (HTDC) v12",
+  "code_file": "03_task_teacher_v12_submission.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": false,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [
+    "kaggriculture"
+  ],
+  "kernel_sources": []
+}

@@ -159,6 +159,37 @@ inert** — same buy day and identical actions vs v5 under the harness
 policy identity. Not promoted; v5 remains champion. See
 `docs/4_agent_version_log.md`.
 
+## `task_teacher_v10` Scope (`agents/task_teacher_v10`) — promoted
+
+Introduces the first fully integrated livestock (Cow/Pasture) and land expansion engine with a dynamic hands scaling floor and liquidity reserves. Limits Cows to `MAX_COWS=3` to avoid early-game food shortages, parallelizing pasture construction and animal purchases. Peak rating reached **503.5** on the public leaderboard.
+
+## `task_teacher_v11` Scope (`agents/task_teacher_v11`) — built, not promoted
+
+Iterates on Cow loop priorities and coordinates parallel animal purchases and pasture allocations. Refined task priorities to ensure milking/feeding don't block critical planting.
+
+## `task_teacher_v12` Scope (`agents/task_teacher_v12`) — promoted
+
+Integrates terminal liquidation policies (selling all animals and resources in the last 2 days of the season) and scales up quadrants to SW/SE. Achieved local win rate enhancements but scored **472.6** on the ladder due to seed sensitivity.
+
+## `task_teacher_v14` Scope (`agents/task_teacher_v14`) — promoted
+
+Implements the **base-price ROI crop fix**. Instead of using live market prices (which crash to $25 during simultaneous competitor harvests and cause our crop scoring to prioritize low-value crops), it ranks crop value using the static base ROI. Led to a major jump to **508.5** on the leaderboard.
+
+## `task_teacher_v15` Scope (`agents/task_teacher_v15`) — promoted
+
+Integrates two key components:
+1. **Strawberry Crop Engine:** Plants Strawberries (up to 12 tiles) starting from Day 10 to provide constant cash flow.
+2. **Circular Feed Economy:** Plants Wheat dynamically when feed stock falls below safety levels, eliminating the cost of buying feed from the market.
+Scored an all-time record peak of **515.8** on the public leaderboard.
+
+## `task_teacher_v16` Scope (`agents/task_teacher_v16`) — Current Champion (Current Build)
+
+Introduces **Animal Liquidity Protection**: Gates all animal purchases to only occur if the agent has a hard cash reserve of at least `COST + $1,200`. This completely eliminates the middle-game bankruptcy trap where the agent spends all its capital buying livestock, leaving it unable to hire farmhands or purchase feed.
+
+## `task_teacher_v17` Scope (`agents/task_teacher_v17`) — Planned Build
+
+Unlocks up to **4 quadrants of land** (`0 <= n_extra < 3`) and scales labor dynamically up to **11 hands** in the middle and late game. Uses a scaling cash reserve reserve policy ($2,000 for 3rd land, $3,000 for 4th land) to safely expand production capacity, allowing the agent to capture maximum Melon and Strawberry yield to break the 600 rating barrier.
+
 ## Strategy Approach (unchanged from the design doc)
 
 Per `docs/superpowers/specs/2026-08-01-kaggriculture-competition-plan-design.md`'s

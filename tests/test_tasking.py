@@ -1347,3 +1347,117 @@ def test_joint_assign_falls_back_to_greedy_for_too_many_units():
     assert elapsed < 2.0  # must not attempt (8+1)^12 exhaustive search
     claimed = [v for v in assignment.values() if v is not None]
     assert len(claimed) == len(set(claimed))  # still no duplicate claims
+
+
+def test_joint_assign_is_inventory_aware():
+    # 2 units: Farmer (unit 0) at (0, 0), Hand 1 (unit 1) at (1, 1).
+    # Farmer holds COW, Hand 1 is empty.
+    # Tasks:
+    # 1. PLACE COW at (2, 2)
+    # 2. WATER at (0, 0)
+    unit_positions = [(0, 0), (1, 1)]
+    place_task = Task(
+        task_id=TaskId(kind=TaskKind.PLACE, x=2, y=2, item="COW"),
+        target=(2, 2),
+        priority_tier=PriorityTier.DAILY_CARE,
+        deadline_step=None,
+        expected_value=0.0,
+        action_cost=1,
+    )
+    water_task = Task(
+        task_id=TaskId(kind=TaskKind.WATER, x=0, y=0),
+        target=(0, 0),
+        priority_tier=PriorityTier.DAILY_CARE,
+        deadline_step=None,
+        expected_value=0.0,
+        action_cost=1,
+    )
+    tasks = [place_task, water_task]
+
+    # CASE 1: Pass unit_inventories where Farmer has COW, Hand 1 has nothing.
+    inventories = [{"COW": 1}, {}]
+    assignment = joint_assign(
+        unit_positions=unit_positions,
+        tasks=tasks,
+        current_assignments={},
+        unit_inventories=inventories,
+    )
+    # Farmer must get PLACE COW, Hand 1 must get water_task.
+    assert assignment[0] == place_task.task_id
+    assert assignment[1] == water_task.task_id
+
+    # CASE 2: Greedy fallback with too many units
+    large_positions = [(0, 0)] * 5  # > MAX_EXHAUSTIVE_UNITS
+    large_inventories = [{"COW": 1}] + [{}] * 4
+    
+    # If we only have place_task, only Unit 0 (which has COW) can claim it
+    only_place_tasks = [place_task]
+    assignment_greedy = joint_assign(
+        unit_positions=large_positions,
+        tasks=only_place_tasks,
+        current_assignments={},
+        unit_inventories=large_inventories,
+    )
+    assert assignment_greedy[0] == place_task.task_id
+    for u in range(1, 5):
+        assert assignment_greedy[u] is None
+
+
+def test_generate_tasks_sheep_support_and_nw_exclusion():
+    # 10x10 board, half is 5.
+    # NW: x in [0, 4], y in [0, 4]
+    # NE: x in [5, 9], y in [0, 4]
+    tiles = [[None for _ in range(10)] for _ in range(10)]
+    
+    # NE empty access tile: x=5, y=0.
+    # If we set unlocked = ["NW", "NE"] and want_pasture = True,
+    # it must choose x=5, y=0 (NE) over any NW tile because NW is excluded.
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW", "NE"],
+        day=15,
+        last_day=29,
+        market_prices={"WHEAT": 25.0},
+        candidate_crops=("MELON",),
+        board_size=10,
+        want_pasture=True,
+    )
+    pasture_tasks = [t for t in tasks if t.task_id.kind == TaskKind.BUILD_PASTURE]
+    assert len(pasture_tasks) == 1
+    # Must NOT build in NW
+    assert pasture_tasks[0].task_id.x >= 5
+
+    # Test SHEEP pickup and place
+    shed = {"SHEEP": 1}
+    tasks_with_sheep = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW", "NE"],
+        day=15,
+        last_day=29,
+        market_prices={"WHEAT": 25.0},
+        candidate_crops=("MELON",),
+        board_size=10,
+        shed=shed,
+        want_pasture=True,
+        sheep_in_any_inventory=False,
+    )
+    pickup_sheep = [t for t in tasks_with_sheep if t.task_id.kind == TaskKind.PICKUP and t.task_id.item == "SHEEP"]
+    assert len(pickup_sheep) == 1
+
+    # Put a pasture on the board and test PLACE SHEEP
+    tiles[0][5] = {"kind": "PASTURE"}
+    tasks_place = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW", "NE"],
+        day=15,
+        last_day=29,
+        market_prices={"WHEAT": 25.0},
+        candidate_crops=("MELON",),
+        board_size=10,
+        sheep_in_any_inventory=True,
+    )
+    place_sheep = [t for t in tasks_place if t.task_id.kind == TaskKind.PLACE and t.task_id.item == "SHEEP"]
+    assert len(place_sheep) == 1
+
+
+

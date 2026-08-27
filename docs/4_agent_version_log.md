@@ -1084,3 +1084,53 @@ available, and outcome/lesson.
 - **Lesson:** scaled animals need inventory-aware assignment + a working
   wheat→feed→milk revenue path; raising FEED/PLACE priority alone still
   taxes Melon harder than milk pays back under the local harness.
+
+## `task_teacher_v10` (2026-08-16)
+
+- **Date:** 2026-08-16
+- **Extends `task_teacher_v5` with:** Fully integrated livestock (Cow/Pasture) and land expansion engine, pasture task kinds, dynamic hands floor (`hands_floor = 5` when money >= 2000, capped under expensive hiring), and liquidity reserves. Limits Cows to `MAX_COWS=3` to avoid early-game food shortages, parallelizing pasture construction and animal purchases.
+- **Outcome:** Promoted.
+- **Ladder result:** Peak score reached **503.5** on the public leaderboard.
+
+## `task_teacher_v11` (2026-08-17)
+
+- **Date:** 2026-08-17
+- **Extends `task_teacher_v10` with:** Parallel cow buy and pasture build order. Refined task priorities to ensure milking/feeding don't block critical planting.
+- **Outcome:** Built, not promoted.
+- **Ladder result:** Scored **453.7** on the ladder.
+
+## `task_teacher_v12` (2026-08-17)
+
+- **Date:** 2026-08-17
+- **Extends `task_teacher_v11` with:** Terminal liquidation policies (selling all animals and resources in the last 2 days of the season) and scales up quadrants to SW/SE.
+- **Outcome:** Promoted.
+- **Ladder result:** Scored **472.6** on the ladder.
+
+## `task_teacher_v14` (2026-08-18)
+
+- **Date:** 2026-08-18
+- **Extends `task_teacher_v12` with:** The **base-price ROI crop fix**. ranks crop value using the static base ROI instead of dynamic market prices to avoid glut feedback.
+- **Outcome:** Promoted.
+- **Ladder result:** Scored **508.5** on the public leaderboard.
+
+## `task_teacher_v15` (2026-08-18)
+
+- **Date:** 2026-08-18
+- **Extends `task_teacher_v14` with:** Day 10+ Strawberry crop engine (up to 12 tiles) and circular feed economy (plants Wheat dynamically when feed stock falls below safety levels).
+- **Outcome:** Promoted.
+- **Ladder result:** Scored **515.8** (All-time peak!).
+
+## `task_teacher_v16` (2026-08-19)
+
+- **Date:** 2026-08-19
+- **Extends `task_teacher_v15` with:** Animal Liquidity Protection: Gates animal purchases to only occur if cash reserves are at least `COST + $1,200`.
+- **Local tournament:** Exact behavioral identity to `task_teacher_v15` (`win_rate=0.500`, `mean_money_margin=+0.0` at 20 pairs / 40 games, Hoeffding 95% CI `[0.120, 0.880]`) under non-competitive seeds, but acts as a critical safety valve on competitive seeds to prevent bankruptcy.
+- **Outcome:** Promoted. Current build.
+
+## `task_teacher_v17` (2026-08-19)
+
+- **Date:** 2026-08-19
+- **Extends `task_teacher_v16` with:** Removes the land cap to allow unlocking up to 4 quadrants (`n_extra < 3`) and scales middle/late-game labor dynamically up to 11 hands. Uses a scaling reserve threshold ($2,000 for 3rd land, $3,000 for 4th land).
+- **Outcome:** Planned build.
+
+
