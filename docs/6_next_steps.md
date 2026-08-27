@@ -35,21 +35,39 @@ v17 as strictly better, though v17's design is a superset extension of
 v16's. See `docs/4_agent_version_log.md`'s `task_teacher_v16`/`v17` entries
 for the full record.
 
-**Next engineering priority:** `task_teacher_v18` (extends v17-ish
-threat-conditioned expansion with a Sheep loop) is the most recently and
-most rigorously built version, but is **rejected** — not a design failure,
-a precisely diagnosed bug: 47 animals (24 Cow, 23 Sheep) escaped from two
-consecutive unfed days across 24/100 acceptance games (see
-`docs/9_task_teacher_v18_evaluation.md`). The fix is narrow (raise `FEED`
-task priority and/or add an explicit starvation-avoidance safeguard) —
-build it test-first, re-run the *exact* v18 acceptance protocol including
-the specific escape-count check that caught this, and only if that passes,
-screen against `task_teacher_v17` (now the strongest verified version, not
-v5) before any promotion or resubmission. This also extends
-`docs/8_ladder_replay_analysis.md`'s land/animals finding (opponents who
-expand land and use animals decisively beat scope-constrained agents) —
-v16/v17 already partially close that gap with Cow; a fixed v18/v19 with
-working Sheep would close it further.
+**Next engineering priority — see
+[`docs/10_ladder_revenue_diagnosis.md`](10_ladder_revenue_diagnosis.md)
+(2026-08-28), which supersedes the ordering below.** A full revenue audit
+of all 78 real ladder episodes found we are **rank 4992 of 6650** (score
+470.6 vs field median 764.8 — bottom quartile; the ~47% win rate reflects
+matchmaking against equally-rated agents, not parity), and that opponents
+generate **1.68x our revenue**. Three defects, all confirmed in code,
+account for it:
+
+| # | Defect | Measured | Rough upside/game |
+| --- | --- | --- | ---: |
+| P1 | Unmetered dumping: every sale is `SELL <all>`; we dump 100 melons in one turn, crashing the price (`above_func=sq`) from ~$220 to $4, then liquidate the rest at day 26 into our own crater | our melon $64.2/u vs their $102.0/u on **2.4x** their volume; our median sale day 26 vs their 16 | ~+$7,600 |
+| P2 | Wheat never sold (gated on owning zero animals — we always own animals) and capped at 4 feed-only tiles | their **$1,090,522** vs our **$0** — their single largest revenue line | ~+$7,000 |
+| P3 | Fertilizer never collected — `COLLECT_FERTILIZER` isn't even a `TaskKind`; it is free daily output from animals we already feed | their **$421,761** vs our **$0** | ~+$2,700 |
+| P4 | Feed starvation (the v18 rejection bug) — **already live** in the shipped build: 16 escapes across 11/46 games | animal loss | preservation |
+
+P1–P3 total ~$17,300/game against a measured median loss gap of ~$16,500.
+Our realized *unit* prices on premium goods already beat the field
+(strawberry $260.6 vs 232.7, milk $264.2 vs 216.2, wool $227.9 vs 206.4) —
+the task/route engine is sound; **portfolio and sale timing are the
+problem**. Build P1 first (largest, lowest-risk, no new mechanics), each
+test-first, then screen against `task_teacher_v17` (the strongest verified
+version) before promotion or resubmission.
+
+This reorders the earlier recommendation to lead with the v18
+feed-starvation fix — that was reasoned from the only evidence then
+available (v18's acceptance report), before this revenue audit existed.
+The starvation bug is real and still worth fixing, but it is fourth by
+measured value. It likewise refines
+`docs/8_ladder_replay_analysis.md`'s land+animals conclusion: that was
+correct for `task_teacher_v2` (which had neither), and v16/v17 acted on
+it, but standing did not improve much — acquiring capacity without fixing
+the conversion of output into banked cash moves production, not score.
 
 ## Task Teacher v18 Decision (2026-08-20, patched acceptance refresh)
 
