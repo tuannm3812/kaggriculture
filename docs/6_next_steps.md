@@ -2,6 +2,55 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
+## Current Recommendation (2026-08-28, process-gap cleanup + retroactive verification)
+
+**Repo hygiene fixed:** `agents/task_teacher_v9` through `v17` (several of them
+real, submitted, scored ladder entries) had never been committed to git —
+all committed now as a safety-net commit. Separately, the `task_teacher_v18`
+arc (22 commits, 2026-08-20) had never successfully reached GitHub at all: a
+133MB acceptance-replay JSON exceeded GitHub's 100MB limit and silently
+blocked every push since. Fixed via `git filter-repo` + a scoped rebase onto
+the real, untouched `origin/main` (no already-published commit was disturbed,
+no force-push was needed) — full history now pushed cleanly. Full test
+suite: 592 passed.
+
+**Process gap closed:** `task_teacher_v9` through `v17`'s "Promoted" labels in
+`docs/4_agent_version_log.md` were asserted from raw ladder score alone, not
+this project's own paired Hoeffding-CI protocol — the exact anti-pattern the
+project caught and corrected for `task_teacher_v2` back on 2026-08-02. Ran
+the missing retroactive evaluation for the two currently-live submissions
+(`v16`, `v17`) against `task_teacher_v5` (the last CI-verified champion),
+ladder-match config, both escalated from a positive 20-pair screen to the
+full 50-pair gate:
+
+| Candidate | 50-pair win rate | Mean margin | Hoeffding 95% CI | Verdict |
+| --- | ---: | ---: | --- | --- |
+| `task_teacher_v16` vs `v5` | 1.000 | +$11,962.9 | `[0.760, 1.000]` | **confirmed promoted** |
+| `task_teacher_v17` vs `v5` | 1.000 | +$13,291.0 | `[0.760, 1.000]` | **confirmed promoted** |
+
+Both are genuine, verified improvements, not ladder-score artifacts. v17
+was not directly screened head-to-head against v16 (both were verified
+independently against the actual gap, v5) — worth running before treating
+v17 as strictly better, though v17's design is a superset extension of
+v16's. See `docs/4_agent_version_log.md`'s `task_teacher_v16`/`v17` entries
+for the full record.
+
+**Next engineering priority:** `task_teacher_v18` (extends v17-ish
+threat-conditioned expansion with a Sheep loop) is the most recently and
+most rigorously built version, but is **rejected** — not a design failure,
+a precisely diagnosed bug: 47 animals (24 Cow, 23 Sheep) escaped from two
+consecutive unfed days across 24/100 acceptance games (see
+`docs/9_task_teacher_v18_evaluation.md`). The fix is narrow (raise `FEED`
+task priority and/or add an explicit starvation-avoidance safeguard) —
+build it test-first, re-run the *exact* v18 acceptance protocol including
+the specific escape-count check that caught this, and only if that passes,
+screen against `task_teacher_v17` (now the strongest verified version, not
+v5) before any promotion or resubmission. This also extends
+`docs/8_ladder_replay_analysis.md`'s land/animals finding (opponents who
+expand land and use animals decisively beat scope-constrained agents) —
+v16/v17 already partially close that gap with Cow; a fixed v18/v19 with
+working Sheep would close it further.
+
 ## Task Teacher v18 Decision (2026-08-20, patched acceptance refresh)
 
 **`task_teacher_v18` at `a6f6444`: `reject`; do not submit.** The refreshed

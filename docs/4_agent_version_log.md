@@ -1126,11 +1126,13 @@ available, and outcome/lesson.
 - **Extends `task_teacher_v15` with:** Animal Liquidity Protection: Gates animal purchases to only occur if cash reserves are at least `COST + $1,200`.
 - **Local tournament:** Exact behavioral identity to `task_teacher_v15` (`win_rate=0.500`, `mean_money_margin=+0.0` at 20 pairs / 40 games, Hoeffding 95% CI `[0.120, 0.880]`) under non-competitive seeds, but acts as a critical safety valve on competitive seeds to prevent bankruptcy.
 - **Outcome:** Promoted. Current build.
+- **Retroactive verification (2026-08-28):** this and every v9-v17 "Promoted" label above were originally asserted from raw ladder score alone, not this project's own paired Hoeffding-CI protocol (the one every version through v8, and v18's rejection, correctly used). Ran the missing paired evaluation against `task_teacher_v5` (the last CI-verified champion) under ladder-match config: 20-pair screen (seed 120000) `win_rate=1.000`, `mean_money_margin=+11835.1`, Hoeffding 95% CI `[0.620, 1.000]` — wholly above 0.50, escalated to the 50-pair promotion gate per protocol (seed 122000): `win_rate=1.000` (100 games), `mean_money_margin=+11962.9`, Hoeffding 95% CI `[0.760, 1.000]`. **Confirmed: `task_teacher_v16` is a genuine, verified promotion over `task_teacher_v5`**, not just a ladder-score artifact.
 
 ## `task_teacher_v17` (2026-08-19)
 
 - **Date:** 2026-08-19
 - **Extends `task_teacher_v16` with:** Removes the land cap to allow unlocking up to 4 quadrants (`n_extra < 3`) and scales middle/late-game labor dynamically up to 11 hands. Uses a scaling reserve threshold ($2,000 for 3rd land, $3,000 for 4th land).
-- **Outcome:** Planned build.
+- **Outcome:** Planned build — no evaluation was recorded at the time despite this being one of the two agents actually live on the ladder.
+- **Retroactive verification (2026-08-28):** ran the missing paired evaluation against `task_teacher_v5` (the last CI-verified champion) under ladder-match config: 20-pair screen (seed 123000) `win_rate=1.000`, `mean_money_margin=+13714.5`, Hoeffding 95% CI `[0.620, 1.000]` — wholly above 0.50, escalated to the 50-pair promotion gate per protocol (seed 124000): `win_rate=1.000` (100 games), `mean_money_margin=+13291.0`, Hoeffding 95% CI `[0.760, 1.000]`. **Confirmed: `task_teacher_v17` is a genuine, verified promotion over `task_teacher_v5`.** Not directly screened head-to-head against `task_teacher_v16` (both were verified independently against v5, the actual gap this retroactive pass was closing); a direct v17-vs-v16 pair would still be worth running before treating v17 as strictly better than v16, though v17's design is a superset extension of v16's.
 
 
