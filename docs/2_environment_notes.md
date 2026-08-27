@@ -39,6 +39,15 @@ release (`1.18.0`, which predates `kaggriculture`). Under Python 3.11,
 PyPI. See the version-gap section below for why `1.29.3` specifically,
 not `1.32.2` or "latest".
 
+> **Superseded 2026-08-28 — the pin is now `1.32.4`.** The reasoning below
+> (that `1.29.3` is what the ladder runs) was correct about Kaggle's
+> *notebook-kernel* image but wrong about the runtime that grades ladder
+> episodes. See
+> [§ Correction (2026-08-28)](#correction-2026-08-28-the-ladder-runs-1324-not-1293)
+> at the end of this section. Everything between here and that correction is
+> retained as the historical record of the 2026-08-01 decision, not as
+> current guidance.
+
 The env's own source ships alongside the package at:
 
 ```
@@ -105,6 +114,81 @@ agents. Full before/after tournament numbers in
 the ladder's actual agent-evaluation backend runs (vs. pinned separately)
 — treated as ladder-representative until contradicted, per the design
 doc §9.
+
+### Correction (2026-08-28): the ladder runs `1.32.4`, not `1.29.3`
+
+**That "still open" question above resolved the wrong way, and it cost us
+four weeks of miscalibrated evaluation.** The kernel image is *not* what
+grades ladder episodes. `requirements.txt` is now pinned to `1.32.4`.
+
+Two independent confirmations:
+
+1. A submission's own error traceback reported the runtime as **`1.32.4`**
+   (2026-08-06, the `replay_compat` packaging incident — the version string
+   was right there in the crash and nobody connected it back to these
+   constants).
+2. Across **299 glut-side price observations** taken from real ladder
+   replays, `1.32.4`'s `MARKET_PARAMS` reproduce the observed price
+   **299/299**; `1.29.3`'s match **3/299**. Melon was exact at eight
+   consecutive sampled inventories.
+
+**Constants corrected in `economy.py`:**
+
+| Constant | was (`1.29.3`) | now (`1.32.4`) |
+| --- | ---: | ---: |
+| `COW` cost | 600 | **400** |
+| `FARM_HAND_COST_MULT` | 10 | **1** |
+| `STRAWBERRY` `above_target` | 0.40 | **1.60** |
+| `MELON` `above_target` | 0.90 | **3.60** |
+| `MILK` `above_target` | 0.40 | **1.60** |
+| `WOOL` `above_target` | 0.80 | **3.20** |
+
+**Mechanics differences** (not just constants): `1.29.3` *forbids*
+`SELL FERTILIZER` and blocks movement onto `LOCKED` tiles; `1.32.4` permits
+both. `1.32.4` restricts `BUY_PRODUCT` to `WHEAT`/`FERTILIZER` (`1.29.3`
+allowed any product) and implements `DROP` (a no-op in `1.29.3`).
+`startingMoney` schema default is 3000 (was 150 in `1.29.3`'s schema).
+
+**Why this matters more than a version bump.** All four *premium* goods —
+exactly the ones our strategy leans on — collapse under glut **~4x harder**
+on the real ladder than our simulator modelled. At the inventory where the
+ladder charged us $4/melon, the old local model said $188. Consequences:
+
+- Every local promotion result for a premium-good-heavy strategy (v14's
+  melon-heavy base-price ROI fix, v15's strawberry engine, the v16/v17
+  Hoeffding CI `[0.760, 1.000]` confirmations) was measured in a market that
+  under-punishes the exact failure mode those strategies suffer on the
+  ladder. Those results are not *wrong*, but they are **not evidence about
+  ladder performance** and should not be cited as such.
+- The fertilizer revenue gap (opponents $421k, us $0 — see
+  `docs/10_ladder_revenue_diagnosis.md`) had a mechanical cause: selling
+  fertilizer was *impossible* in our simulator.
+- True market absorption, at ≥50% of base price: MELON ~113 units,
+  STRAWBERRY ~32, MILK ~39, WOOL ~42, CARROT ~230, while WHEAT and EGG are
+  effectively unbounded (town demand drains them faster than players
+  supply). We were producing ~200 melons/game; the last ~80 are worth
+  roughly $3 each.
+
+**Test fallout and how it was handled.** 26 tests failed. Each was
+classified as a stale expectation or a real regression rather than
+re-baselined wholesale:
+
+- `test_economy.py`'s sample price table encoded the `1.29.3` premium-good
+  values; the corrected values `(204,1,1)`/`(300,1,1)`/`(256,1,1)`/
+  `(240,1,1)` now match the competition's *own published table* exactly.
+- Several agent and `should_hire` tests silently inherited
+  `economy.FARM_HAND_COST_MULT` through configs that omitted
+  `farmHandCostMult`. Those configs now pin the multiplier explicitly, so
+  the tests state which hiring regime they exercise instead of drifting with
+  a library default. Note they largely exercise mult=10, which the ladder
+  does **not** use.
+- `agents/task_teacher_v8/main.py` read `HIRE_DECISION_MULT =
+  economy.FARM_HAND_COST_MULT` with a comment stating the intent was 10.
+  Changing the library constant silently altered a frozen agent's evaluated
+  behaviour, so the literal is now pinned. **This is a general hazard: agent
+  versions are immutable as files, but they read shared-library constants,
+  so a library change retroactively alters their behaviour.** Any future
+  constant change must audit `agents/*/main.py` for derived values.
 
 ## Verified: Market Price Formula
 

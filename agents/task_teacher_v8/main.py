@@ -40,8 +40,14 @@ SW_BUDGET_RESERVE_V8 = 3000
 # Safety cap (concurrent hands). Day boundary clears hands, so this is not
 # a daily spend cap — hire *pricing* below is what stops re-hire spam.
 MAX_HANDS = 8
-# Decision mult stays at the library default (10), not ladder config (1).
-HIRE_DECISION_MULT = economy.FARM_HAND_COST_MULT
+# Decision mult stays at 10, not ladder config (1) — a deliberate
+# conservatism knob: at the true ladder mult of 1, hiring is so cheap the
+# agent re-hires to the cap every day after hands clear (first screen came
+# back WR 0.000). Pinned as a literal 2026-08-28: this previously read
+# `economy.FARM_HAND_COST_MULT`, whose value changed 10 -> 1 when the
+# library was corrected to the ladder's real 1.32.4 constants, which would
+# silently have altered this frozen agent's evaluated behaviour.
+HIRE_DECISION_MULT = 10
 
 GOOSE_COST = economy.ANIMALS["GOOSE"]["cost"]  # unused while MAX_GEESE == 0; kept for parity with v4 helpers.
 

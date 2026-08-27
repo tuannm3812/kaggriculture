@@ -1042,8 +1042,17 @@ def test_should_hire_false_when_no_overload():
 
 
 def test_should_hire_false_when_insufficient_money():
+    # `hire_cost_mult` pinned explicitly: it defaults to
+    # `economy.FARM_HAND_COST_MULT`, which changed 10 -> 1 on 2026-08-28 when
+    # the library was corrected to the ladder's real 1.32.4 constants. At
+    # mult=1 the first hire costs $1, so $5 is no longer "insufficient" and
+    # the case this test exists to cover would silently stop being tested.
     assert not should_hire(
-        projected_load=100, remaining_turns_today=20, hires_today=0, money=5
+        projected_load=100,
+        remaining_turns_today=20,
+        hires_today=0,
+        money=5,
+        hire_cost_mult=10,
     )
 
 
@@ -1058,8 +1067,15 @@ def test_should_hire_true_when_value_clearly_exceeds_cost():
 def test_should_hire_false_when_cost_exceeds_marginal_value():
     # Tiny overload late in the day (little value to recover) with a high
     # hires_today count (fibonacci cost has escalated a lot already).
+    # `hire_cost_mult` pinned explicitly for the same reason as the test
+    # above: at the corrected mult=1 the escalated cost is only $13, which no
+    # longer exceeds the marginal value this case is meant to fall short of.
     assert not should_hire(
-        projected_load=21, remaining_turns_today=20, hires_today=6, money=3000
+        projected_load=21,
+        remaining_turns_today=20,
+        hires_today=6,
+        money=3000,
+        hire_cost_mult=10,
     )
 
 

@@ -2,15 +2,23 @@
 # requirement) — use a dedicated venv, e.g.:
 #   python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 #
-# Pinned to 1.29.3, not "latest": confirmed 2026-08-01 (see
-# docs/2_environment_notes.md and the design doc §9's version-gap
-# comparison) that this is the version actually pre-installed on Kaggle's
-# own kernel infrastructure — newer releases (e.g. 1.32.2) have real
-# balance/mechanics differences (hire cost, animal cost, market glut
-# sensitivity, config defaults). Bump this deliberately, not silently, and
-# re-run the version-gap comparison against the then-current Kaggle kernel
-# image before doing so.
-kaggle-environments==1.29.3
+# Pinned to 1.32.4, not "latest": this is the version the live competition
+# ladder actually runs, confirmed two independent ways —
+#   1. a submission's own error traceback reported "found 1.32.4" (2026-08-06);
+#   2. across 299 glut-side price observations taken from real ladder replays,
+#      1.32.4's MARKET_PARAMS reproduce the observed price 299/299, while
+#      1.29.3's match 3/299 (2026-08-28).
+#
+# This supersedes the 2026-08-01 pin to 1.29.3, which was reasonable on the
+# evidence then available (1.29.3 was pre-installed on Kaggle's *notebook
+# kernel* image) but described a different runtime from the one that grades
+# ladder episodes. Versions differ in real balance constants — premium-good
+# glut sensitivity, COW cost, hire-cost multiplier, config defaults — and
+# also in mechanics (1.29.3 forbids SELL FERTILIZER and blocks movement onto
+# LOCKED tiles; 1.32.4 permits both). See docs/2_environment_notes.md's
+# 2026-08-28 correction. Bump deliberately, not silently, and re-validate
+# against ladder replays before doing so.
+kaggle-environments==1.32.4
 
 numpy
 pytest

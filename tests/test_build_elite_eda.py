@@ -77,7 +77,7 @@ def _records(
                 hour=step % 24,
                 seat=0,
                 opponent_family="starter",
-                environment_version="1.29.3",
+                environment_version="1.32.4",
                 configuration={"shedCapacity": 100},
                 observation=_observation(
                     money=money,
@@ -131,7 +131,7 @@ def _fixture_dataset(tmp_path: Path) -> FixtureDataset:
             episode_id="elite-1",
             retrieved_at="2026-08-02T00:00:00+00:00",
             sha256="1" * 64,
-            declared_environment="1.29.3",
+            declared_environment="1.32.4",
         ),
         PublicArtifact(
             source_policy_id="public/missing",

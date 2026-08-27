@@ -25,7 +25,7 @@ def sample_record() -> DecisionRecord:
         hour=0,
         seat=0,
         opponent_family="baseline",
-        environment_version="1.29.3",
+        environment_version="1.32.4",
         configuration={"seed": 7},
         observation={},
         action=NormalizedAction(("PASS",), (), ()),

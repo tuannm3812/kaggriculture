@@ -40,20 +40,23 @@ def test_market_price_matches_real_module(item, inventory_offset):
     assert economy.market_price(item, inventory) == real.market_price(item, inventory)
 
 
-# kaggle-environments==1.29.3's README sample table (price at I0-T, I0+T,
-# I0+2T per resource) -- pinned version, per docs/2_environment_notes.md's
-# version-gap comparison. Newer releases (e.g. 1.32.2) have different
-# above_target constants for STRAWBERRY/MELON/MILK/WOOL and would produce
-# different I0+T/I0+2T values here.
+# (P(I0-T), P(I0+T), P(I0+2T)) per the competition's own published price
+# table. The four premium goods' middle/last entries were previously the
+# 1.29.3 values (STRAWBERRY 72/24, MELON 25/1, MILK 96/32, WOOL 40/1);
+# under 1.32.4 -- the version the live ladder runs -- all four collapse to
+# the $1 floor at I0+T, exactly as the competition page documents
+# ("Premium resources use above_target > 1, so even modest gluts drive them
+# straight to the $1 floor"). Corrected 2026-08-28; see
+# docs/2_environment_notes.md.
 README_SAMPLE_PRICES = {
     "WHEAT": (45, 20, 19),
     "CARROT": (42, 10, 1),
     "TOMATO": (84, 24, 9),
-    "STRAWBERRY": (204, 72, 24),
-    "MELON": (300, 25, 1),
+    "STRAWBERRY": (204, 1, 1),
+    "MELON": (300, 1, 1),
     "EGG": (70, 40, 39),
-    "MILK": (256, 96, 32),
-    "WOOL": (240, 40, 1),
+    "MILK": (256, 1, 1),
+    "WOOL": (240, 1, 1),
     "FERTILIZER": (140, 60, 20),
 }
 

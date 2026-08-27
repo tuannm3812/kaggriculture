@@ -15,7 +15,15 @@ from kaggle_environments import make  # noqa: E402
 from kaggriculture_lib.env_config import tournament_configuration  # noqa: E402
 
 BOARD_SIZE = 10
-V18_CONFIG = {"episodeSteps": 720, "turnsPerDay": 24}
+# `farmHandCostMult` pinned explicitly at 10 — the "expensive-hire
+# configuration" the ledger assertions below are written against (sibling
+# tests pass `farmHandCostMult: 1` where they want the cheap regime). It
+# previously inherited `economy.FARM_HAND_COST_MULT`, whose value changed
+# 10 -> 1 on 2026-08-28 when the library was corrected to the ladder's real
+# 1.32.4 constants. Note the live ladder runs mult=1, so v18's cash-ledger
+# thresholds were tuned against constants that do not match it — relevant if
+# v18 is ever revived from its `reject` decision.
+V18_CONFIG = {"episodeSteps": 720, "turnsPerDay": 24, "farmHandCostMult": 10}
 ACTION_KEYS = {"farmer", "hands", "market"}
 
 

@@ -84,7 +84,7 @@ def _record(
         hour=step % 24,
         seat=seat,
         opponent_family=opponent_family,
-        environment_version="1.29.3",
+        environment_version="1.32.4",
         configuration={"seed": 31, "shedCapacity": 100},
         observation=observation or _observation(),
         action=NormalizedAction(farmer, hands, market),

@@ -18,23 +18,30 @@ ShapeFn = Literal["linear", "sq", "sqrt", "log", "log10"]
 MARKET_I0 = 10_000
 PRICE_FLOOR = 1
 
-# Mirrors kaggle-environments==1.29.3's kaggriculture.py MARKET_PARAMS
-# verbatim (pinned version — see requirements.txt and docs/2_environment_notes.md's
-# version-gap comparison: newer releases like 1.32.2 have different
-# above_target glut-sensitivity constants for premium goods).
+# Mirrors kaggle-environments==1.32.4's kaggriculture.py MARKET_PARAMS
+# verbatim — the version the live ladder actually runs.
+#
+# The four premium goods' `above_target` values were previously the 1.29.3
+# constants (STRAWBERRY 0.40, MELON 0.90, MILK 0.40, WOOL 0.80), which model
+# glut collapse ~4x too gently. Corrected 2026-08-28 after validating against
+# real ladder replays: across 299 glut-side price observations, the 1.32.x
+# constants below reproduce the observed price exactly 299/299 times, while
+# the 1.29.3 constants matched 3/299. See docs/2_environment_notes.md's
+# 2026-08-28 correction and docs/10_ladder_revenue_diagnosis.md.
 MARKET_PARAMS: dict[str, dict] = {
     "WHEAT":      {"base":  25, "I0": MARKET_I0, "T": 400, "below_func": "sqrt",   "below_target": 0.80, "above_func": "log",  "above_target": 0.20},
     "CARROT":     {"base":  35, "I0": MARKET_I0, "T": 450, "below_func": "log",    "below_target": 0.20, "above_func": "sqrt", "above_target": 0.70},
     "TOMATO":     {"base":  60, "I0": MARKET_I0, "T": 200, "below_func": "linear", "below_target": 0.40, "above_func": "sqrt", "above_target": 0.60},
-    "STRAWBERRY": {"base": 120, "I0": MARKET_I0, "T": 100, "below_func": "sqrt",   "below_target": 0.70, "above_func": "linear", "above_target": 0.40},
-    "MELON":      {"base": 250, "I0": MARKET_I0, "T": 300, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 0.90},
+    "STRAWBERRY": {"base": 120, "I0": MARKET_I0, "T": 100, "below_func": "sqrt",   "below_target": 0.70, "above_func": "linear", "above_target": 1.60},
+    "MELON":      {"base": 250, "I0": MARKET_I0, "T": 300, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 3.60},
     "EGG":        {"base":  50, "I0": MARKET_I0, "T": 332, "below_func": "linear", "below_target": 0.40, "above_func": "log",  "above_target": 0.20},
-    "MILK":       {"base": 160, "I0": MARKET_I0, "T": 122, "below_func": "sqrt",   "below_target": 0.60, "above_func": "linear", "above_target": 0.40},
-    "WOOL":       {"base": 200, "I0": MARKET_I0, "T": 105, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 0.80},
+    "MILK":       {"base": 160, "I0": MARKET_I0, "T": 122, "below_func": "sqrt",   "below_target": 0.60, "above_func": "linear", "above_target": 1.60},
+    "WOOL":       {"base": 200, "I0": MARKET_I0, "T": 105, "below_func": "log",    "below_target": 0.20, "above_func": "sq",   "above_target": 3.20},
     "FERTILIZER": {"base": 100, "I0": MARKET_I0, "T": 200, "below_func": "linear", "below_target": 0.40, "above_func": "linear", "above_target": 0.40},
 }
 
-# Mirrors kaggle-environments==1.29.3's kaggriculture.py CROPS verbatim.
+# Mirrors kaggle-environments==1.32.4's kaggriculture.py CROPS verbatim
+# (identical between 1.29.3 and 1.32.4).
 CROPS: dict[str, dict] = {
     "WHEAT":      {"seed": 10, "first_yield_day": 2, "max_yield_day": 4, "interval": 0, "max_yield": 6, "ongoing": False},
     "CARROT":     {"seed": 20, "first_yield_day": 2, "max_yield_day": 3, "interval": 0, "max_yield": 4, "ongoing": False},
@@ -43,21 +50,24 @@ CROPS: dict[str, dict] = {
     "MELON":      {"seed": 80, "first_yield_day": 10, "max_yield_day": 12, "interval": 0, "max_yield": 6, "ongoing": False},
 }
 
-# Mirrors kaggle-environments==1.29.3's kaggriculture.py ANIMALS verbatim.
-# Note COW cost is 600 here vs. 400 in 1.32.2 — confirmed via direct diff,
-# not a transcription assumption.
+# Mirrors kaggle-environments==1.32.4's kaggriculture.py ANIMALS verbatim.
+# COW cost is 400 in 1.32.4 vs. 600 in 1.29.3 — confirmed via direct diff of
+# both installed sources, not a transcription assumption.
 ANIMALS: dict[str, dict] = {
     "GOOSE": {"cost": 300, "structure": "COOP", "first_yield_day": 4, "interval": 1, "max_held": 4, "product": "EGG"},
-    "COW":   {"cost": 600, "structure": "PASTURE", "first_yield_day": 8, "interval": 2, "max_held": 6, "product": "MILK"},
+    "COW":   {"cost": 400, "structure": "PASTURE", "first_yield_day": 8, "interval": 2, "max_held": 6, "product": "MILK"},
     "SHEEP": {"cost": 500, "structure": "PASTURE", "first_yield_day": 6, "interval": 3, "max_held": 6, "product": "WOOL"},
 }
 
-# Mirrors kaggle-environments==1.29.3's kaggriculture.py LAND_ORDER / LAND_PRICES verbatim.
+# Mirrors kaggle-environments==1.32.4's kaggriculture.py LAND_ORDER / LAND_PRICES
+# verbatim (identical between 1.29.3 and 1.32.4).
 LAND_ORDER = ["NE", "SW", "SE"]
 LAND_PRICES = [1000, 2000, 4000]
 
-# 1.29.3's default; confirmed 10x more expensive than 1.32.2's default of 1.
-FARM_HAND_COST_MULT = 10
+# 1.32.4's default (1.29.3's was 10). Live ladder episodes run mult=1, which
+# the 2026-08-13 ladder-match config work had already established empirically;
+# the schema default now agrees with it.
+FARM_HAND_COST_MULT = 1
 
 
 def _shape(func: ShapeFn, x: float) -> float:

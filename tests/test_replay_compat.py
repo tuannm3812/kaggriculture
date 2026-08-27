@@ -20,7 +20,7 @@ from kaggriculture_lib.replay_schema import (
 )
 
 
-def _artifact(*, episode_id="episode-1", declared_environment="1.29.3"):
+def _artifact(*, episode_id="episode-1", declared_environment="1.32.4"):
     return PublicArtifact(
         source_policy_id="owner/policy",
         source_family="family",
@@ -33,7 +33,7 @@ def _artifact(*, episode_id="episode-1", declared_environment="1.29.3"):
     )
 
 
-def _pass_record(step, *, legality_ok=True, environment_version="1.29.3"):
+def _pass_record(step, *, legality_ok=True, environment_version="1.32.4"):
     return DecisionRecord(
         episode_id="episode-1",
         source_policy_id="owner/policy",
@@ -77,7 +77,7 @@ def test_pass_tape_completes_both_seats_under_pinned_runtime():
         return {"farmer": ["PASS"], "hands": [["PASS"]] * hands, "market": []}
 
     reports = [run_tape_compatibility(pass_policy, seed=31, seat=seat) for seat in (0, 1)]
-    assert all(report.environment_version == "1.29.3" for report in reports)
+    assert all(report.environment_version == "1.32.4" for report in reports)
     assert all(report.status == "DONE" for report in reports)
     assert all(report.action_calls == 719 for report in reports)
 

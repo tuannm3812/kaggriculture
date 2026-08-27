@@ -15,7 +15,13 @@ if str(REPO_ROOT / "src") not in sys.path:
 from kaggle_environments import make  # noqa: E402
 
 BOARD_SIZE = 10
-V15_CONFIG = {"episodeSteps": 720, "turnsPerDay": 24}
+# `farmHandCostMult` pinned explicitly rather than inherited from
+# `economy.FARM_HAND_COST_MULT`, whose value changed 10 -> 1 on 2026-08-28
+# when the library was corrected to the ladder's real 1.32.4 constants.
+# These tests were written against the mult=10 (expensive-hiring) regime;
+# note the live ladder actually runs mult=1, so the low-money "does not
+# hire" assertions below describe this regime, not ladder behaviour.
+V15_CONFIG = {"episodeSteps": 720, "turnsPerDay": 24, "farmHandCostMult": 10}
 
 
 def make_obs(

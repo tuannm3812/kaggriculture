@@ -11,9 +11,9 @@ from typing import Any, Callable, Mapping
 
 import kaggle_environments
 
-if kaggle_environments.__version__ != "1.29.3":
+if kaggle_environments.__version__ != "1.32.4":
     raise RuntimeError(
-        "compatibility evaluation requires kaggle-environments==1.29.3; "
+        "compatibility evaluation requires kaggle-environments==1.32.4; "
         f"found {kaggle_environments.__version__}"
     )
 
@@ -22,7 +22,7 @@ from kaggle_environments import make
 from kaggriculture_lib.replay_schema import NormalizedAction, normalize_action
 
 
-PINNED_ENVIRONMENT_VERSION = "1.29.3"
+PINNED_ENVIRONMENT_VERSION = "1.32.4"
 EXPECTED_ACTION_CALLS = 719
 MAX_MARKET_ORDERS = 10
 
