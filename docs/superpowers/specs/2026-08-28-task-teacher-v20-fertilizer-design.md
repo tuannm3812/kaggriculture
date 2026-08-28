@@ -87,9 +87,9 @@ collection task.
                         Task(
                             task_id=TaskId(kind=TaskKind.COLLECT_FERTILIZER, x=x, y=y),
                             target=(x, y),
-                            priority_tier=PriorityTier.OPTIONAL,
+                            priority_tier=PriorityTier.ECONOMIC,   # see Sec 5.3
                             deadline_step=None,
-                            expected_value=0.0,
+                            expected_value=float(market_prices.get("FERTILIZER", 100)),
                             action_cost=1,
                         )
                     )
@@ -105,7 +105,13 @@ In the new `agents/task_teacher_v20/main.py`, alongside the existing
             return ["COLLECT_FERTILIZER"]
 ```
 
-## 5. Priority: `OPTIONAL`, and why that is the whole design
+## 5. Priority
+
+> **Superseded by §5.3.** This section originally specified
+> `PriorityTier.OPTIONAL`. That tier proved unreachable by construction; the
+> task is now emitted at `ECONOMIC` with a truthful `expected_value`. The
+> reasoning below is retained as the record of why `OPTIONAL` was chosen and
+> what the measurement showed.
 
 The task is emitted at `PriorityTier.OPTIONAL` (tier 4, the lowest —
 below `ECONOMIC`). No task in this codebase currently uses that tier; this
@@ -157,17 +163,49 @@ is ever evaluated.
 **`PriorityTier.OPTIONAL` is therefore dead on any busy farm** — a finding
 that reaches beyond this version, since it was the tier's first use.
 
-**Fix: reserve a candidate slot.** Candidate-set construction reserves one
-slot for the nearest `OPTIONAL`-tier task when one exists, so the tier
-becomes reachable without changing its priority. The no-displacement
-guarantee is preserved: an `OPTIONAL` task is still ranked below every
-other tier and is only *taken* when the unit's higher-tier candidates are
-infeasible or claimed. What changes is that it is now *visible* to the
-scorer at all.
+### 5.3 Correction (2026-08-28, second): reserving a slot does not work
+either — the task must compete on value
 
-This is gated behind a new `reserve_optional_slot: bool = False` parameter
-so every frozen agent (`task_teacher_v2` … `v19`) keeps byte-identical
-behaviour, for the same reason §5.1 gives.
+A reserved candidate slot was considered and rejected before
+implementation, after checking both assignment paths against a real
+episode (720 turns, seed 140000):
+
+- **51% of turns (368/720) use `_greedy_assign`**, not `_exhaustive_assign`
+  — `MAX_EXHAUSTIVE_UNITS` is 4, and v20 fields up to 9 units. Greedy gives
+  each unit its top-ranked remaining task; with ~40 tasks and 9 units,
+  every unit always receives a higher-tier task, so no spare unit ever
+  exists for a reserved slot to serve.
+- **`_exhaustive_assign` scores combinations by tier coverage first.**
+  Taking an `OPTIONAL` task in place of an available higher-tier one always
+  reduces coverage, so the scorer would never select it even if it were
+  added as a candidate.
+
+The structural conclusion, which reaches beyond this version: **while any
+higher-tier task is unclaimed, no unit will ever take an `OPTIONAL`-tier
+task in either path.** That is exactly what "strictly lowest priority"
+means under a coverage-maximising scorer. `PriorityTier.OPTIONAL` is not
+merely hard to reach — it is unreachable by construction, and a slot
+reservation would make the task visible without ever making it chosen.
+
+**Fix: price it honestly and let it compete.** The task is emitted at
+`PriorityTier.ECONOMIC` with `expected_value` set to the live fertilizer
+market price, rather than at `OPTIONAL` with `expected_value=0.0`.
+
+The economics support this. One fertilizer sells for roughly $95. A wheat
+tile yields ~4 units at ~$35 across ~4 watering actions — about **$9 per
+unit-action**. Collecting fertilizer is worth roughly **10x more per
+unit-action** than the marginal crop task it was queued behind. Ranking it
+last was not conservatism; it was mispricing.
+
+This is *not* the displacement that sank `task_teacher_v19`. v19 gave up
+high-value Melon **tiles** to grow low-value wheat — trading a better
+asset for a worse one. This trades a $9 action for a $95 one, in the right
+direction. The guard against getting that wrong is no longer the tier: it
+is **Task 4's paired measurement**, which asserts v20 does not water or
+feed less than v17, plus the evaluation screen itself.
+
+Gated behind the same `collect_fertilizer: bool = False` parameter, so
+every frozen agent keeps byte-identical behaviour.
 
 ### 5.1 Backwards compatibility is mandatory
 
