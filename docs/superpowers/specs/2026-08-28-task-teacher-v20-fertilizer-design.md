@@ -164,7 +164,7 @@ is ever evaluated.
 that reaches beyond this version, since it was the tier's first use.
 
 ### 5.3 Correction (2026-08-28, second): reserving a slot does not work
-either — the task must compete on value
+either — promote the task into `ECONOMIC` instead
 
 A reserved candidate slot was considered and rejected before
 implementation, after checking both assignment paths against a real
@@ -196,6 +196,19 @@ tile yields ~4 units at ~$35 across ~4 watering actions — about **$9 per
 unit-action**. Collecting fertilizer is worth roughly **10x more per
 unit-action** than the marginal crop task it was queued behind. Ranking it
 last was not conservatism; it was mispricing.
+
+**Mechanism, precisely — not "compete on value":** `rank_tasks`
+(`tasking.py:641`) sorts by `(priority_tier, distance, -expected_value +
+switch_penalty, task_id)`. What actually changes is that the task is
+*promoted out of the unreachable `OPTIONAL` tier into `ECONOMIC`*, where it
+is ordered like every other task there — by tier, then distance, with
+`expected_value` only a tiebreak among same-tier tasks at equal distance.
+It does not let fertilizer outrank a closer `PLANT` by being worth more.
+The $95-vs-$9 figures above argue why `ECONOMIC` is the right tier to price
+it at; they are not a description of how the scheduler compares tasks. The
+units differ too: `PLANT`'s `expected_value` is a $/day ROI estimate
+(`_score_crop`, ~18 for wheat, ~109 for melon), while fertilizer's is the
+raw per-action market price (~100) — not a like-for-like number.
 
 This is *not* the displacement that sank `task_teacher_v19`. v19 gave up
 high-value Melon **tiles** to grow low-value wheat — trading a better
@@ -248,21 +261,28 @@ are material against the ~$16,500 median loss gap.
 
 ## 7. Acceptance Tests
 
+> Criteria below reflect the shipped `ECONOMIC`-tier design; see §5.3 for
+> why `OPTIONAL` (§5) was superseded.
+
 New, alongside every existing test, which must keep passing unmodified:
 
 - `COLLECT_FERTILIZER` task generated for an animal tile with
   `fertilizer_available` true, when `collect_fertilizer=True`.
 - No such task when `fertilizer_available` is false.
 - No such task for a plant tile or an empty animal structure (no `animal`).
-- The task is emitted at `PriorityTier.OPTIONAL`, asserted explicitly —
-  this is the design's load-bearing property, not an incidental detail.
+- The task is emitted at `PriorityTier.ECONOMIC` with `expected_value` set
+  from the live `FERTILIZER` market price, asserted explicitly. `OPTIONAL`
+  proved unreachable by construction (§5.3) and was replaced by this
+  pricing plus the paired FEED/WATER displacement measurement (Task 4,
+  `test_collection_does_not_displace_higher_priority_work`) as the guard.
 - **`collect_fertilizer=False` (the default) produces task output identical
   to current behaviour** — the frozen-agent regression guard from §5.1.
 - The agent returns `["COLLECT_FERTILIZER"]` when assigned that task.
 - Full-episode regression: a real run in which v20 records fertilizer sale
-  revenue greater than zero. **If this assertion fails, the `OPTIONAL`-tier
-  risk in §5 has materialised** — report it as a finding rather than
-  lowering the tier to force a pass.
+  revenue greater than zero. **If this assertion fails, the `ECONOMIC`
+  pricing and value-competition risk in §5.3 has materialised** — units are
+  labour-saturated and the task never gets assigned; report it as a
+  finding rather than raising `expected_value` or the tier to force a pass.
 
 ## 8. Evaluation
 

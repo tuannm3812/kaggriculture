@@ -81,7 +81,18 @@ def test_full_episode_collects_and_sells_fertilizer():
 
 
 def test_collection_does_not_displace_higher_priority_work():
-    """OPTIONAL tier must mean 'spare labour only'.
+    """Fertilizer collection no longer guarantees non-displacement -- this
+    paired measurement is the guard that replaces the removed OPTIONAL tier.
+
+    Fertilizer is emitted at `PriorityTier.ECONOMIC`, the same tier as
+    `PLANT`. Tier ordering means it still cannot preempt `WATER`/`FEED`/
+    `CARE` (tiers `DAILY_CARE`/`EMERGENCY`) or `HARVEST`
+    (`DECAYING_YIELD`) -- those all outrank `ECONOMIC` regardless. What it
+    does compete with, at the same tier, is new-tile `PLANT`: taking a
+    unit-turn for fertilizer instead of a `PLANT` is design doc Sec 5.3's
+    accepted trade-off. Since `ECONOMIC` no longer guarantees blanket
+    non-displacement the way `OPTIONAL` did, this paired FEED/WATER
+    measurement against v17 is what actually stands guard.
 
     task_teacher_v19 sold wheat successfully and still lost 0/20 pairs,
     because the new work displaced Melon. Selling fertilizer is worthless if

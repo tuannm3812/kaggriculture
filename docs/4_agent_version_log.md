@@ -1275,6 +1275,17 @@ available, and outcome/lesson.
   fertilizer sold/ep (43.2) materially greater than 0 — the change is not
   inert, so evaluation proceeded to the paired screen rather than stopping.
 
+- **Collection capture rate** (single-episode diagnostic, seed 140000): of
+  112 live animal-days, fertilizer was available at least once on 104 of
+  them, and 40 were actually collected (**~38% of achievable**). The
+  uncollected residual (~60 units/ep) is real headroom, not a defect: it is
+  `ECONOMIC`-tier starvation under tier-first `rank_tasks` ordering plus
+  `MAX_CANDIDATES_PER_UNIT = 8`'s candidate-set truncation (design doc
+  §5.2) — a next-version opportunity. An earlier ~160-unit ceiling estimate
+  was wrong: it assumed a full, fully-fed animal population for the whole
+  season, but measured `FEED` volume is only ~54/ep against 112
+  animal-days.
+
 - **Paired evaluation** (`scripts/run_tournament.py`, ladder-match config —
   the script's default; `--legacy-1293-defaults` not passed):
 
@@ -1288,6 +1299,11 @@ available, and outcome/lesson.
   Wall time / throughput: screen 235.3s (122 steps/sec); promotion 575.9s
   (125 steps/sec); vs-`v16` regression 223.4s (129 steps/sec); vs-`starter`
   regression 149.6s (193 steps/sec).
+
+- **Independent replication** (fresh unused seed 145000, vs.
+  `task_teacher_v17`, 10 pairs): win rate 1.000, mean margin **+$5,588.8**
+  — consistent with the 50-pair promotion gate's +$5,516.7 (seed 142000)
+  above.
 
 - **Outcome: promoted per protocol.** The 20-pair screen's CI `[0.620,
   1.000]` was wholly above 0.50, so per the authoritative rule ("CI wholly

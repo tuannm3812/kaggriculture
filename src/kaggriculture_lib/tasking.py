@@ -516,8 +516,13 @@ def generate_tasks(
                             target=(x, y),
                             # ECONOMIC (not OPTIONAL) per design §5.3: OPTIONAL is
                             # unreachable by construction (tier-first ranking and
-                            # candidate truncation starve it). One fertilizer is worth
-                            # ~$95 vs. ~$9/unit-action for wheat, so rank it on value.
+                            # candidate truncation starve it). This promotes the task
+                            # into ECONOMIC, where rank_tasks (below) orders it by tier
+                            # then distance -- expected_value is only a tiebreak among
+                            # same-tier, same-distance tasks, not a value comparison
+                            # against PLANT. Units differ too: PLANT's expected_value
+                            # is a $/day ROI (~18 wheat, ~109 melon); this is a raw
+                            # per-action price (~100), not directly comparable.
                             priority_tier=PriorityTier.ECONOMIC,
                             deadline_step=None,
                             expected_value=float(market_prices.get("FERTILIZER", economy.MARKET_PARAMS["FERTILIZER"]["base"])),

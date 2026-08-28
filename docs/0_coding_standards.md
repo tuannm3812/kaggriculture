@@ -108,13 +108,15 @@ comments explain why not what). Additionally for this project:
 
 ## 6. Local Environment
 
-Pinned to `kaggle-environments==1.29.3` in `requirements.txt` — installs
-cleanly from PyPI, no GitHub source needed. Not "latest" deliberately:
-`1.29.3` is confirmed running on Kaggle's own kernel infrastructure and
-has real balance differences from newer releases (e.g. `1.32.2`) — see
-`docs/2_environment_notes.md`'s version-gap comparison before ever
-bumping this pin. Requires Python >= 3.11 — use the project's `.venv`
-(created via `python3.11 -m venv .venv`) rather than system Python.
+Pinned to `kaggle-environments==1.32.4` in `requirements.txt` — installs
+cleanly from PyPI, no GitHub source needed. Re-pinned 2026-08-28: `1.29.3`
+matches Kaggle's *notebook-kernel* image but not the runtime that actually
+grades ladder episodes, which real replays confirm is `1.32.4` — its
+market constants reproduce 299 observed ladder prices 299/299, against
+3/299 for `1.29.3`. See `docs/2_environment_notes.md`'s 2026-08-28
+correction before ever bumping this pin again. Requires Python >= 3.11 —
+use the project's `.venv` (created via `python3.11 -m venv .venv`) rather
+than system Python.
 
 ## 7. Git Hygiene
 
