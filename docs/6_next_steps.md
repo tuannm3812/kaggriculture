@@ -2,6 +2,58 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
+## Current Recommendation (2026-08-28, task_teacher_v20 evaluation)
+
+**`task_teacher_v20` (fertilizer collection, extends `task_teacher_v17`):
+promoted per protocol; not yet submitted.** Built to close the P3 gap in
+`docs/10_ladder_revenue_diagnosis.md` (fertilizer: opponents earned
+$421,761 across 78 ladder episodes (~$5.4k/game) selling FERTILIZER; we
+earned $0 because `COLLECT_FERTILIZER` was never implemented — not even a
+`TaskKind`). Adds exactly one variable to v17: emits the collection task
+at `PriorityTier.ECONOMIC`, priced at the live market price. Mid-
+implementation the design was corrected twice (design doc §5.2/§5.3):
+the original `OPTIONAL`-tier placement proved structurally unreachable —
+this codebase's tier-first, coverage-maximizing assignment never selects
+the lowest tier while any higher-tier task remains unclaimed — so the fix
+prices the task honestly instead of hiding it at the bottom.
+
+Step 1 acceptance gate passed cleanly under the corrected `1.32.4`
+simulator (100/100 DONE and finite, determinism IDENTICAL, median latency
+4.61ms/turn, fertilizer collected/ep 45.9, fertilizer sold/ep **43.2** —
+not the ~0 inert case the design flagged as a real possibility). The Step
+2 20-pair screen against `task_teacher_v17` (seed 141000, ladder-match
+config) came back `win_rate=1.000`, `mean_money_margin=+6213.9`, Hoeffding
+95% CI `[0.620, 1.000]` — wholly above 0.50, escalating to the 50-pair
+gate per protocol. The Step 3 gate (seed 142000) held: `win_rate=0.990`
+(100 games), `mean_money_margin=+5516.7`, CI `[0.750, 1.000]` — wholly
+above 0.50, satisfying promotion. Both Step 4 regression screens (vs.
+`task_teacher_v16`, seed 143000: CI `[0.595, 1.000]`; vs. `starter`, seed
+143000: CI `[0.620, 1.000]`) also stayed wholly above 0.50 — no
+regression detected. Full numbers: `docs/4_agent_version_log.md`'s
+`task_teacher_v20` entry; raw acceptance output:
+`replays/analysis/task_teacher_v20_acceptance.txt`.
+
+**No Kaggle submission was made or authorized in this task** — its scope
+was measurement and recording only (per its brief). `task_teacher_v17`
+remains the last-submitted ladder agent; whether/when to package and
+submit `task_teacher_v20` is a separate, explicit decision.
+
+**Evaluation caveat:** measured under the corrected `1.32.4` simulator
+(validated against real ladder prices, 299/299 exact matches). Version-log
+entries predating 2026-08-28 were measured under the miscalibrated
+`1.29.3` constants, which under-punish premium-good glut ~4x, and are not
+directly comparable.
+
+**Next priority, if v20 is submitted and confirmed:** per the design's own
+Post-Plan Notes and `docs/10_ladder_revenue_diagnosis.md`, melon sale
+metering / production capping (P1: unmetered `SELL <all>` dumping crashes
+our own melon price from ~$220 to ~$4 before we liquidate the rest into
+our own crater; ~$7,600/game upside measured) is the largest remaining
+line of the original four defects and now the only one left unaddressed —
+P2 (wheat-as-cash-crop) was attempted and rejected as `task_teacher_v19`,
+P3 (fertilizer) is this version, P4 (feed starvation) remains open as a
+preservation-, not revenue-, item.
+
 ## Current Recommendation (2026-08-28, task_teacher_v19 evaluation)
 
 **`task_teacher_v19` (wheat as a cash crop, extends `task_teacher_v17`):

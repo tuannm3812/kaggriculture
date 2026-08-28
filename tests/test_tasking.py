@@ -33,7 +33,7 @@ from kaggriculture_lib.tasking import (
 
 BOARD_SIZE = 10
 CANDIDATE_CROPS = ("WHEAT", "CARROT", "MELON")
-BASE_PRICES = {"WHEAT": 25, "CARROT": 35, "MELON": 250}
+BASE_PRICES = {"WHEAT": 25, "CARROT": 35, "MELON": 250, "FERTILIZER": 100}
 
 
 def make_tiles(overrides: dict[tuple[int, int], object] | None = None) -> list[list]:
@@ -1591,4 +1591,143 @@ def test_wheat_target_defaults_to_zero_leaving_existing_agents_unchanged():
         t for t in without_param
         if t.task_id.kind == TaskKind.PLANT and t.task_id.item == "WHEAT"
     ]
+
+
+def make_animal_tile(
+    animal="COW",
+    *,
+    fed_today=True,
+    cared_today=True,
+    yield_units=0,
+    fertilizer_available=True,
+    consecutive_unfed=0,
+):
+    """An occupied animal structure. Defaults are a fully-tended animal with
+    nothing to harvest, so only the fertilizer rule can fire."""
+    return {
+        "kind": "PASTURE",
+        "animal": animal,
+        "placed_day": 0,
+        "yield_units": yield_units,
+        "fed_today": fed_today,
+        "consecutive_unfed": consecutive_unfed,
+        "cared_today": cared_today,
+        "fertilizer_available": fertilizer_available,
+        "pending_care_bonus": 0,
+    }
+
+
+def _collect_tasks(tasks):
+    return [t for t in tasks if t.task_id.kind == TaskKind.COLLECT_FERTILIZER]
+
+
+def _generate_with_animal(tile, **kwargs):
+    return generate_tasks(
+        tiles=make_tiles({(1, 1): tile}),
+        unlocked_quadrants=["NW"],
+        day=5,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        **kwargs,
+    )
+
+
+def test_generate_tasks_collects_available_fertilizer():
+    """Every surviving animal makes 1 fertilizer available each end-of-day,
+    fed or not. Opponents earned $421,761 across 78 ladder episodes selling
+    it; this agent family earns $0 because COLLECT_FERTILIZER was never
+    implemented. See docs/10_ladder_revenue_diagnosis.md.
+    """
+    tasks = _generate_with_animal(make_animal_tile(), collect_fertilizer=True)
+    collect = _collect_tasks(tasks)
+    assert len(collect) == 1
+    assert collect[0].target == (1, 1)
+
+
+def test_collect_fertilizer_task_is_priced_at_economic_tier():
+    """Per design §5.3: OPTIONAL was unreachable by construction, not merely
+    low priority. `rank_tasks` sorts by tier first, and both assignment
+    paths (`_greedy_assign`'s top-ranked-per-unit pass and
+    `_exhaustive_assign`'s tier-coverage scorer) starve any OPTIONAL task
+    while a higher-tier task remains unclaimed -- confirmed by a real
+    episode collecting only 7 fertilizer in 720 steps. Fertilizer is
+    ~10x more valuable per unit-action than the marginal crop task
+    (~$95 vs. ~$9), so it is emitted at ECONOMIC with a truthful
+    `expected_value` and left to compete on that value instead.
+    """
+    tasks = _generate_with_animal(make_animal_tile(), collect_fertilizer=True)
+    collected = _collect_tasks(tasks)[0]
+    assert collected.priority_tier == PriorityTier.ECONOMIC
+    assert collected.expected_value == BASE_PRICES["FERTILIZER"]
+
+
+def test_no_collect_task_when_fertilizer_not_available():
+    """fertilizer_available is a boolean, not a counter -- once collected it
+    stays false until the next end-of-day refresh."""
+    tasks = _generate_with_animal(
+        make_animal_tile(fertilizer_available=False), collect_fertilizer=True
+    )
+    assert _collect_tasks(tasks) == []
+
+
+def test_collect_task_generated_even_when_animal_also_needs_feeding():
+    """The fertilizer rule is a separate `if`, not another `elif` in the
+    FEED/HARVEST/CARE chain. If it were chained it would only fire on a
+    fed, fully-cared, nothing-to-harvest animal -- suppressing it on most
+    turns. Generation is unconditional; priority tier (ECONOMIC) and value
+    (live fertilizer market price per design §5.3) decide assignment.
+    """
+    tasks = _generate_with_animal(
+        make_animal_tile(fed_today=False), collect_fertilizer=True
+    )
+    kinds = {t.task_id.kind for t in tasks}
+    assert TaskKind.FEED in kinds
+    assert TaskKind.COLLECT_FERTILIZER in kinds
+
+
+def test_no_collect_task_for_empty_structure():
+    """BUILD_COOP/BUILD_PASTURE create {"kind": ...} with no "animal" key,
+    and an escaped animal's tile is reset the same way, so an unoccupied
+    structure must never generate a collection task."""
+    tasks = _generate_with_animal({"kind": "PASTURE"}, collect_fertilizer=True)
+    assert _collect_tasks(tasks) == []
+
+
+def test_no_collect_task_for_a_plant_tile():
+    """Crops never produce fertilizer. This is currently guaranteed by the
+    branch ordering (a PLANT tile is handled earlier in the if/elif chain
+    and never reaches the animal branch), so the test guards against a
+    future restructure quietly breaking that.
+    """
+    plant = make_plant_tile("MELON", planted_day=0, watered_today=True)
+    plant["fertilizer_available"] = True  # nonsense state, must still be ignored
+    tasks = _generate_with_animal(plant, collect_fertilizer=True)
+    assert _collect_tasks(tasks) == []
+
+
+def test_collect_fertilizer_defaults_to_off_leaving_existing_agents_unchanged():
+    """The fertilizer rule must be inert unless explicitly requested.
+
+    Agent versions are immutable as files but read this shared module, so a
+    behavioural change here rewrites every frozen agent's evaluated
+    behaviour retroactively. On 2026-08-28 correcting
+    economy.FARM_HAND_COST_MULT silently changed frozen task_teacher_v8
+    (docs/2_environment_notes.md). This asserts the default path is
+    unchanged, so v2..v19 keep the behaviour they were evaluated with.
+    """
+    tile = make_animal_tile(fertilizer_available=True)
+    kwargs = dict(
+        tiles=make_tiles({(1, 1): tile}),
+        unlocked_quadrants=["NW"],
+        day=5,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+    )
+    without_param = generate_tasks(**kwargs)
+    explicit_false = generate_tasks(**kwargs, collect_fertilizer=False)
+
+    assert [t.task_id for t in without_param] == [t.task_id for t in explicit_false]
+    assert _collect_tasks(without_param) == []
 

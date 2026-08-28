@@ -87,9 +87,9 @@ collection task.
                         Task(
                             task_id=TaskId(kind=TaskKind.COLLECT_FERTILIZER, x=x, y=y),
                             target=(x, y),
-                            priority_tier=PriorityTier.OPTIONAL,
+                            priority_tier=PriorityTier.ECONOMIC,   # see Sec 5.3
                             deadline_step=None,
-                            expected_value=0.0,
+                            expected_value=float(market_prices.get("FERTILIZER", 100)),
                             action_cost=1,
                         )
                     )
@@ -105,7 +105,13 @@ In the new `agents/task_teacher_v20/main.py`, alongside the existing
             return ["COLLECT_FERTILIZER"]
 ```
 
-## 5. Priority: `OPTIONAL`, and why that is the whole design
+## 5. Priority
+
+> **Superseded by §5.3.** This section originally specified
+> `PriorityTier.OPTIONAL`. That tier proved unreachable by construction; the
+> task is now emitted at `ECONOMIC` with a truthful `expected_value`. The
+> reasoning below is retained as the record of why `OPTIONAL` was chosen and
+> what the measurement showed.
 
 The task is emitted at `PriorityTier.OPTIONAL` (tier 4, the lowest —
 below `ECONOMIC`). No task in this codebase currently uses that tier; this
@@ -127,6 +133,92 @@ binding constraint, the task simply does not fire and costs nothing.
 inert. If v17's units are labour-saturated, `OPTIONAL` may almost never be
 reached and v20 collects nothing — a null result rather than a loss. This
 is cheap to detect and is an explicit acceptance-gate metric (§7).
+
+### 5.2 Correction (2026-08-28): `OPTIONAL` was unreachable, for a
+different reason than §5 anticipated
+
+The first implementation collected **7 fertilizer in a whole 720-step
+episode**, against this design's ~200 estimate. §5 predicted the inert case
+and blamed labour saturation. **That diagnosis was wrong.** Measured on the
+same episode:
+
+| | |
+| --- | ---: |
+| Peak animals | 8 |
+| Tile-turns with fertilizer available | 2,379 |
+| `COLLECT_FERTILIZER` actions taken | 7 |
+| Idle (`PASS`) unit-actions | 342 of 4,473 (7%) |
+
+Units were **not** saturated — they idled through 342 actions while 2,379
+tile-turns of fertilizer went uncollected.
+
+The real cause is in the assignment algorithm. `rank_tasks` sorts by
+`priority_tier` **first**, and `joint_assign` then truncates each unit's
+candidate set to its top `MAX_CANDIDATES_PER_UNIT = 8`. On a busy farm
+there are far more than eight higher-tier tasks (WATER, HARVEST, PLANT,
+FEED), so `OPTIONAL` tasks never enter any unit's shortlist. The
+truncation happens *before* "does this unit have anything better to do?"
+is ever evaluated.
+
+**`PriorityTier.OPTIONAL` is therefore dead on any busy farm** — a finding
+that reaches beyond this version, since it was the tier's first use.
+
+### 5.3 Correction (2026-08-28, second): reserving a slot does not work
+either — promote the task into `ECONOMIC` instead
+
+A reserved candidate slot was considered and rejected before
+implementation, after checking both assignment paths against a real
+episode (720 turns, seed 140000):
+
+- **51% of turns (368/720) use `_greedy_assign`**, not `_exhaustive_assign`
+  — `MAX_EXHAUSTIVE_UNITS` is 4, and v20 fields up to 9 units. Greedy gives
+  each unit its top-ranked remaining task; with ~40 tasks and 9 units,
+  every unit always receives a higher-tier task, so no spare unit ever
+  exists for a reserved slot to serve.
+- **`_exhaustive_assign` scores combinations by tier coverage first.**
+  Taking an `OPTIONAL` task in place of an available higher-tier one always
+  reduces coverage, so the scorer would never select it even if it were
+  added as a candidate.
+
+The structural conclusion, which reaches beyond this version: **while any
+higher-tier task is unclaimed, no unit will ever take an `OPTIONAL`-tier
+task in either path.** That is exactly what "strictly lowest priority"
+means under a coverage-maximising scorer. `PriorityTier.OPTIONAL` is not
+merely hard to reach — it is unreachable by construction, and a slot
+reservation would make the task visible without ever making it chosen.
+
+**Fix: price it honestly and let it compete.** The task is emitted at
+`PriorityTier.ECONOMIC` with `expected_value` set to the live fertilizer
+market price, rather than at `OPTIONAL` with `expected_value=0.0`.
+
+The economics support this. One fertilizer sells for roughly $95. A wheat
+tile yields ~4 units at ~$35 across ~4 watering actions — about **$9 per
+unit-action**. Collecting fertilizer is worth roughly **10x more per
+unit-action** than the marginal crop task it was queued behind. Ranking it
+last was not conservatism; it was mispricing.
+
+**Mechanism, precisely — not "compete on value":** `rank_tasks`
+(`tasking.py:641`) sorts by `(priority_tier, distance, -expected_value +
+switch_penalty, task_id)`. What actually changes is that the task is
+*promoted out of the unreachable `OPTIONAL` tier into `ECONOMIC`*, where it
+is ordered like every other task there — by tier, then distance, with
+`expected_value` only a tiebreak among same-tier tasks at equal distance.
+It does not let fertilizer outrank a closer `PLANT` by being worth more.
+The $95-vs-$9 figures above argue why `ECONOMIC` is the right tier to price
+it at; they are not a description of how the scheduler compares tasks. The
+units differ too: `PLANT`'s `expected_value` is a $/day ROI estimate
+(`_score_crop`, ~18 for wheat, ~109 for melon), while fertilizer's is the
+raw per-action market price (~100) — not a like-for-like number.
+
+This is *not* the displacement that sank `task_teacher_v19`. v19 gave up
+high-value Melon **tiles** to grow low-value wheat — trading a better
+asset for a worse one. This trades a $9 action for a $95 one, in the right
+direction. The guard against getting that wrong is no longer the tier: it
+is **Task 4's paired measurement**, which asserts v20 does not water or
+feed less than v17, plus the evaluation screen itself.
+
+Gated behind the same `collect_fertilizer: bool = False` parameter, so
+every frozen agent keeps byte-identical behaviour.
 
 ### 5.1 Backwards compatibility is mandatory
 
@@ -169,21 +261,28 @@ are material against the ~$16,500 median loss gap.
 
 ## 7. Acceptance Tests
 
+> Criteria below reflect the shipped `ECONOMIC`-tier design; see §5.3 for
+> why `OPTIONAL` (§5) was superseded.
+
 New, alongside every existing test, which must keep passing unmodified:
 
 - `COLLECT_FERTILIZER` task generated for an animal tile with
   `fertilizer_available` true, when `collect_fertilizer=True`.
 - No such task when `fertilizer_available` is false.
 - No such task for a plant tile or an empty animal structure (no `animal`).
-- The task is emitted at `PriorityTier.OPTIONAL`, asserted explicitly —
-  this is the design's load-bearing property, not an incidental detail.
+- The task is emitted at `PriorityTier.ECONOMIC` with `expected_value` set
+  from the live `FERTILIZER` market price, asserted explicitly. `OPTIONAL`
+  proved unreachable by construction (§5.3) and was replaced by this
+  pricing plus the paired FEED/WATER displacement measurement (Task 4,
+  `test_collection_does_not_displace_higher_priority_work`) as the guard.
 - **`collect_fertilizer=False` (the default) produces task output identical
   to current behaviour** — the frozen-agent regression guard from §5.1.
 - The agent returns `["COLLECT_FERTILIZER"]` when assigned that task.
 - Full-episode regression: a real run in which v20 records fertilizer sale
-  revenue greater than zero. **If this assertion fails, the `OPTIONAL`-tier
-  risk in §5 has materialised** — report it as a finding rather than
-  lowering the tier to force a pass.
+  revenue greater than zero. **If this assertion fails, the `ECONOMIC`
+  pricing and value-competition risk in §5.3 has materialised** — units are
+  labour-saturated and the task never gets assigned; report it as a
+  finding rather than raising `expected_value` or the tier to force a pass.
 
 ## 8. Evaluation
 
