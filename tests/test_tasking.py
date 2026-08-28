@@ -1697,3 +1697,29 @@ def test_no_collect_task_for_a_plant_tile():
     tasks = _generate_with_animal(plant, collect_fertilizer=True)
     assert _collect_tasks(tasks) == []
 
+
+def test_collect_fertilizer_defaults_to_off_leaving_existing_agents_unchanged():
+    """The fertilizer rule must be inert unless explicitly requested.
+
+    Agent versions are immutable as files but read this shared module, so a
+    behavioural change here rewrites every frozen agent's evaluated
+    behaviour retroactively. On 2026-08-28 correcting
+    economy.FARM_HAND_COST_MULT silently changed frozen task_teacher_v8
+    (docs/2_environment_notes.md). This asserts the default path is
+    unchanged, so v2..v19 keep the behaviour they were evaluated with.
+    """
+    tile = make_animal_tile(fertilizer_available=True)
+    kwargs = dict(
+        tiles=make_tiles({(1, 1): tile}),
+        unlocked_quadrants=["NW"],
+        day=5,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+    )
+    without_param = generate_tasks(**kwargs)
+    explicit_false = generate_tasks(**kwargs, collect_fertilizer=False)
+
+    assert [t.task_id for t in without_param] == [t.task_id for t in explicit_false]
+    assert _collect_tasks(without_param) == []
+
