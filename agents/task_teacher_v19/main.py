@@ -45,12 +45,15 @@ MAX_FEED_ACTIONS_PER_DAY = 10
 # brackets the opponents' measured ~$14k/game. This is the design's one
 # tunable knob.
 WHEAT_TARGET_TILES = 20
-# Days of feed to keep unsold. Matches the existing buy-side target
-# (max(2, total_owned_animals * 2)) so the reserve the agent buys up to and
-# the reserve it refuses to sell below are the same number. Animals escape
-# after two consecutive unfed days, so this is the smallest reserve that
-# tolerates one missed delivery.
-FEED_DAYS_BUFFER = 2
+# Days of feed to keep unsold. Deliberately LARGER than the buy-side
+# top-up target of 2 days, to create a hysteresis band. When both numbers
+# were 2, the every-turn sell rule trimmed inventory down to exactly the
+# threshold the once-daily `BUY_PRODUCT WHEAT` top-up buys back up to, so
+# the agent sold its own wheat cheap and re-bought at market every morning
+# (measured: 153 sold / 71 bought vs v17's 47). Animals eat 1 wheat/day and
+# escape after two consecutive unfed days, so 5 days sits comfortably above
+# the survival floor.
+SELL_RESERVE_DAYS = 5
 
 COW_COST = economy.ANIMALS["COW"]["cost"]      # 400 under 1.32.4
 SHEEP_COST = economy.ANIMALS["SHEEP"]["cost"]  # 500
@@ -227,7 +230,7 @@ def agent(obs, config=None):
         
         # Sell wheat above a feed reserve. v17 gated this on owning zero
         # animals, which never holds, so it sold no wheat at all.
-        feed_reserve = max(2, total_owned_animals * FEED_DAYS_BUFFER) if total_owned_animals else 0
+        feed_reserve = max(2, total_owned_animals * SELL_RESERVE_DAYS) if total_owned_animals else 0
         sellable = shed.get("WHEAT", 0) - feed_reserve
         if sellable > 0:
             market_orders.append(["SELL", "WHEAT", sellable])

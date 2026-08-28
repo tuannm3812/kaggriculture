@@ -78,7 +78,7 @@ def sell_orders(action, item):
 def test_constants():
     module = load_agent_module("task_teacher_v19")
     assert module.WHEAT_TARGET_TILES == 20
-    assert module.FEED_DAYS_BUFFER == 2
+    assert module.SELL_RESERVE_DAYS == 5
 
 
 def test_sells_surplus_wheat_while_owning_animals():
@@ -87,12 +87,12 @@ def test_sells_surplus_wheat_while_owning_animals():
     across 78 real ladder episodes."""
     module = load_agent_module("task_teacher_v19")
     tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
-    tiles[0][0] = pasture_tile("COW")  # 1 animal -> reserve = max(2, 1*2) = 2
+    tiles[0][0] = pasture_tile("COW")  # 1 animal -> reserve = max(2, 1*5) = 5
     obs = make_obs(day=5, tiles=tiles, shed={"WHEAT": 30})
     action = module.agent(obs, V19_CONFIG)
     orders = sell_orders(action, "WHEAT")
     assert orders, "expected a wheat SELL order while owning animals"
-    assert orders[0][2] == 28  # 30 held - 2 reserved
+    assert orders[0][2] == 25  # 30 held - 5 reserved
 
 
 def test_never_sells_into_the_feed_reserve():
@@ -101,10 +101,28 @@ def test_never_sells_into_the_feed_reserve():
     module = load_agent_module("task_teacher_v19")
     tiles = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
     tiles[0][0] = pasture_tile("COW")
-    tiles[0][1] = pasture_tile("SHEEP")  # 2 animals -> reserve = 4
+    tiles[0][1] = pasture_tile("SHEEP")  # 2 animals -> reserve = max(2, 2*5) = 10
     obs = make_obs(day=5, tiles=tiles, shed={"WHEAT": 4})
     action = module.agent(obs, V19_CONFIG)
     assert sell_orders(action, "WHEAT") == []
+
+
+def test_sell_reserve_exceeds_buy_target():
+    """The sell reserve must strictly exceed the buy top-up target at every
+    animal count, or the every-turn sell rule and the once-daily buy top-up
+    collide on the same number again -- exactly the bug this fix closes.
+    When both were `max(2, n*2)`, the sell rule trimmed inventory down to
+    the same threshold the buy rule topped it back up to, so the agent sold
+    its own wheat cheap and re-bought it at market every morning."""
+    module = load_agent_module("task_teacher_v19")
+    for n_animals in (1, 2, 5, 12):
+        sell_reserve = max(2, n_animals * module.SELL_RESERVE_DAYS)
+        buy_target = max(2, n_animals * 2)
+        assert sell_reserve > buy_target, (
+            f"sell_reserve ({sell_reserve}) must exceed buy_target "
+            f"({buy_target}) for n_animals={n_animals}, or daily buy-back "
+            "churn returns"
+        )
 
 
 def test_terminal_liquidation_still_sells_the_feed_reserve():
