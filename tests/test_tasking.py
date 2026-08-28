@@ -33,7 +33,7 @@ from kaggriculture_lib.tasking import (
 
 BOARD_SIZE = 10
 CANDIDATE_CROPS = ("WHEAT", "CARROT", "MELON")
-BASE_PRICES = {"WHEAT": 25, "CARROT": 35, "MELON": 250}
+BASE_PRICES = {"WHEAT": 25, "CARROT": 35, "MELON": 250, "FERTILIZER": 100}
 
 
 def make_tiles(overrides: dict[tuple[int, int], object] | None = None) -> list[list]:
@@ -1645,13 +1645,21 @@ def test_generate_tasks_collects_available_fertilizer():
     assert collect[0].target == (1, 1)
 
 
-def test_collect_fertilizer_task_is_optional_tier():
-    """Load-bearing: OPTIONAL (tier 4) is what stops fertilizer displacing
-    watering, feeding, harvesting or planting. task_teacher_v19 lost 0/20
-    pairs by displacing higher-value work; this tier is the fix.
+def test_collect_fertilizer_task_is_priced_at_economic_tier():
+    """Per design §5.3: OPTIONAL was unreachable by construction, not merely
+    low priority. `rank_tasks` sorts by tier first, and both assignment
+    paths (`_greedy_assign`'s top-ranked-per-unit pass and
+    `_exhaustive_assign`'s tier-coverage scorer) starve any OPTIONAL task
+    while a higher-tier task remains unclaimed -- confirmed by a real
+    episode collecting only 7 fertilizer in 720 steps. Fertilizer is
+    ~10x more valuable per unit-action than the marginal crop task
+    (~$95 vs. ~$9), so it is emitted at ECONOMIC with a truthful
+    `expected_value` and left to compete on that value instead.
     """
     tasks = _generate_with_animal(make_animal_tile(), collect_fertilizer=True)
-    assert _collect_tasks(tasks)[0].priority_tier == PriorityTier.OPTIONAL
+    collected = _collect_tasks(tasks)[0]
+    assert collected.priority_tier == PriorityTier.ECONOMIC
+    assert collected.expected_value == BASE_PRICES["FERTILIZER"]
 
 
 def test_no_collect_task_when_fertilizer_not_available():

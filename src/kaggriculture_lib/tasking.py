@@ -509,14 +509,18 @@ def generate_tasks(
                     # Separate `if`, not another `elif`: the FEED/HARVEST/CARE
                     # chain emits at most one task per tile per turn, and
                     # chaining this would suppress it on most turns. Generation
-                    # is unconditional; OPTIONAL tier decides assignment.
+                    # is unconditional; priority tier and value decide assignment.
                     tasks.append(
                         Task(
                             task_id=TaskId(kind=TaskKind.COLLECT_FERTILIZER, x=x, y=y),
                             target=(x, y),
-                            priority_tier=PriorityTier.OPTIONAL,
+                            # ECONOMIC (not OPTIONAL) per design §5.3: OPTIONAL is
+                            # unreachable by construction (tier-first ranking and
+                            # candidate truncation starve it). One fertilizer is worth
+                            # ~$95 vs. ~$9/unit-action for wheat, so rank it on value.
+                            priority_tier=PriorityTier.ECONOMIC,
                             deadline_step=None,
-                            expected_value=0.0,
+                            expected_value=float(market_prices.get("FERTILIZER", 100)),
                             action_cost=1,
                         )
                     )
