@@ -1592,3 +1592,108 @@ def test_wheat_target_defaults_to_zero_leaving_existing_agents_unchanged():
         if t.task_id.kind == TaskKind.PLANT and t.task_id.item == "WHEAT"
     ]
 
+
+def make_animal_tile(
+    animal="COW",
+    *,
+    fed_today=True,
+    cared_today=True,
+    yield_units=0,
+    fertilizer_available=True,
+    consecutive_unfed=0,
+):
+    """An occupied animal structure. Defaults are a fully-tended animal with
+    nothing to harvest, so only the fertilizer rule can fire."""
+    return {
+        "kind": "PASTURE",
+        "animal": animal,
+        "placed_day": 0,
+        "yield_units": yield_units,
+        "fed_today": fed_today,
+        "consecutive_unfed": consecutive_unfed,
+        "cared_today": cared_today,
+        "fertilizer_available": fertilizer_available,
+        "pending_care_bonus": 0,
+    }
+
+
+def _collect_tasks(tasks):
+    return [t for t in tasks if t.task_id.kind == TaskKind.COLLECT_FERTILIZER]
+
+
+def _generate_with_animal(tile, **kwargs):
+    return generate_tasks(
+        tiles=make_tiles({(1, 1): tile}),
+        unlocked_quadrants=["NW"],
+        day=5,
+        last_day=29,
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
+        **kwargs,
+    )
+
+
+def test_generate_tasks_collects_available_fertilizer():
+    """Every surviving animal makes 1 fertilizer available each end-of-day,
+    fed or not. Opponents earned $421,761 across 78 ladder episodes selling
+    it; this agent family earns $0 because COLLECT_FERTILIZER was never
+    implemented. See docs/10_ladder_revenue_diagnosis.md.
+    """
+    tasks = _generate_with_animal(make_animal_tile(), collect_fertilizer=True)
+    collect = _collect_tasks(tasks)
+    assert len(collect) == 1
+    assert collect[0].target == (1, 1)
+
+
+def test_collect_fertilizer_task_is_optional_tier():
+    """Load-bearing: OPTIONAL (tier 4) is what stops fertilizer displacing
+    watering, feeding, harvesting or planting. task_teacher_v19 lost 0/20
+    pairs by displacing higher-value work; this tier is the fix.
+    """
+    tasks = _generate_with_animal(make_animal_tile(), collect_fertilizer=True)
+    assert _collect_tasks(tasks)[0].priority_tier == PriorityTier.OPTIONAL
+
+
+def test_no_collect_task_when_fertilizer_not_available():
+    """fertilizer_available is a boolean, not a counter -- once collected it
+    stays false until the next end-of-day refresh."""
+    tasks = _generate_with_animal(
+        make_animal_tile(fertilizer_available=False), collect_fertilizer=True
+    )
+    assert _collect_tasks(tasks) == []
+
+
+def test_collect_task_generated_even_when_animal_also_needs_feeding():
+    """The fertilizer rule is a separate `if`, not another `elif` in the
+    FEED/HARVEST/CARE chain. If it were chained it would only fire on a
+    fed, fully-cared, nothing-to-harvest animal -- suppressing it on most
+    turns. Generation is unconditional; PriorityTier.OPTIONAL decides
+    whether it actually gets assigned.
+    """
+    tasks = _generate_with_animal(
+        make_animal_tile(fed_today=False), collect_fertilizer=True
+    )
+    kinds = {t.task_id.kind for t in tasks}
+    assert TaskKind.FEED in kinds
+    assert TaskKind.COLLECT_FERTILIZER in kinds
+
+
+def test_no_collect_task_for_empty_structure():
+    """BUILD_COOP/BUILD_PASTURE create {"kind": ...} with no "animal" key,
+    and an escaped animal's tile is reset the same way, so an unoccupied
+    structure must never generate a collection task."""
+    tasks = _generate_with_animal({"kind": "PASTURE"}, collect_fertilizer=True)
+    assert _collect_tasks(tasks) == []
+
+
+def test_no_collect_task_for_a_plant_tile():
+    """Crops never produce fertilizer. This is currently guaranteed by the
+    branch ordering (a PLANT tile is handled earlier in the if/elif chain
+    and never reaches the animal branch), so the test guards against a
+    future restructure quietly breaking that.
+    """
+    plant = make_plant_tile("MELON", planted_day=0, watered_today=True)
+    plant["fertilizer_available"] = True  # nonsense state, must still be ignored
+    tasks = _generate_with_animal(plant, collect_fertilizer=True)
+    assert _collect_tasks(tasks) == []
+

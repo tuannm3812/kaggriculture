@@ -28,6 +28,7 @@ class TaskKind(str, Enum):
     FEED = "FEED"
     CARE = "CARE"
     PICKUP = "PICKUP"
+    COLLECT_FERTILIZER = "COLLECT_FERTILIZER"
 
 
 class PriorityTier(IntEnum):
@@ -216,6 +217,7 @@ def generate_tasks(
     cow_in_any_inventory: bool = False,
     sheep_in_any_inventory: bool = False,
     wheat_target_tiles: int = 0,
+    collect_fertilizer: bool = False,
     max_feed_tasks: int | None = None,
     non_emergency_feed_tier: PriorityTier = PriorityTier.DAILY_CARE,
     care_tier: PriorityTier = PriorityTier.DAILY_CARE,
@@ -236,6 +238,14 @@ def generate_tasks(
     here rewrites frozen agents' evaluated behaviour retroactively (see
     docs/2_environment_notes.md's 2026-08-28 correction, where exactly that
     happened to task_teacher_v8).
+
+    `collect_fertilizer` defaults to False, which suppresses the
+    COLLECT_FERTILIZER rule entirely and leaves task output byte-identical
+    for every agent that does not pass it. That default is load-bearing:
+    agent versions are immutable as files but read this shared module, so a
+    behavioural change here rewrites frozen agents' evaluated behaviour
+    retroactively (see docs/2_environment_notes.md's 2026-08-28 correction,
+    where exactly that happened to task_teacher_v8).
     """
     tasks: list[Task] = []
     unlocked = set(unlocked_quadrants)
@@ -490,6 +500,21 @@ def generate_tasks(
                             task_id=TaskId(kind=TaskKind.CARE, x=x, y=y),
                             target=(x, y),
                             priority_tier=care_tier,
+                            deadline_step=None,
+                            expected_value=0.0,
+                            action_cost=1,
+                        )
+                    )
+                if collect_fertilizer and tile.get("fertilizer_available"):
+                    # Separate `if`, not another `elif`: the FEED/HARVEST/CARE
+                    # chain emits at most one task per tile per turn, and
+                    # chaining this would suppress it on most turns. Generation
+                    # is unconditional; OPTIONAL tier decides assignment.
+                    tasks.append(
+                        Task(
+                            task_id=TaskId(kind=TaskKind.COLLECT_FERTILIZER, x=x, y=y),
+                            target=(x, y),
+                            priority_tier=PriorityTier.OPTIONAL,
                             deadline_step=None,
                             expected_value=0.0,
                             action_cost=1,
