@@ -1476,4 +1476,94 @@ def test_generate_tasks_sheep_support_and_nw_exclusion():
     assert len(place_sheep) == 1
 
 
+def test_generate_tasks_plants_wheat_up_to_the_cash_crop_target():
+    """Wheat is planted on empty tiles as a cash crop, not only for feed.
+
+    Measured motivation: WHEAT is the opponents' single largest ladder
+    revenue line ($1,090,522 across 78 episodes) and this agent family
+    earns $0 from it, because wheat was only ever planted for animal feed
+    (capped at 4 tiles). See docs/10_ladder_revenue_diagnosis.md.
+    """
+    tiles = [[None] * 10 for _ in range(10)]
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=0,
+        last_day=29,
+        market_prices={"WHEAT": 25.0, "CARROT": 35.0, "MELON": 250.0},
+        candidate_crops=("WHEAT", "CARROT", "MELON"),
+        wheat_target_tiles=3,
+    )
+    wheat_plants = [
+        t for t in tasks
+        if t.task_id.kind == TaskKind.PLANT and t.task_id.item == "WHEAT"
+    ]
+    assert len(wheat_plants) == 3
+
+
+def test_generate_tasks_stops_planting_wheat_once_target_is_met():
+    """Existing wheat tiles count toward the target, so a board already at
+    target gets no new wheat -- the remaining tiles go to the ROI pick."""
+    tiles = [[None] * 10 for _ in range(10)]
+    for x in range(3):
+        tiles[0][x] = {
+            "kind": "PLANT", "crop": "WHEAT", "planted_day": 0,
+            "watered_today": True, "consecutive_unwatered": 0, "yield_units": 0,
+            "max_lifespan_step": -1, "fertilized_until_day": -1,
+        }
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=0,
+        last_day=29,
+        market_prices={"WHEAT": 25.0, "CARROT": 35.0, "MELON": 250.0},
+        candidate_crops=("WHEAT", "CARROT", "MELON"),
+        wheat_target_tiles=3,
+    )
+    wheat_plants = [
+        t for t in tasks
+        if t.task_id.kind == TaskKind.PLANT and t.task_id.item == "WHEAT"
+    ]
+    assert wheat_plants == []
+
+
+def test_generate_tasks_does_not_plant_wheat_that_cannot_mature_in_time():
+    """The cash-crop rule respects the same season-horizon gate as every
+    other planting decision -- a seed that can't mature is money burned."""
+    tiles = [[None] * 10 for _ in range(10)]
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=28,  # WHEAT max_yield_day is 4; 28 + 4 > 29
+        last_day=29,
+        market_prices={"WHEAT": 25.0, "CARROT": 35.0, "MELON": 250.0},
+        candidate_crops=("WHEAT", "CARROT", "MELON"),
+        wheat_target_tiles=10,
+    )
+    wheat_plants = [
+        t for t in tasks
+        if t.task_id.kind == TaskKind.PLANT and t.task_id.item == "WHEAT"
+    ]
+    assert wheat_plants == []
+
+
+def test_cash_crop_rule_does_not_break_the_feed_planting_path():
+    """The feed rule runs first and must keep working with the cash-crop
+    rule disabled -- animals starve if feed planting regresses."""
+    tiles = [[None] * 10 for _ in range(10)]
+    tasks = generate_tasks(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=0,
+        last_day=29,
+        market_prices={"WHEAT": 25.0, "CARROT": 35.0, "MELON": 250.0},
+        candidate_crops=("WHEAT", "CARROT", "MELON"),
+        wheat_needed_for_feed=True,
+        wheat_target_tiles=0,
+    )
+    wheat_plants = [
+        t for t in tasks
+        if t.task_id.kind == TaskKind.PLANT and t.task_id.item == "WHEAT"
+    ]
+    assert len(wheat_plants) == 4  # the existing feed cap
 
