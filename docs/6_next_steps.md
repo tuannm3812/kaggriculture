@@ -6,9 +6,10 @@ Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
 **`task_teacher_v19` (wheat as a cash crop, extends `task_teacher_v17`):
 not promoted; do not submit.** Built to close the P2 gap identified below
-(wheat: opponents earn $1,090,522/game, we earned $0 because v17's sell
-branch was gated on owning zero animals and capped planting at 4
-feed-only tiles). The Step 1 acceptance gate passed cleanly under the
+(wheat: opponents earned $1,090,522 across 78 ladder episodes
+(~$14k/game), we earned $0 because v17's sell branch was gated on
+owning zero animals and capped planting at 4 feed-only tiles). The
+Step 1 acceptance gate passed cleanly under the
 corrected `1.32.4` simulator — 100/100 DONE and finite, determinism
 IDENTICAL, median latency 8.54ms/turn, wheat sold/ep **129.3** (v17: $0) —
 so the wheat-selling mechanism itself works as built. But the Step 2

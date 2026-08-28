@@ -1,6 +1,7 @@
 """Tests for agents/task_teacher_v19 -- wheat as a cash crop."""
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -113,11 +114,39 @@ def test_sell_reserve_exceeds_buy_target():
     collide on the same number again -- exactly the bug this fix closes.
     When both were `max(2, n*2)`, the sell rule trimmed inventory down to
     the same threshold the buy rule topped it back up to, so the agent sold
-    its own wheat cheap and re-bought it at market every morning."""
+    its own wheat cheap and re-bought it at market every morning.
+
+    main.py has no named constant for the buy-side target -- it is the
+    inline literal `max(2, total_owned_animals * 2)`, duplicated at both
+    of its call sites (the cash-reservation pass and the hour==1
+    BUY_PRODUCT order). We're told not to edit main.py to add a constant,
+    and hardcoding a second copy of `* 2` here would make this test blind
+    to exactly the regression it exists to catch: if the agent's buy
+    formula is ever changed, a hardcoded copy would keep passing while the
+    hysteresis it's supposed to guard silently breaks. So instead we parse
+    the multiplier out of the agent source itself and fail loudly if its
+    shape no longer matches what this test assumes.
+    """
     module = load_agent_module("task_teacher_v19")
+    src = (REPO_ROOT / "agents" / "task_teacher_v19" / "main.py").read_text()
+
+    buy_multipliers = re.findall(
+        r"target_wheat\s*=\s*max\(2,\s*total_owned_animals\s*\*\s*(\d+)\)", src
+    )
+    assert buy_multipliers, (
+        "expected to find `target_wheat = max(2, total_owned_animals * N)` "
+        "in main.py -- the buy-target formula's shape changed; update this "
+        "test's parsing (and re-check the hysteresis argument still holds)"
+    )
+    assert len(set(buy_multipliers)) == 1, (
+        "buy-target multiplier is inconsistent across main.py's call sites: "
+        f"{buy_multipliers}"
+    )
+    buy_multiplier = int(buy_multipliers[0])
+
     for n_animals in (1, 2, 5, 12):
         sell_reserve = max(2, n_animals * module.SELL_RESERVE_DAYS)
-        buy_target = max(2, n_animals * 2)
+        buy_target = max(2, n_animals * buy_multiplier)
         assert sell_reserve > buy_target, (
             f"sell_reserve ({sell_reserve}) must exceed buy_target "
             f"({buy_target}) for n_animals={n_animals}, or daily buy-back "
@@ -162,7 +191,10 @@ def test_full_episode_sells_wheat_and_completes():
 
     env = make(
         "kaggriculture",
-        configuration={"episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1},
+        configuration={
+            "episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1,
+            "seed": 130000,
+        },
         debug=True,
     )
     env.run(["agents/task_teacher_v19/main.py", "starter"])
@@ -193,11 +225,19 @@ def test_full_episode_sells_wheat_and_completes():
     print(f"v19 wheat planted={wheat_planted} sold={wheat_sold} bought={wheat_bought}")
 
     # Growing our own feed should reduce market purchases: the existing
-    # BUY_PRODUCT top-up is gated on total_wheat < animals*2, so it stops
-    # firing once the farm supplies itself. Same seed, same opponent.
+    # BUY_PRODUCT top-up is gated on total_wheat < animals*2, so buying is
+    # *reduced*, not eliminated -- it still fires whenever a day's
+    # consumption outpaces that day's harvest, which happens routinely
+    # (design doc Sec 4, "Side effect, partial"; the earlier "stops buying
+    # feed" claim was retracted in 9da0888). Same seed (130000, the Step 1
+    # acceptance-gate base seed), same opponent, for a genuinely paired
+    # comparison.
     env17 = make(
         "kaggriculture",
-        configuration={"episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1},
+        configuration={
+            "episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1,
+            "seed": 130000,
+        },
         debug=True,
     )
     env17.run(["agents/task_teacher_v17/main.py", "starter"])

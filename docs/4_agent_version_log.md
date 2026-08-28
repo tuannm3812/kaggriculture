@@ -1143,9 +1143,10 @@ available, and outcome/lesson.
   (v17 capped feed-only wheat at 4 tiles) and sells the surplus above a
   `SELL_RESERVE_DAYS = 5` feed reserve. Motivation
   (`docs/10_ladder_revenue_diagnosis.md`, 78 real ladder episodes): WHEAT
-  is the opponents' single largest revenue line ($1,090,522/game measured)
-  and this agent family earned $0 from it — v17's wheat-sell branch was
-  gated on owning zero animals, which never holds. Design:
+  is the opponents' single largest revenue line ($1,090,522 across 78
+  ladder episodes, ~$14k/game, measured) and this agent family earned $0
+  from it — v17's wheat-sell branch was gated on owning zero animals,
+  which never holds. Design:
   `docs/superpowers/specs/2026-08-28-task-teacher-v19-wheat-cash-crop-design.md`.
 - **Evaluation caveat:** v19 is the first version evaluated under the
   corrected `1.32.4` simulator (validated against real ladder prices,
@@ -1160,10 +1161,18 @@ available, and outcome/lesson.
   | `DONE` / finite | 100/100 / 100/100 |
   | Determinism | IDENTICAL |
   | Action kinds (farmer) | PLANT 1904, WATER 11640, HARVEST 3461, DIG 671 |
-  | Wheat planted/ep | **13.8** |
+  | Wheat planted/ep (farmer actions only; excludes farm hands) | **13.8** |
   | Wheat sold/ep | **129.3** |
   | Melon sold/ep | 50.8 |
   | Median latency ms/turn | 8.54 |
+
+  These rows are not the same measurement scope: the acceptance script
+  counts wheat planted/ep from `action["farmer"]` PLANT orders only, while
+  wheat sold/ep and melon sold/ep are whole-farm market totals that also
+  include the hands' plantings. Farm hands plant wheat too (the same
+  `generate_tasks` queue assigns them wheat-planting tasks), so the true
+  per-episode wheat-tile count is higher than 13.8 — that figure must not
+  be read as "planting stayed below the `WHEAT_TARGET_TILES = 20` target."
 
   All Step 1 acceptance criteria hold: 100/100 DONE and finite,
   determinism IDENTICAL, wheat sold/ep > 0 (the whole point of the
