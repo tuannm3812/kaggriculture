@@ -72,21 +72,42 @@ In the new `agents/task_teacher_v19/main.py`, replace the dead gate with a
 feed-reserved surplus rule:
 
 ```python
-feed_reserve = max(2, total_owned_animals * FEED_DAYS_BUFFER)
+feed_reserve = max(2, total_owned_animals * SELL_RESERVE_DAYS)
 sellable = shed.get("WHEAT", 0) - feed_reserve
 if sellable > 0:
     market_orders.append(["SELL", "WHEAT", sellable])
 ```
 
-`FEED_DAYS_BUFFER = 2`, matching the existing buy-side target
-(`target_wheat = max(2, total_owned_animals * 2)`) so the reserve the agent
-buys up to and the reserve it refuses to sell below are the same number.
+`SELL_RESERVE_DAYS = 5`, deliberately **larger** than the existing
+buy-side target of two days (`target_wheat = max(2, total_owned_animals *
+2)`).
+
+### 4.1 Correction (2026-08-28): the two thresholds must not be equal
+
+This section originally specified `FEED_DAYS_BUFFER = 2`, matching the
+buy-side target exactly, and claimed that once the farm grew its own wheat
+"that condition stops holding and the agent stops buying feed". **That was
+wrong**, and the Task 5 full-episode smoke test caught it.
+
+`BUY_PRODUCT WHEAT` is gated on `if hour == 1:` — it tops up to the
+threshold once per day. The sell rule runs *every* turn, trimming surplus
+down to the same threshold. With both numbers equal there is no buffer:
+the agent sells its home-grown wheat down to the bare minimum, the animals
+eat overnight, and the top-up fires again next morning. Measured over one
+paired episode: v19 sold 153 wheat but **bought 71**, against v17's 47 —
+fixing the revenue bug made buy-back churn *worse*, costing roughly
+$2,000-3,000/episode to sell cheap and re-buy at market.
+
+The fix is hysteresis. Sell only above five days of feed; keep buying at
+two. With 13-20 wheat tiles harvesting on a ~5-day cycle, inventory should
+sit well above the buy trigger and the top-up should essentially stop
+firing — which is what the original claim assumed but did not achieve.
 
 Animals eat one wheat per day and escape after two consecutive unfed days,
-so a two-day buffer is the smallest reserve that tolerates one missed
-delivery. This deliberately does **not** attempt to fix the separate
-feed-starvation defect (`docs/9_task_teacher_v18_evaluation.md`); it only
-avoids *making it worse* by selling feed out from under the animals.
+so five days is comfortably above the survival floor. This deliberately
+does **not** attempt to fix the separate feed-starvation defect
+(`docs/9_task_teacher_v18_evaluation.md`); it only avoids *making it worse*
+by selling feed out from under the animals.
 
 Terminal liquidation (`day == last_day and hour >= 20`) is unchanged and
 still sells everything including the reserve — unsold stock scores nothing.
