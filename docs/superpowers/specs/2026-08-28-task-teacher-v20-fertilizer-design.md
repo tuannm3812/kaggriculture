@@ -128,6 +128,47 @@ inert. If v17's units are labour-saturated, `OPTIONAL` may almost never be
 reached and v20 collects nothing — a null result rather than a loss. This
 is cheap to detect and is an explicit acceptance-gate metric (§7).
 
+### 5.2 Correction (2026-08-28): `OPTIONAL` was unreachable, for a
+different reason than §5 anticipated
+
+The first implementation collected **7 fertilizer in a whole 720-step
+episode**, against this design's ~200 estimate. §5 predicted the inert case
+and blamed labour saturation. **That diagnosis was wrong.** Measured on the
+same episode:
+
+| | |
+| --- | ---: |
+| Peak animals | 8 |
+| Tile-turns with fertilizer available | 2,379 |
+| `COLLECT_FERTILIZER` actions taken | 7 |
+| Idle (`PASS`) unit-actions | 342 of 4,473 (7%) |
+
+Units were **not** saturated — they idled through 342 actions while 2,379
+tile-turns of fertilizer went uncollected.
+
+The real cause is in the assignment algorithm. `rank_tasks` sorts by
+`priority_tier` **first**, and `joint_assign` then truncates each unit's
+candidate set to its top `MAX_CANDIDATES_PER_UNIT = 8`. On a busy farm
+there are far more than eight higher-tier tasks (WATER, HARVEST, PLANT,
+FEED), so `OPTIONAL` tasks never enter any unit's shortlist. The
+truncation happens *before* "does this unit have anything better to do?"
+is ever evaluated.
+
+**`PriorityTier.OPTIONAL` is therefore dead on any busy farm** — a finding
+that reaches beyond this version, since it was the tier's first use.
+
+**Fix: reserve a candidate slot.** Candidate-set construction reserves one
+slot for the nearest `OPTIONAL`-tier task when one exists, so the tier
+becomes reachable without changing its priority. The no-displacement
+guarantee is preserved: an `OPTIONAL` task is still ranked below every
+other tier and is only *taken* when the unit's higher-tier candidates are
+infeasible or claimed. What changes is that it is now *visible* to the
+scorer at all.
+
+This is gated behind a new `reserve_optional_slot: bool = False` parameter
+so every frozen agent (`task_teacher_v2` … `v19`) keeps byte-identical
+behaviour, for the same reason §5.1 gives.
+
 ### 5.1 Backwards compatibility is mandatory
 
 `collect_fertilizer` is a **new keyword parameter on `generate_tasks`
