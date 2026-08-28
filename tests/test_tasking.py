@@ -1561,3 +1561,34 @@ def test_cash_crop_rule_does_not_break_the_feed_planting_path():
     ]
     assert len(wheat_plants) == 4  # the existing feed cap
 
+
+def test_wheat_target_defaults_to_zero_leaving_existing_agents_unchanged():
+    """The cash-crop rule must be inert unless explicitly requested.
+
+    Agent versions are immutable as files but read this shared module, so a
+    behavioural change here rewrites every frozen agent's evaluated
+    behaviour retroactively. That is not hypothetical: on 2026-08-28,
+    correcting economy.FARM_HAND_COST_MULT silently changed frozen
+    task_teacher_v8 (docs/2_environment_notes.md). This asserts the default
+    path is byte-identical, so v2..v18 keep the behaviour they were
+    evaluated with.
+    """
+    tiles = [[None] * 10 for _ in range(10)]
+    kwargs = dict(
+        tiles=tiles,
+        unlocked_quadrants=["NW"],
+        day=0,
+        last_day=29,
+        market_prices={"WHEAT": 25.0, "CARROT": 35.0, "MELON": 250.0},
+        candidate_crops=("WHEAT", "CARROT", "MELON"),
+    )
+    without_param = generate_tasks(**kwargs)
+    explicit_zero = generate_tasks(**kwargs, wheat_target_tiles=0)
+
+    assert [t.task_id for t in without_param] == [t.task_id for t in explicit_zero]
+    # And the default plants no cash-crop wheat at all.
+    assert not [
+        t for t in without_param
+        if t.task_id.kind == TaskKind.PLANT and t.task_id.item == "WHEAT"
+    ]
+
