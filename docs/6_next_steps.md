@@ -2,6 +2,46 @@
 
 Rolling submit/wait recommendation, per `docs/0_coding_standards.md` §5.
 
+## Current Recommendation (2026-08-28, task_teacher_v19 evaluation)
+
+**`task_teacher_v19` (wheat as a cash crop, extends `task_teacher_v17`):
+not promoted; do not submit.** Built to close the P2 gap identified below
+(wheat: opponents earn $1,090,522/game, we earned $0 because v17's sell
+branch was gated on owning zero animals and capped planting at 4
+feed-only tiles). The Step 1 acceptance gate passed cleanly under the
+corrected `1.32.4` simulator — 100/100 DONE and finite, determinism
+IDENTICAL, median latency 8.54ms/turn, wheat sold/ep **129.3** (v17: $0) —
+so the wheat-selling mechanism itself works as built. But the Step 2
+20-pair screen against `task_teacher_v17` (seed 131000, ladder-match
+config) came back `win_rate=0.000` (0/20 pairs, 40 games),
+`mean_money_margin=-6644.2`, Hoeffding 95% CI `[0.000, 0.380]` — wholly
+below 0.50. Per the authoritative stop rule, evaluation halted at the
+screen: no 50-pair gate, no regression screens, no submission.
+`task_teacher_v17` remains the ladder agent. Full numbers:
+`docs/4_agent_version_log.md`'s `task_teacher_v19` entry.
+
+**Evaluation caveat:** v19 is the first version evaluated under the
+corrected `1.32.4` simulator (validated against real ladder prices,
+299/299 exact matches). Every prior promotion number in this log was
+measured under the miscalibrated `1.29.3` constants, which under-punish
+premium-good glut ~4x. v19's figures are not directly comparable to them.
+
+**Next priority — the design's own Post-Plan Notes fallback applies:**
+wheat sold/ep is high (129.3) while the win rate is a clean wipeout, not
+a narrow loss — the documented signature of `WHEAT_TARGET_TILES = 20`
+displacing too much Melon rather than wheat-as-revenue being unsound.
+Code inspection of `generate_tasks` (`src/kaggriculture_lib/tasking.py`)
+is consistent with this: the wheat cash-crop branch wins a fixed,
+price-blind claim on empty tiles ahead of the ROI-ranked fallback that
+plants Melon, for as long as `n_wheat < wheat_target_tiles`. This was not
+confirmed by ablation this pass (the stop rule fired before one was
+warranted). Recommended next step before abandoning wheat-as-cash-crop:
+lower `WHEAT_TARGET_TILES` (e.g. to 12, matching the Strawberry target)
+and re-run the Step 2 screen at a fresh seed — do not re-run the same
+seed hoping for a better number. Fertilizer collection (P3 below) remains
+the next *unclaimed*-revenue candidate if the wheat-tile-target retry
+also fails to clear the screen.
+
 ## Current Recommendation (2026-08-28, process-gap cleanup + retroactive verification)
 
 **Repo hygiene fixed:** `agents/task_teacher_v9` through `v17` (several of them
