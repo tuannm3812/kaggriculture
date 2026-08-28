@@ -1573,14 +1573,14 @@ def test_wheat_target_defaults_to_zero_leaving_existing_agents_unchanged():
     path is byte-identical, so v2..v18 keep the behaviour they were
     evaluated with.
     """
-    tiles = [[None] * 10 for _ in range(10)]
+    tiles = make_tiles()
     kwargs = dict(
         tiles=tiles,
         unlocked_quadrants=["NW"],
         day=0,
         last_day=29,
-        market_prices={"WHEAT": 25.0, "CARROT": 35.0, "MELON": 250.0},
-        candidate_crops=("WHEAT", "CARROT", "MELON"),
+        market_prices=BASE_PRICES,
+        candidate_crops=CANDIDATE_CROPS,
     )
     without_param = generate_tasks(**kwargs)
     explicit_zero = generate_tasks(**kwargs, wheat_target_tiles=0)
