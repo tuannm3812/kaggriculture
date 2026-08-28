@@ -251,6 +251,15 @@ def test_full_episode_sells_wheat_and_completes():
                     and order[0] == "BUY_PRODUCT" and order[1] == "WHEAT"):
                 v17_bought += int(order[2])
     print(f"v17 wheat bought={v17_bought}")
+    # Seed-sensitivity disclosure: this inequality is NOT a universal
+    # property. A 12-seed paired sweep (2026-08-28) found it fails outright
+    # on 3 of 12 seeds (42, 131000, 202608) and passes by a margin of only
+    # 0-1 on several others. Seed 130000 is used because it is already this
+    # version's canonical acceptance-gate BASE_SEED, not because it is the
+    # most favourable available -- 99999 gave a larger margin and was
+    # deliberately not chosen. Read this assertion as "buy-back is reduced
+    # on a representative seed", never as "v19 always buys less than v17".
+    # The sweep table is in .superpowers/sdd/task-6-report.md.
     assert wheat_bought <= v17_bought, (
         f"v19 bought more feed wheat ({wheat_bought}) than v17 ({v17_bought}) "
         "despite growing its own"
