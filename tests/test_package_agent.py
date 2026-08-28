@@ -302,6 +302,14 @@ def test_packaged_task_teacher_v19_runs_standalone_without_pythonpath():
     _assert_runs_standalone(out_path, episode_steps=96)
 
 
+def test_packaged_task_teacher_v20_runs_standalone_without_pythonpath():
+    """v20 adds fertilizer collection on top of the same shared modules
+    v17 already packages correctly."""
+    out_path = REPO_ROOT / "build" / "task_teacher_v20" / "main.py"
+    package_agent.package(REPO_ROOT / "agents" / "task_teacher_v20", out_path)
+    _assert_runs_standalone(out_path, episode_steps=96)
+
+
 def _assert_runs_standalone(out_path: Path, episode_steps: int) -> None:
     script = f"""
 from kaggle_environments import make
