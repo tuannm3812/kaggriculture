@@ -520,7 +520,7 @@ def generate_tasks(
                             # ~$95 vs. ~$9/unit-action for wheat, so rank it on value.
                             priority_tier=PriorityTier.ECONOMIC,
                             deadline_step=None,
-                            expected_value=float(market_prices.get("FERTILIZER", 100)),
+                            expected_value=float(market_prices.get("FERTILIZER", economy.MARKET_PARAMS["FERTILIZER"]["base"])),
                             action_cost=1,
                         )
                     )

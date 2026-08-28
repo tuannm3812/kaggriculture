@@ -38,10 +38,10 @@ def test_full_episode_collects_and_sells_fertilizer():
     """End-to-end proof. v17 already sells FERTILIZER (main.py:206), so
     collection alone should produce sale revenue.
 
-    If this fails with zero fertilizer, the OPTIONAL-tier risk recorded in
-    the design (Sec 5) has materialised -- units are labour-saturated and the
-    task never gets assigned. Report that as a finding; do NOT raise the
-    tier to force a pass.
+    If this fails with zero fertilizer, the ECONOMIC pricing and
+    value-competition risk recorded in the design (Sec 5.3) has materialised
+    -- units are labour-saturated and the task never gets assigned. Report
+    that as a finding; do NOT raise the tier to force a pass.
     """
     from kaggle_environments import make
 
@@ -75,6 +75,6 @@ def test_full_episode_collects_and_sells_fertilizer():
 
     print(f"v20 fertilizer collected={collected} sold={sold}")
     assert collected > 0, (
-        "v20 never collected fertilizer -- OPTIONAL tier may never be reached"
+        "v20 never collected fertilizer -- ECONOMIC tier saturated by higher-value tasks"
     )
     assert sold > 0, "v20 collected fertilizer but never sold any"

@@ -1675,8 +1675,8 @@ def test_collect_task_generated_even_when_animal_also_needs_feeding():
     """The fertilizer rule is a separate `if`, not another `elif` in the
     FEED/HARVEST/CARE chain. If it were chained it would only fire on a
     fed, fully-cared, nothing-to-harvest animal -- suppressing it on most
-    turns. Generation is unconditional; PriorityTier.OPTIONAL decides
-    whether it actually gets assigned.
+    turns. Generation is unconditional; priority tier (ECONOMIC) and value
+    (live fertilizer market price per design §5.3) decide assignment.
     """
     tasks = _generate_with_animal(
         make_animal_tile(fed_today=False), collect_fertilizer=True

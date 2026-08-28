@@ -9,11 +9,13 @@ this agent family earned $0 -- COLLECT_FERTILIZER was never implemented,
 not even as a TaskKind. v17 already sells FERTILIZER, so only collection
 was missing.
 
-Collection is emitted at PriorityTier.OPTIONAL so it can never displace
-watering, feeding, harvesting or planting. That is deliberate:
-`task_teacher_v19` lost 0/20 pairs by displacing Melon on tiles still in
-their high-value range. Fertilizer costs no tiles at all -- only spare
-unit-actions.
+Collection is emitted at PriorityTier.ECONOMIC priced at the live fertilizer
+market price. OPTIONAL proved unreachable by construction (tier-first ranking
+and truncation starve it); ECONOMIC still cannot preempt watering, feeding,
+caring or harvesting (all strictly higher priority tiers), but does compete
+with new-tile planting on value (docs/superpowers/specs/2026-08-28-
+task-teacher-v20-fertilizer-design.md §5.3). Fertilizer costs no tiles -- only
+spare unit-actions.
 
 Design: docs/superpowers/specs/2026-08-28-task-teacher-v20-fertilizer-design.md
 """
