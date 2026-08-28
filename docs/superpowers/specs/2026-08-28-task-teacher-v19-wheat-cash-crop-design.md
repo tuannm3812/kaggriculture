@@ -112,11 +112,16 @@ by selling feed out from under the animals.
 Terminal liquidation (`day == last_day and hour >= 20`) is unchanged and
 still sells everything including the reserve — unsold stock scores nothing.
 
-**Side effect, intended:** the existing `BUY_PRODUCT WHEAT` top-up is gated
-on `total_wheat < animals * 2`. Once the farm grows its own wheat, that
-condition stops holding and the agent stops buying feed — the circular feed
-economy `task_teacher_v15` aimed at, achieved as a consequence rather than
-as separate machinery.
+**Side effect, partial:** the existing `BUY_PRODUCT WHEAT` top-up is gated
+on `total_wheat < animals * 2`, so growing our own wheat *reduces* feed
+purchases — measured across four paired episodes after the §4.1 fix, v19
+bought 33/40/47/40 units against v17's 59/44/51/48.
+
+It does **not** eliminate them, and an earlier draft of this section
+wrongly claimed it would ("the agent stops buying feed"). Buying continues
+whenever a day's consumption outpaces that day's harvest, which happens
+routinely. This is a step toward the circular feed economy
+`task_teacher_v15` aimed at, not an achievement of it.
 
 ## 5. Change 2 — Plant Wheat to a Tile Target
 
