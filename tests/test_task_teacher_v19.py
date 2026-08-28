@@ -130,3 +130,70 @@ def test_passes_wheat_target_to_generate_tasks():
     # test (Task 5); here we assert the constant is actually consumed.
     src = (REPO_ROOT / "agents" / "task_teacher_v19" / "main.py").read_text()
     assert "wheat_target_tiles=WHEAT_TARGET_TILES" in src
+
+
+def test_full_episode_sells_wheat_and_completes():
+    """End-to-end: v19 must actually realise wheat revenue in a real
+    episode, not merely be capable of emitting the order.
+
+    Guards the coupling: the planting rule (shared library) and the sell
+    rule (agent) are in different files, and either alone produces zero
+    wheat revenue.
+    """
+    from kaggle_environments import make
+
+    env = make(
+        "kaggriculture",
+        configuration={"episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1},
+        debug=True,
+    )
+    env.run(["agents/task_teacher_v19/main.py", "starter"])
+
+    final = env.steps[-1]
+    assert all(s.status == "DONE" for s in final), [s.status for s in final]
+
+    wheat_sold = 0
+    wheat_bought = 0
+    wheat_planted = 0
+    for step in env.steps:
+        action = step[0].action
+        if not isinstance(action, dict):
+            continue
+        for order in action.get("market") or []:
+            if not (isinstance(order, (list, tuple)) and len(order) > 2):
+                continue
+            if order[0] == "SELL" and order[1] == "WHEAT":
+                wheat_sold += int(order[2])
+            elif order[0] == "BUY_PRODUCT" and order[1] == "WHEAT":
+                wheat_bought += int(order[2])
+        farmer = action.get("farmer")
+        if isinstance(farmer, list) and len(farmer) > 1 and farmer[0] == "PLANT" and farmer[1] == "WHEAT":
+            wheat_planted += 1
+
+    assert wheat_planted > 0, "v19 never planted wheat as a cash crop"
+    assert wheat_sold > 0, "v19 never sold wheat -- the two halves are not wired together"
+    print(f"v19 wheat planted={wheat_planted} sold={wheat_sold} bought={wheat_bought}")
+
+    # Growing our own feed should reduce market purchases: the existing
+    # BUY_PRODUCT top-up is gated on total_wheat < animals*2, so it stops
+    # firing once the farm supplies itself. Same seed, same opponent.
+    env17 = make(
+        "kaggriculture",
+        configuration={"episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1},
+        debug=True,
+    )
+    env17.run(["agents/task_teacher_v17/main.py", "starter"])
+    v17_bought = 0
+    for step in env17.steps:
+        action = step[0].action
+        if not isinstance(action, dict):
+            continue
+        for order in action.get("market") or []:
+            if (isinstance(order, (list, tuple)) and len(order) > 2
+                    and order[0] == "BUY_PRODUCT" and order[1] == "WHEAT"):
+                v17_bought += int(order[2])
+    print(f"v17 wheat bought={v17_bought}")
+    assert wheat_bought <= v17_bought, (
+        f"v19 bought more feed wheat ({wheat_bought}) than v17 ({v17_bought}) "
+        "despite growing its own"
+    )
