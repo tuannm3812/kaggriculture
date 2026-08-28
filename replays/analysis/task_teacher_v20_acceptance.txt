@@ -1,0 +1,31 @@
+task_teacher_v20 -- Step 1 acceptance-gate output (2026-08-28)
+
+Script: `.superpowers/sdd/task-5-brief.md` Step 1, "100-episode acceptance
+gate for task_teacher_v20" (run as
+`.venv/bin/python <scratchpad>/v20_acceptance.py`; content identical to
+the brief's script verbatim -- written to the session scratchpad instead
+of literally /tmp per this environment's temp-file policy, no logic
+changed).
+Base seed: 140000 (per-episode seed = 140000 + i, i in 0..99)
+Episodes: 100
+Opponent: starter
+Config: {"episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1}
+
+--- verbatim output ---
+DONE: 100/100   finite: 100/100
+action kinds (all units): {'PLANT': 10462, 'WATER': 77665, 'HARVEST': 11684, 'DIG': 4485, 'FEED': 5361, 'COLLECT_FERTILIZER': 4593}
+fertilizer collected/ep: 45.9
+fertilizer sold/ep: 43.2
+median latency ms/turn: 4.61
+determinism: (56673.0, 3483.0) vs (56673.0, 3483.0) -> IDENTICAL
+--- end verbatim output ---
+
+Acceptance criteria (all required):
+- DONE: 100/100 -- PASS
+- finite: 100/100 -- PASS
+- determinism: IDENTICAL -- PASS
+- median latency well under 1000 ms/turn (actTimeout) -- PASS (4.61 ms/turn)
+- fertilizer sold/ep materially greater than 0 -- PASS (43.2/ep; not the
+  ~0 inert case the design flagged as a possible outcome)
+
+All criteria pass. Proceeded to Step 2 (20-pair screen vs task_teacher_v17).

@@ -1208,3 +1208,107 @@ available, and outcome/lesson.
   `WHEAT_TARGET_TILES` (e.g. to 12, matching the Strawberry target) and
   re-run the Step 2 screen at a fresh seed before concluding wheat cannot
   be monetized at all — v17's own $0 wheat revenue is still on the table.
+
+## task_teacher_v20 (`agents/task_teacher_v20/main.py`)
+
+- **Date:** 2026-08-28
+- **Extends `task_teacher_v17` with:** one variable — collects and sells
+  the fertilizer animals already produce. `agents/task_teacher_v20/main.py`
+  differs from `agents/task_teacher_v17/main.py` by exactly: the docstring,
+  a stale-comment correction (`COW_COST` inline comment `# 600` →
+  `# 400 under 1.32.4`, cosmetic only, no logic change), passing
+  `collect_fertilizer=True` to `generate_tasks`, and dispatching
+  `TaskKind.COLLECT_FERTILIZER -> ["COLLECT_FERTILIZER"]` (verified via
+  direct diff). In the shared `src/kaggriculture_lib/tasking.py`: adds a
+  `COLLECT_FERTILIZER` member to `TaskKind`; `generate_tasks` gains a new
+  `collect_fertilizer: bool = False` keyword (default off, so every
+  existing frozen agent v2–v19 produces byte-identical task output — the
+  §5.1 backwards-compatibility guard) and, when true, emits the task
+  inside the existing animal-tile branch alongside `FEED`/`CARE`, at
+  `PriorityTier.ECONOMIC` priced at the live `FERTILIZER` market price.
+  Selling was already wired in v17 (`FERTILIZER` was already in its
+  per-day and terminal-liquidation sell loops); only collection was
+  missing. Design:
+  `docs/superpowers/specs/2026-08-28-task-teacher-v20-fertilizer-design.md`.
+  Motivation (`docs/10_ladder_revenue_diagnosis.md`, 78 real ladder
+  episodes): opponents earned $421,761 selling FERTILIZER (~$5.4k/game),
+  this agent family earned $0.
+- **Mid-implementation design correction (§5.2/§5.3 of the design doc):**
+  the task was originally specified at `PriorityTier.OPTIONAL` (lowest
+  tier), reasoned to be safe-by-construction since it could never preempt
+  higher-priority work. Measurement showed that tier is **unreachable by
+  construction** under this codebase's assignment algorithm — `rank_tasks`
+  sorts by tier first and `joint_assign` truncates each unit's candidate
+  set before "does this unit have anything better to do?" is ever
+  evaluated, and the exhaustive path scores by tier-coverage first, so no
+  unit ever selects an `OPTIONAL` task while any higher-tier task remains
+  unclaimed (a first-implementation probe collected only 7 fertilizer in a
+  720-step episode against a ~200 estimate, with units idling 7% of the
+  time rather than saturated). Fix: emit at `PriorityTier.ECONOMIC` with
+  `expected_value` set to the live market price instead of 0.0, so the
+  task competes honestly on value (~$95/action vs. ~$9/action for the
+  marginal crop task) rather than hiding at the bottom. This is a
+  different kind of tradeoff than the one that sank `task_teacher_v19`:
+  v19 gave up high-value Melon **tiles** for low-value wheat (wrong
+  direction); this trades a low-value unit-action for a high-value one
+  (right direction), and fertilizer costs no tiles at all.
+- **Evaluation caveat:** measured under the corrected `1.32.4` simulator
+  (validated against real ladder prices, 299/299 exact matches). Version-log
+  entries predating 2026-08-28 were measured under the miscalibrated
+  `1.29.3` constants, which under-punish premium-good glut ~4x, and are not
+  directly comparable.
+- **Acceptance** (100×720 vs `starter`, seeds 140000–140099, ladder-match
+  config `startingMoney=3000`/`farmHandCostMult=1`; action-kind counts are
+  **all units** — farmer plus hands — not farmer-only):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` / finite | 100/100 / 100/100 |
+  | Action kinds (all units) | PLANT 10462, WATER 77665, HARVEST 11684, DIG 4485, FEED 5361, COLLECT_FERTILIZER 4593 |
+  | Fertilizer collected/ep (all units) | **45.9** |
+  | Fertilizer sold/ep (whole-farm market total) | **43.2** |
+  | Median latency ms/turn | 4.61 |
+  | Determinism (same seed, 2 runs) | `(56673.0, 3483.0)` vs `(56673.0, 3483.0)` → IDENTICAL |
+
+  All Step 1 acceptance criteria hold: 100/100 DONE and finite, determinism
+  IDENTICAL, median latency far under the 1000ms `actTimeout`, and
+  fertilizer sold/ep (43.2) materially greater than 0 — the change is not
+  inert, so evaluation proceeded to the paired screen rather than stopping.
+
+- **Paired evaluation** (`scripts/run_tournament.py`, ladder-match config —
+  the script's default; `--legacy-1293-defaults` not passed):
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v17` (screen, seed 141000) | 20/40 | 1.000 | +6213.9 | **[0.620, 1.000]** |
+  | vs. `task_teacher_v17` (promotion, seed 142000) | 50/100 | 0.990 | +5516.7 | **[0.750, 1.000]** |
+  | vs. `task_teacher_v16` (regression, seed 143000) | 20/40 | 0.975 | +6544.8 | [0.595, 1.000] |
+  | vs. `starter` (regression, seed 143000) | 20/40 | 1.000 | +43192.1 | [0.620, 1.000] |
+
+  Wall time / throughput: screen 235.3s (122 steps/sec); promotion 575.9s
+  (125 steps/sec); vs-`v16` regression 223.4s (129 steps/sec); vs-`starter`
+  regression 149.6s (193 steps/sec).
+
+- **Outcome: promoted per protocol.** The 20-pair screen's CI `[0.620,
+  1.000]` was wholly above 0.50, so per the authoritative rule ("CI wholly
+  above 0.50 → Step 3") evaluation escalated to the 50-pair gate. The
+  50-pair gate's CI `[0.750, 1.000]` is wholly above 0.50 — the promotion
+  condition is satisfied. Both regression screens (`v16`, `starter`)
+  stayed wholly above 0.50 too, so the fertilizer-collection change is not
+  trading away performance elsewhere. `task_teacher_v20` beats
+  `task_teacher_v17` on every number this protocol measures. **No Kaggle
+  submission was made or authorized as part of this evaluation** — this
+  task's scope was measurement and recording only; whether/when to package
+  and submit is a separate, explicit decision for the controller.
+- **Lesson:** the design's own mid-implementation corrections (§5.2/§5.3 —
+  `OPTIONAL` tier is unreachable by construction under a tier-first,
+  coverage-maximizing assignment algorithm; pricing the task honestly at
+  `ECONOMIC` instead) held up under the full protocol, not just the
+  isolated single-episode measurement that motivated them: the acceptance
+  gate confirms real collection (45.9/ep) and real sale volume (43.2/ep)
+  at scale, and the paired evaluation confirms that competing on true
+  value rather than hiding at the bottom tier did not reproduce
+  `task_teacher_v19`'s displacement failure — a $9-vs-$95 per-unit-action
+  tradeoff in the right direction is not the same risk as v19's
+  tile-for-tile giveaway in the wrong one, and the measured result bears
+  that out.
