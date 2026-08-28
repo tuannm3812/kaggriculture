@@ -1,0 +1,23 @@
+task_teacher_v19 -- Step 1 acceptance-gate output (2026-08-28)
+
+Script: `.superpowers/sdd/task-6-brief.md` Step 1, "100-episode acceptance
+gate for task_teacher_v19" (run as
+`.venv/bin/python <scratchpad>/v19_acceptance.py`; content identical to
+the brief's script verbatim -- written to the session scratchpad instead
+of literally /tmp per this environment's temp-file policy, no logic
+changed).
+Seed base: 130000 (per-episode seed = 130000 + i, i in 0..99)
+Episodes: 100
+Opponent: starter
+Config: {"episodeSteps": 720, "startingMoney": 3000, "farmHandCostMult": 1}
+
+Source: `.superpowers/sdd/task-6-report.md`, Step 1 "Output (verbatim)"
+block. Numbers below are copied exactly as recorded there -- not
+re-derived or re-run.
+
+--- verbatim output ---
+DONE: 100/100   finite: 100/100
+action kinds: {'PLANT': 1904, 'WATER': 11640, 'HARVEST': 3461, 'DIG': 671}
+wheat planted/ep: 13.8   wheat sold/ep: 129.3   melon sold/ep: 50.8
+median latency ms/turn: 8.54
+determinism: (33016.0, 3485.0) vs (33016.0, 3485.0) -> IDENTICAL

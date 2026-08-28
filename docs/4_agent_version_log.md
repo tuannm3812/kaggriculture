@@ -1135,4 +1135,76 @@ available, and outcome/lesson.
 - **Outcome:** Planned build — no evaluation was recorded at the time despite this being one of the two agents actually live on the ladder.
 - **Retroactive verification (2026-08-28):** ran the missing paired evaluation against `task_teacher_v5` (the last CI-verified champion) under ladder-match config: 20-pair screen (seed 123000) `win_rate=1.000`, `mean_money_margin=+13714.5`, Hoeffding 95% CI `[0.620, 1.000]` — wholly above 0.50, escalated to the 50-pair promotion gate per protocol (seed 124000): `win_rate=1.000` (100 games), `mean_money_margin=+13291.0`, Hoeffding 95% CI `[0.760, 1.000]`. **Confirmed: `task_teacher_v17` is a genuine, verified promotion over `task_teacher_v5`.** Not directly screened head-to-head against `task_teacher_v16` (both were verified independently against v5, the actual gap this retroactive pass was closing); a direct v17-vs-v16 pair would still be worth running before treating v17 as strictly better than v16, though v17's design is a superset extension of v16's.
 
+## task_teacher_v19 (`agents/task_teacher_v19/main.py`)
 
+- **Date:** 2026-08-28
+- **Extends `task_teacher_v17` with:** wheat as a cash crop instead of
+  feed-only animal input. Plants wheat up to `WHEAT_TARGET_TILES = 20`
+  (v17 capped feed-only wheat at 4 tiles) and sells the surplus above a
+  `SELL_RESERVE_DAYS = 5` feed reserve. Motivation
+  (`docs/10_ladder_revenue_diagnosis.md`, 78 real ladder episodes): WHEAT
+  is the opponents' single largest revenue line ($1,090,522 across 78
+  ladder episodes, ~$14k/game, measured) and this agent family earned $0
+  from it — v17's wheat-sell branch was gated on owning zero animals,
+  which never holds. Design:
+  `docs/superpowers/specs/2026-08-28-task-teacher-v19-wheat-cash-crop-design.md`.
+- **Evaluation caveat:** v19 is the first version evaluated under the
+  corrected `1.32.4` simulator (validated against real ladder prices,
+  299/299 exact matches). Every prior promotion number in this log was
+  measured under the miscalibrated `1.29.3` constants, which under-punish
+  premium-good glut ~4x. v19's figures are not directly comparable to them.
+- **Acceptance** (100×720 vs `starter`, seeds 130000–130099, ladder-match
+  config `startingMoney=3000`/`farmHandCostMult=1`):
+
+  | Metric | Result |
+  | --- | --- |
+  | `DONE` / finite | 100/100 / 100/100 |
+  | Determinism | IDENTICAL |
+  | Action kinds (farmer) | PLANT 1904, WATER 11640, HARVEST 3461, DIG 671 |
+  | Wheat planted/ep (farmer actions only; excludes farm hands) | **13.8** |
+  | Wheat sold/ep | **129.3** |
+  | Melon sold/ep | 50.8 |
+  | Median latency ms/turn | 8.54 |
+
+  These rows are not the same measurement scope: the acceptance script
+  counts wheat planted/ep from `action["farmer"]` PLANT orders only, while
+  wheat sold/ep and melon sold/ep are whole-farm market totals that also
+  include the hands' plantings. Farm hands plant wheat too (the same
+  `generate_tasks` queue assigns them wheat-planting tasks), so the true
+  per-episode wheat-tile count is higher than 13.8 — that figure must not
+  be read as "planting stayed below the `WHEAT_TARGET_TILES = 20` target."
+
+  All Step 1 acceptance criteria hold: 100/100 DONE and finite,
+  determinism IDENTICAL, wheat sold/ep > 0 (the whole point of the
+  version), median latency far under the 1000ms `actTimeout`.
+
+- **Paired evaluation:**
+
+  | Matchup | Pairs | Win rate | Mean margin | Hoeffding 95% CI |
+  | --- | ---: | ---: | ---: | --- |
+  | vs. `task_teacher_v17` (screen, seed 131000) | 20/40 | **0.000** | −6644.2 | **[0.000, 0.380]** |
+
+- **Outcome: not promoted.** The 20-pair screen's Hoeffding 95% CI
+  `[0.000, 0.380]` is wholly below 0.50 — v19 lost all 20 seed pairs (40
+  games) against `task_teacher_v17`. Per the authoritative stop rule,
+  evaluation halted at the screen: no 50-pair promotion gate, no
+  regression screens (vs. `task_teacher_v16` / `starter`), no notebook
+  packaging, no Kaggle submission. `task_teacher_v17` remains the
+  champion and ladder agent.
+- **Lesson:** wheat sold/ep is high (129.3, clearing the acceptance bar
+  easily) yet the head-to-head result is a clean sweep loss, not a narrow
+  one — exactly the condition the design's own Post-Plan Notes flagged in
+  advance as the diagnosis for "not promoted": `WHEAT_TARGET_TILES = 20`
+  displacing too much Melon. Consistent with that: in
+  `generate_tasks` (`src/kaggriculture_lib/tasking.py`), the
+  `n_wheat < wheat_target_tiles` cash-crop branch is checked, and wins,
+  ahead of the ROI-ranked crop fallback that plants Melon on every empty
+  tile once the day-10+ Strawberry target is met — a fixed, price-blind
+  claim on plot capacity rather than an ROI-competitive one. This is a
+  code-level mechanism consistent with the measured wipeout, not a
+  confirmed root cause (no ablation of `WHEAT_TARGET_TILES` was run this
+  pass — the stop rule fired at the 20-pair screen before one was
+  warranted). Next experiment, per the design's own fallback: lower
+  `WHEAT_TARGET_TILES` (e.g. to 12, matching the Strawberry target) and
+  re-run the Step 2 screen at a fresh seed before concluding wheat cannot
+  be monetized at all — v17's own $0 wheat revenue is still on the table.

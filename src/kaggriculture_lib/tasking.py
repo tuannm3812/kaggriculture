@@ -215,6 +215,7 @@ def generate_tasks(
     want_pasture: bool = False,
     cow_in_any_inventory: bool = False,
     sheep_in_any_inventory: bool = False,
+    wheat_target_tiles: int = 0,
     max_feed_tasks: int | None = None,
     non_emergency_feed_tier: PriorityTier = PriorityTier.DAILY_CARE,
     care_tier: PriorityTier = PriorityTier.DAILY_CARE,
@@ -227,6 +228,14 @@ def generate_tasks(
 
     Pasture/cow kwargs and FEED/CARE tier overrides are additive: defaults
     preserve the Goose path used by `task_teacher_v4`.
+
+    `wheat_target_tiles` defaults to 0, which disables the cash-crop wheat
+    rule entirely and leaves task output byte-identical for every agent
+    that does not pass it. That default is load-bearing: agent versions are
+    immutable as files but read this shared module, so a behavioural change
+    here rewrites frozen agents' evaluated behaviour retroactively (see
+    docs/2_environment_notes.md's 2026-08-28 correction, where exactly that
+    happened to task_teacher_v8).
     """
     tasks: list[Task] = []
     unlocked = set(unlocked_quadrants)
@@ -312,6 +321,18 @@ def generate_tasks(
                     if "STRAWBERRY" in candidate_crops and day >= 10 and n_strawberries < 12 and economy.can_ongoing_crop_reach_any_tick("STRAWBERRY", day, last_day):
                         crop = "STRAWBERRY"
                         n_strawberries += 1
+                    elif (
+                        n_wheat < wheat_target_tiles
+                        and "WHEAT" in candidate_crops
+                        and economy.can_mature_in_time("WHEAT", day, last_day)
+                    ):
+                        # Wheat as a cash crop, not just feed. Unlike MELON
+                        # (~113 units of whole-game absorption, drained only
+                        # ~1/day by the town centre), five town shops consume
+                        # wheat, so its absorption is effectively unbounded and
+                        # its price rises across the season.
+                        crop = "WHEAT"
+                        n_wheat += 1
                     else:
                         crop = best
                         if crop == "MELON":
